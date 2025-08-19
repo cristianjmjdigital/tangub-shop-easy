@@ -12,8 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 const Products = () => {
   const { toast } = useToast();
   const [priceRange, setPriceRange] = useState([0, 10000]);
-  const [selectedCategory, setSelectedCategory] = useState("");
-  const [selectedLocation, setSelectedLocation] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedLocation, setSelectedLocation] = useState("all");
 
   const categories = [
     "Electronics", "Fashion", "Food & Beverage", "Home & Garden", 
@@ -33,7 +33,7 @@ const Products = () => {
       originalPrice: 300,
       rating: 4.8,
       reviews: 125,
-      image: "/placeholder-food.jpg",
+      image: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=400&q=80",
       business: "Tangub Delicacies",
       location: "Poblacion",
       category: "Food & Beverage",
@@ -46,7 +46,7 @@ const Products = () => {
       price: 450,
       rating: 4.9,
       reviews: 87,
-      image: "/placeholder-craft.jpg",
+      image: "https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=400&q=80",
       business: "Local Crafts Co.",
       location: "Maloro",
       category: "Home & Garden",
@@ -58,7 +58,7 @@ const Products = () => {
       price: 380,
       rating: 4.7,
       reviews: 203,
-      image: "/placeholder-coffee.jpg",
+      image: "https://images.unsplash.com/photo-1511920170033-f8396924c348?auto=format&fit=crop&w=400&q=80",
       business: "Mountain Coffee",
       location: "Katipunan",
       category: "Food & Beverage",
@@ -70,7 +70,7 @@ const Products = () => {
       price: 320,
       rating: 4.6,
       reviews: 94,
-      image: "/placeholder-honey.jpg",
+      image: "https://images.unsplash.com/photo-1464983953574-0892a716854b?auto=format&fit=crop&w=400&q=80",
       business: "Bee Happy Farm",
       location: "Silabay",
       category: "Food & Beverage",
@@ -83,7 +83,7 @@ const Products = () => {
       originalPrice: 200,
       rating: 4.5,
       reviews: 67,
-      image: "/placeholder-bamboo.jpg",
+      image: "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=400&q=80",
       business: "Eco Crafts",
       location: "Bonga",
       category: "Electronics",
@@ -96,7 +96,7 @@ const Products = () => {
       price: 280,
       rating: 4.4,
       reviews: 156,
-      image: "/placeholder-shirt.jpg",
+      image: "https://images.unsplash.com/photo-1512436991641-6745cdb1723f?auto=format&fit=crop&w=400&q=80",
       business: "City Pride Apparel",
       location: "Poblacion",
       category: "Fashion",
@@ -112,8 +112,8 @@ const Products = () => {
   };
 
   const filteredProducts = products.filter(product => {
-    const matchesCategory = !selectedCategory || product.category === selectedCategory;
-    const matchesLocation = !selectedLocation || product.location === selectedLocation;
+    const matchesCategory = selectedCategory === "all" || product.category === selectedCategory;
+    const matchesLocation = selectedLocation === "all" || product.location === selectedLocation;
     const matchesPrice = product.price >= priceRange[0] && product.price <= priceRange[1];
     return matchesCategory && matchesLocation && matchesPrice;
   });
@@ -139,7 +139,7 @@ const Products = () => {
                       <SelectValue placeholder="All Categories" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All Categories</SelectItem>
+                      <SelectItem value="all">All Categories</SelectItem>
                       {categories.map(category => (
                         <SelectItem key={category} value={category}>{category}</SelectItem>
                       ))}
@@ -155,7 +155,7 @@ const Products = () => {
                       <SelectValue placeholder="All Locations" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All Locations</SelectItem>
+                      <SelectItem value="all">All Locations</SelectItem>
                       {locations.map(location => (
                         <SelectItem key={location} value={location}>{location}</SelectItem>
                       ))}
@@ -197,8 +197,8 @@ const Products = () => {
                   variant="outline" 
                   className="w-full"
                   onClick={() => {
-                    setSelectedCategory("");
-                    setSelectedLocation("");
+                    setSelectedCategory("all");
+                    setSelectedLocation("all");
                     setPriceRange([0, 10000]);
                   }}
                 >
@@ -235,13 +235,14 @@ const Products = () => {
               {filteredProducts.map((product) => (
                 <Card key={product.id} className="overflow-hidden hover:shadow-elegant transition-all duration-300 group">
                   <div className="relative">
-                    <div className="aspect-square bg-muted relative overflow-hidden">
-                      <div className="absolute inset-0 bg-gradient-primary opacity-10"></div>
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-muted-foreground font-medium">
-                          {product.name}
-                        </span>
-                      </div>
+                    <div className="aspect-square bg-white relative overflow-hidden rounded-xl shadow-sm">
+                      <img
+                        src={product.image || "/placeholder.svg"}
+                        alt={product.name}
+                        className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-105"
+                        loading="lazy"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-80"></div>
                     </div>
                     {product.featured && (
                       <Badge className="absolute top-2 left-2 bg-gradient-primary text-primary-foreground">
@@ -262,19 +263,19 @@ const Products = () => {
                     </Button>
                   </div>
 
-                  <CardContent className="p-4">
+                  <CardContent className="p-4 flex flex-col gap-2">
                     <div className="flex items-center text-sm text-muted-foreground mb-2">
                       <MapPin className="h-3 w-3 mr-1" />
                       {product.location}
                     </div>
-                    <h3 className="font-semibold text-lg mb-1 line-clamp-2">
+                    <h3 className="font-semibold text-base md:text-lg mb-1 line-clamp-2">
                       {product.name}
                     </h3>
                     <p className="text-sm text-muted-foreground mb-2">
                       by {product.business}
                     </p>
                     
-                    <div className="flex items-center mb-3">
+                    <div className="flex items-center mb-1">
                       <div className="flex items-center">
                         <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                         <span className="ml-1 text-sm font-medium">{product.rating}</span>
@@ -284,7 +285,7 @@ const Products = () => {
                       </span>
                     </div>
 
-                    <div className="flex items-center mb-4">
+                    <div className="flex items-center mb-2">
                       <span className="text-xl font-bold text-primary">
                         ₱{product.price.toLocaleString()}
                       </span>
@@ -296,9 +297,9 @@ const Products = () => {
                     </div>
                   </CardContent>
 
-                  <CardFooter className="p-4 pt-0">
+                  <CardFooter className="p-4 pt-0 flex flex-col gap-2">
                     <Button 
-                      className="w-full"
+                      className="w-full text-base py-2"
                       onClick={() => addToCart(product)}
                     >
                       <ShoppingCart className="h-4 w-4 mr-2" />
@@ -318,8 +319,8 @@ const Products = () => {
                   variant="outline" 
                   className="mt-4"
                   onClick={() => {
-                    setSelectedCategory("");
-                    setSelectedLocation("");
+                    setSelectedCategory("all");
+                    setSelectedLocation("all");
                     setPriceRange([0, 10000]);
                   }}
                 >

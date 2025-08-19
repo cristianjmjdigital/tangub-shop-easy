@@ -1,9 +1,10 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { ArrowRight, Sparkles, Search, Star, MapPin, Store, Users, Package, TrendingUp, ShoppingCart } from "lucide-react";
+import { ArrowRight, Sparkles, Search, MapPin, Store, Users, Package, TrendingUp, ShoppingCart, Shirt, Utensils, Home, Gift, Smartphone, Heart } from "lucide-react";
 import { Link } from "react-router-dom";
+import ProductCard from "@/components/ui/ProductCard";
 
 const Index = () => {
   const featuredProducts = [
@@ -15,7 +16,8 @@ const Index = () => {
       rating: 4.8,
       business: "Tangub Delicacies",
       location: "Poblacion",
-      discount: 17
+      discount: 17,
+      image: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=400&q=80"
     },
     {
       id: 2,
@@ -23,7 +25,8 @@ const Index = () => {
       price: 380,
       rating: 4.7,
       business: "Mountain Coffee",
-      location: "Katipunan"
+      location: "Katipunan",
+      image: "https://images.unsplash.com/photo-1511920170033-f8396924c348?auto=format&fit=crop&w=400&q=80"
     },
     {
       id: 3,
@@ -31,7 +34,8 @@ const Index = () => {
       price: 450,
       rating: 4.9,
       business: "Local Crafts Co.",
-      location: "Maloro"
+      location: "Maloro",
+      image: "https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=400&q=80"
     }
   ];
 
@@ -59,50 +63,55 @@ const Index = () => {
     }
   ];
 
+  // Categories for Shopee-like section
+  const categories = [
+    { name: "Fashion", icon: Shirt },
+    { name: "Food & Drinks", icon: Utensils },
+    { name: "Home & Living", icon: Home },
+    { name: "Gifts & Crafts", icon: Gift },
+    { name: "Electronics", icon: Smartphone },
+    { name: "Health & Beauty", icon: Heart },
+  ];
+
   return (
-    <div className="min-h-screen bg-gradient-subtle">
+  <div className="min-h-screen bg-white">
       {/* Hero Section */}
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-hero opacity-10"></div>
-        <div className="container mx-auto px-6 py-16 relative z-10">
+      <section className="relative overflow-hidden bg-white">
+        <div className="container mx-auto px-6 py-12 relative z-10">
           <div className="text-center max-w-4xl mx-auto">
             <div className="flex justify-center mb-6">
-              <Badge variant="secondary" className="text-primary font-medium px-4 py-2">
+              <Badge className="bg-orange-100 text-orange-600 font-medium px-4 py-2">
                 <MapPin className="h-4 w-4 mr-2" />
                 Tangub City Local Marketplace
               </Badge>
             </div>
-            
-            <h1 className="text-4xl md:text-6xl font-bold mb-6 bg-gradient-hero bg-clip-text text-transparent leading-tight">
+            <h1 className="text-4xl md:text-6xl font-bold mb-6 text-orange-500 leading-tight">
               Tangub Shop Easy
             </h1>
-            
-            <p className="text-xl md:text-2xl text-muted-foreground mb-8 max-w-2xl mx-auto leading-relaxed">
+            <p className="text-xl md:text-2xl text-gray-500 mb-8 max-w-2xl mx-auto leading-relaxed">
               Support local businesses and discover amazing products right here in Tangub City. From fresh delicacies to handmade crafts.
             </p>
-            
             {/* Search Bar */}
             <div className="max-w-2xl mx-auto mb-8">
               <div className="relative">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground h-5 w-5" />
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-orange-400 h-5 w-5" />
                 <Input
                   placeholder="Search for products, businesses..."
-                  className="pl-12 py-4 text-base rounded-full"
+                  className="pl-12 py-4 text-base rounded-full border-2 border-orange-200 focus:border-orange-400"
                 />
-                <Button className="absolute right-2 top-1/2 transform -translate-y-1/2 rounded-full">
+                <Button className="absolute right-2 top-1/2 transform -translate-y-1/2 rounded-full bg-orange-500 hover:bg-orange-600 text-white px-6">
                   Search
                 </Button>
               </div>
             </div>
-            
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" className="text-lg px-8 py-4 shadow-elegant hover:shadow-glow transition-all" asChild>
+              <Button size="lg" className="text-lg px-8 py-4 bg-orange-500 hover:bg-orange-600 text-white shadow transition-all" asChild>
                 <Link to="/products">
                   <ShoppingCart className="mr-2 h-5 w-5" />
                   Shop Now
                 </Link>
               </Button>
-              <Button variant="outline" size="lg" className="text-lg px-8 py-4" asChild>
+              <Button variant="outline" size="lg" className="text-lg px-8 py-4 border-orange-500 text-orange-500 hover:bg-orange-50" asChild>
                 <Link to="/businesses">
                   <Store className="mr-2 h-5 w-5" />
                   Browse Businesses
@@ -113,60 +122,36 @@ const Index = () => {
         </div>
       </section>
 
+      {/* Categories Section */}
+      <section className="py-6 px-6">
+        <div className="container mx-auto">
+          <div className="flex flex-wrap justify-center gap-6 max-w-4xl mx-auto">
+            {categories.map((cat) => (
+              <div key={cat.name} className="flex flex-col items-center bg-orange-50 rounded-xl shadow p-4 w-32 hover:bg-orange-100 hover:text-orange-600 transition-all cursor-pointer">
+                <cat.icon className="h-8 w-8 mb-2 text-orange-400" />
+                <span className="font-medium text-sm text-center">{cat.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Featured Products */}
       <section className="py-16 px-6">
         <div className="container mx-auto">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Featured Products</h2>
-            <p className="text-xl text-muted-foreground">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4 text-orange-500">Featured Products</h2>
+            <p className="text-xl text-gray-500">
               Discover the best products from local businesses in Tangub City
             </p>
           </div>
-          
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto mb-8">
             {featuredProducts.map((product) => (
-              <Card key={product.id} className="overflow-hidden hover:shadow-elegant transition-all duration-300 group">
-                <div className="relative">
-                  <div className="aspect-square bg-gradient-primary opacity-20 relative">
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-lg font-medium text-primary">{product.name}</span>
-                    </div>
-                  </div>
-                  {product.discount && (
-                    <Badge variant="destructive" className="absolute top-2 right-2">
-                      -{product.discount}%
-                    </Badge>
-                  )}
-                </div>
-
-                <CardHeader className="pb-4">
-                  <div className="flex items-center text-sm text-muted-foreground mb-2">
-                    <MapPin className="h-3 w-3 mr-1" />
-                    {product.location}
-                  </div>
-                  <CardTitle className="text-lg">{product.name}</CardTitle>
-                  <CardDescription>by {product.business}</CardDescription>
-                  
-                  <div className="flex items-center mb-3">
-                    <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                    <span className="ml-1 text-sm font-medium">{product.rating}</span>
-                  </div>
-
-                  <div className="flex items-center">
-                    <span className="text-xl font-bold text-primary">₱{product.price.toLocaleString()}</span>
-                    {product.originalPrice && (
-                      <span className="text-sm text-muted-foreground line-through ml-2">
-                        ₱{product.originalPrice.toLocaleString()}
-                      </span>
-                    )}
-                  </div>
-                </CardHeader>
-              </Card>
+              <ProductCard key={product.id} {...product} />
             ))}
           </div>
-          
           <div className="text-center">
-            <Button variant="outline" size="lg" asChild>
+            <Button variant="outline" size="lg" className="border-orange-500 text-orange-500 hover:bg-orange-50" asChild>
               <Link to="/products">
                 View All Products
                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -179,24 +164,24 @@ const Index = () => {
       {/* Call to Action */}
       <section className="py-20 px-6">
         <div className="container mx-auto">
-          <Card className="border-0 shadow-elegant bg-gradient-subtle text-center max-w-4xl mx-auto">
+          <Card className="border-0 shadow-elegant bg-orange-50 text-center max-w-4xl mx-auto">
             <CardContent className="p-12">
-              <Sparkles className="h-12 w-12 mx-auto mb-6 text-primary" />
-              <h3 className="text-3xl md:text-4xl font-bold mb-6">
+              <Sparkles className="h-12 w-12 mx-auto mb-6 text-orange-500" />
+              <h3 className="text-3xl md:text-4xl font-bold mb-6 text-orange-500">
                 Join the Tangub Shop Easy Community
               </h3>
-              <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
+              <p className="text-xl text-gray-500 mb-8 max-w-2xl mx-auto">
                 Whether you're a customer looking for local products or a business owner ready to grow, 
                 we're here to connect our community.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button size="lg" className="text-lg px-8 py-4 shadow-elegant hover:shadow-glow transition-all" asChild>
+                <Button size="lg" className="text-lg px-8 py-4 bg-orange-500 hover:bg-orange-600 text-white shadow transition-all" asChild>
                   <Link to="/products">
                     <ShoppingCart className="mr-2 h-5 w-5" />
                     Start Shopping
                   </Link>
                 </Button>
-                <Button variant="outline" size="lg" className="text-lg px-8 py-4" asChild>
+                <Button variant="outline" size="lg" className="text-lg px-8 py-4 border-orange-500 text-orange-500 hover:bg-orange-100" asChild>
                   <Link to="/register-business">
                     <Store className="mr-2 h-5 w-5" />
                     Register Business
