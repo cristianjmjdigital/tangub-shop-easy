@@ -1,12 +1,86 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { ArrowRight, Sparkles, Search, MapPin, Store, Users, Package, TrendingUp, ShoppingCart, Shirt, Utensils, Home, Gift, Smartphone, Heart } from "lucide-react";
+import { ArrowRight, Sparkles, Search, MapPin, Store, Users, Package, TrendingUp, ShoppingCart, Shirt, Utensils, Home, Gift, Smartphone, Heart, Camera } from "lucide-react";
 import { Link } from "react-router-dom";
 import ProductCard from "@/components/ui/ProductCard";
 
 const Index = () => {
+  const [scanSuggestions, setScanSuggestions] = useState<string[]>([]);
+  const [scanning, setScanning] = useState(false);
+
+  // Scan handler
+  const handleScanClick = async () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.capture = 'environment';
+    input.onchange = async (e) => {
+      const target = e.target as HTMLInputElement;
+      const file = target.files && target.files[0];
+      if (file) {
+        setScanning(true);
+        await recognizeImage(file);
+        setScanning(false);
+      }
+    };
+    input.click();
+  };
+
+  // Google Vision API integration (replace with your backend endpoint for security)
+  async function recognizeImage(file: File) {
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const result = reader.result;
+      const base64 = typeof result === 'string' ? result.split(',')[1] : '';
+      try {
+        const response = await fetch(
+          'https://vision.googleapis.com/v1/images:annotate?key=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',
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              requests: [
+                {
+                  image: { content: base64 },
+                  features: [{ type: 'LABEL_DETECTION', maxResults: 5 }]
+                }
+              ]
+            }),
+            headers: { 'Content-Type': 'application/json' }
+          }
+        );
+        const result = await response.json();
+        const labels = result.responses?.[0]?.labelAnnotations?.map((l: any) => l.description) || [];
+        suggestProducts(labels);
+      } catch (err) {
+        setScanSuggestions(["Scan failed. Please try again."]);
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // Suggest products based on detected labels
+  function suggestProducts(labels: string[]) {
+    // Dummy product list for matching (use your real product list in production)
+    const allProducts = [
+      { name: "Fresh Buko Pie", category: "Food & Beverage" },
+      { name: "Tangub Coffee Beans", category: "Food & Beverage" },
+      { name: "Handwoven Banig Mat", category: "Home & Living" },
+      { name: "Coffee Beans", category: "Food & Beverage" },
+      { name: "Banig Mat", category: "Home & Living" },
+      { name: "T-Shirt", category: "Fashion" },
+      // ...add more as needed
+    ];
+    const matches = allProducts.filter(p =>
+      labels.some(label =>
+        p.name.toLowerCase().includes(label.toLowerCase()) ||
+        (p.category && p.category.toLowerCase().includes(label.toLowerCase()))
+      )
+    );
+    setScanSuggestions(matches.length ? matches.map(m => m.name) : ["No related products found."]);
+  }
   const featuredProducts = [
     {
       id: 1,
@@ -104,7 +178,26 @@ const Index = () => {
                 </Button>
               </div>
             </div>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-4">
+              <Button
+                className="bg-orange-500 hover:bg-orange-600 text-white"
+                onClick={handleScanClick}
+                disabled={scanning}
+              >
+                <Camera className="mr-2 h-5 w-5" />
+                {scanning ? 'Scanning...' : 'Scan Item'}
+              </Button>
+            {/* Scan Suggestions */}
+            {scanSuggestions.length > 0 && (
+              <div className="mt-6 max-w-md mx-auto bg-orange-50 border border-orange-200 rounded-xl p-4">
+                <div className="font-semibold mb-2 text-orange-600">Scan Suggestions:</div>
+                <ul className="list-disc pl-5 text-gray-700">
+                  {scanSuggestions.map((s, i) => (
+                    <li key={i}>{s}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
               <Button size="lg" className="text-lg px-8 py-4 bg-orange-500 hover:bg-orange-600 text-white shadow transition-all" asChild>
                 <Link to="/products">
                   <ShoppingCart className="mr-2 h-5 w-5" />
