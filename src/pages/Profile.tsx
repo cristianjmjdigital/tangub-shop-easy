@@ -28,8 +28,8 @@ const Profile = () => {
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [userInfo, setUserInfo] = useState({
-    name: "Juan dela Cruz",
-    email: "juan.delacruz@email.com",
+    name: "Cristian Daron",
+    email: "xtiandev@email.com",
     phone: "+63 912 345 6789",
     address: "123 Rizal Street, Poblacion, Tangub City, Misamis Occidental"
   });

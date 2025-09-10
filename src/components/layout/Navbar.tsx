@@ -13,6 +13,7 @@ import {
   Store,
   MapPin 
 } from "lucide-react";
+const logo = "/logo.jpg"; // served from public/
 
 const Navbar = () => {
   const [cartCount] = useState(3);
@@ -34,16 +35,27 @@ const Navbar = () => {
       <div className="container mx-auto px-4">
         {/* Top Bar */}
         <div className="flex items-center justify-between py-3">
-          <Link to="/" className="flex items-center space-x-2">
-            <div className="bg-gradient-primary p-2 rounded-lg">
-              <Store className="h-6 w-6 text-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="font-bold text-lg text-primary">Tangub Shop Easy</h1>
-              <div className="flex items-center text-xs text-muted-foreground">
-                <MapPin className="h-3 w-3 mr-1" />
-                Tangub City
+          <Link to="/" className="flex items-center space-x-2 group">
+            <div className="relative h-12 w-12 flex items-center justify-center">
+              <img
+                src={logo}
+                alt="Tangub City Shopeasy"
+                className="h-12 w-auto drop-shadow-sm transition-transform group-hover:scale-105"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  const fallback = e.currentTarget.parentElement?.querySelector('[data-fallback]');
+                  if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                }}
+              />
+              <div
+                data-fallback
+                className="hidden absolute inset-0 bg-gradient-primary rounded-md items-center justify-center"
+              >
+                <Store className="h-7 w-7 text-primary-foreground" />
               </div>
+            </div>
+            <div className="hidden sm:block">
+              <h1 className="font-bold text-lg text-primary leading-tight">Tangub City<br /><span className="text-accent">Shopeasy</span></h1>
             </div>
           </Link>
 

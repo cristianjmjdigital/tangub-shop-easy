@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Tangub Shop Easy</string>
+    <string name="title_activity_main">Tangub Shop Easy</string>
+    <string name="package_name">com.tangub.shopeasy</string>
+    <string name="custom_url_scheme">com.tangub.shopeasy</string>
+</resources>
