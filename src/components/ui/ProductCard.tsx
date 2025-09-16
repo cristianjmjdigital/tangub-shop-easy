@@ -12,6 +12,7 @@ interface ProductCardProps {
   location: string;
   discount?: number;
   imageUrl?: string;
+  image?: string; // alias used by some pages
 }
 
 const ProductCard = ({
@@ -22,19 +23,24 @@ const ProductCard = ({
   business,
   location,
   discount,
-  imageUrl
+  imageUrl,
+  image
 }: ProductCardProps) => {
+  const src = imageUrl || image || "/placeholder.svg";
   return (
     <Card className="overflow-hidden hover:shadow-elegant transition-all duration-300 group">
       <div className="relative">
-        <div className="aspect-square bg-gradient-primary opacity-20 relative">
-          {imageUrl ? (
-            <img src={imageUrl} alt={name} className="object-cover w-full h-full" />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-lg font-medium text-primary">{name}</span>
-            </div>
-          )}
+        <div className="aspect-square bg-white relative overflow-hidden rounded-xl">
+          <img
+            src={src}
+            alt={name}
+            className="object-cover w-full h-full"
+            onError={(e) => {
+              if (e.currentTarget.src.endsWith("/placeholder.svg")) return;
+              e.currentTarget.src = "/placeholder.svg";
+            }}
+            loading="lazy"
+          />
         </div>
         {discount && (
           <Badge variant="destructive" className="absolute top-2 right-2">

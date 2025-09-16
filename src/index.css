@@ -122,6 +122,8 @@ All colors MUST be HSL.
 
 /* Splash screen animations */
 @layer utilities {
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   @keyframes loading-bar {
     0% { transform: translateX(-100%); }
     60% { transform: translateX(0); }

@@ -31,7 +31,7 @@ const Navbar = () => {
   ];
 
   return (
-    <nav className="bg-background border-b shadow-sm sticky top-0 z-50">
+    <nav className="bg-primary text-primary-foreground sticky top-0 z-50 shadow-sm">
       <div className="container mx-auto px-4">
         {/* Top Bar */}
         <div className="flex items-center justify-between py-3">
@@ -55,7 +55,7 @@ const Navbar = () => {
               </div>
             </div>
             <div className="hidden sm:block">
-              <h1 className="font-bold text-lg text-primary leading-tight">Tangub City<br /><span className="text-accent">Shopeasy</span></h1>
+              <h1 className="font-bold text-lg leading-tight">Tangub City<br /><span className="text-accent-foreground/90">Shopeasy</span></h1>
             </div>
           </Link>
 
@@ -67,8 +67,8 @@ const Navbar = () => {
                 to={item.path}
                 className={`flex items-center space-x-1 px-3 py-2 rounded-lg transition-colors ${
                   isActive(item.path)
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                    ? "bg-white/15 text-white"
+                    : "text-primary-foreground/90 hover:text-white hover:bg-white/10"
                 }`}
               >
                 {item.icon && <item.icon className="h-4 w-4" />}
@@ -85,7 +85,7 @@ const Navbar = () => {
           {/* Cart and Mobile Menu */}
           <div className="flex items-center space-x-2">
             <Link to="/cart">
-              <Button variant="outline" size="sm" className="relative">
+              <Button variant="secondary" size="sm" className="relative">
                 <ShoppingCart className="h-4 w-4" />
                 {cartCount > 0 && (
                   <Badge variant="destructive" className="absolute -top-2 -right-2 h-5 w-5 p-0 text-xs flex items-center justify-center">
@@ -98,7 +98,7 @@ const Navbar = () => {
             {/* Mobile Menu */}
             <Sheet>
               <SheetTrigger asChild className="md:hidden">
-                <Button variant="outline" size="sm">
+                <Button variant="secondary" size="sm">
                   <Menu className="h-4 w-4" />
                 </Button>
               </SheetTrigger>
@@ -128,14 +128,13 @@ const Navbar = () => {
             </Sheet>
           </div>
         </div>
-
-        {/* Search Bar */}
+        {/* Search Bar (white pill) */}
         <div className="pb-4">
           <div className="relative max-w-2xl mx-auto">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
               placeholder="Search products, businesses in Tangub City..."
-              className="pl-10 pr-4 py-3 text-base"
+              className="pl-10 pr-4 py-3 text-base bg-white text-foreground border-0 shadow-sm rounded-full"
             />
           </div>
         </div>
