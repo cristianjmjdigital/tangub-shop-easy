@@ -19,7 +19,7 @@ export default function BusinessDetail() {
       <div className="relative">
         <img src="https://images.unsplash.com/photo-1550317138-10000687a72b?q=80&w=1200&auto=format&fit=crop" alt="cover" className="h-56 w-full object-cover" />
         <div className="absolute top-3 left-3 flex gap-2">
-          <Link to="/" className="inline-flex"><Button size="icon" variant="secondary" className="rounded-full"><ArrowLeft className="h-4 w-4" /></Button></Link>
+          <Link to="/home" className="inline-flex"><Button size="icon" variant="secondary" className="rounded-full"><ArrowLeft className="h-4 w-4" /></Button></Link>
           <Button size="icon" variant="secondary" className="rounded-full"><Heart className="h-4 w-4" /></Button>
         </div>
       </div>

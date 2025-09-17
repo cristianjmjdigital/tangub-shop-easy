@@ -8,6 +8,10 @@ import Navbar from "./components/layout/Navbar";
 import BottomNav from "./components/layout/BottomNav";
 import SplashScreen from "./components/layout/SplashScreen";
 import Index from "./pages/Index";
+import Access from "./pages/Access";
+import UserLogin from "./pages/UserLogin";
+import VendorLogin from "./pages/VendorLogin";
+import VendorDashboard from "./pages/VendorDashboard";
 import Products from "./pages/Products";
 import Businesses from "./pages/Businesses";
 import BusinessDetail from "./pages/BusinessDetail";
@@ -33,7 +37,11 @@ const App = () => {
               <Navbar />
               <main>
                 <Routes>
-                  <Route path="/" element={<Index />} />
+                  <Route path="/" element={<Access />} />
+                  <Route path="/home" element={<Index />} />
+                  <Route path="/login/user" element={<UserLogin />} />
+                  <Route path="/login/vendor" element={<VendorLogin />} />
+                  <Route path="/vendor" element={<VendorDashboard />} />
                   <Route path="/products" element={<Products />} />
                   <Route path="/businesses" element={<Businesses />} />
                   <Route path="/business-demo" element={<BusinessDetail />} />

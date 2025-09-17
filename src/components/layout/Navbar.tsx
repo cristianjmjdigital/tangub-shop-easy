@@ -23,7 +23,7 @@ const Navbar = () => {
   const isActive = (path: string) => location.pathname === path;
 
   const navItems = [
-    { path: "/", label: "Home", icon: null },
+    { path: "/home", label: "Home", icon: null },
     { path: "/products", label: "Products", icon: null },
     { path: "/businesses", label: "Businesses", icon: Store },
     { path: "/messages", label: "Messages", icon: MessageCircle },
@@ -35,7 +35,7 @@ const Navbar = () => {
       <div className="container mx-auto px-4">
         {/* Top Bar */}
         <div className="flex items-center justify-between py-3">
-          <Link to="/" className="flex items-center space-x-2 group">
+          <Link to="/home" className="flex items-center space-x-2 group">
             <div className="relative h-12 w-12 flex items-center justify-center">
               <img
                 src={logo}

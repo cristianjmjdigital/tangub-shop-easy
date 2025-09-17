@@ -3,7 +3,7 @@ import { Home, ShoppingBag, ShoppingCart, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 const tabs = [
-  { to: "/", label: "Home", icon: Home },
+  { to: "/home", label: "Home", icon: Home },
   { to: "/products", label: "Products", icon: ShoppingBag },
   { to: "/cart", label: "Cart", icon: ShoppingCart },
   { to: "/profile", label: "Profile", icon: User },
