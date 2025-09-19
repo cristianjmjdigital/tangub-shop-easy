@@ -10,6 +10,7 @@ import SplashScreen from "./components/layout/SplashScreen";
 import Index from "./pages/Index";
 import Access from "./pages/Access";
 import UserLogin from "./pages/UserLogin";
+import UserSignup from "./pages/UserSignup";
 import VendorLogin from "./pages/VendorLogin";
 import VendorDashboard from "./pages/VendorDashboard";
 import Products from "./pages/Products";
@@ -40,6 +41,7 @@ const App = () => {
                   <Route path="/" element={<Access />} />
                   <Route path="/home" element={<Index />} />
                   <Route path="/login/user" element={<UserLogin />} />
+                  <Route path="/signup/user" element={<UserSignup />} />
                   <Route path="/login/vendor" element={<VendorLogin />} />
                   <Route path="/vendor" element={<VendorDashboard />} />
                   <Route path="/products" element={<Products />} />

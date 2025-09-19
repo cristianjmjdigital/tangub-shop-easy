@@ -18,6 +18,9 @@ export default function Access() {
         <Button size="lg" variant="outline" className="w-full rounded-full border-primary text-primary hover:bg-secondary" asChild>
           <Link to="/login/vendor">Vendor Login</Link>
         </Button>
+        <div className="text-center text-sm text-muted-foreground">
+          New here? <Link to="/signup/user" className="text-primary font-medium">Create an account</Link>
+        </div>
       </div>
       <div className="mt-8 text-xs text-muted-foreground">Prototype access screen</div>
     </div>

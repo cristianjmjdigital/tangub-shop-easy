@@ -16,6 +16,7 @@ export default function UserLogin() {
           <Button className="w-full" asChild>
             <Link to="/home">Continue (Mock)</Link>
           </Button>
+          <div className="text-center text-sm text-muted-foreground">Don't have an account? <Link to="/signup/user" className="text-primary font-medium">Sign up</Link></div>
           <Button variant="outline" className="w-full" asChild>
             <Link to="/">Back</Link>
           </Button>
