@@ -79,26 +79,56 @@ export default function UserSignup() {
       if (!supabase) {
         throw new Error('Supabase client not initialized');
       }
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: form.email.trim(),
-        password: form.password,
-        options: { data: { full_name: form.name.trim() } }
-      });
+      const emailTrim = form.email.trim().toLowerCase();
+      let signUpData, signUpError;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const { data, error } = await supabase.auth.signUp({
+          email: emailTrim,
+          password: form.password,
+          options: { data: { full_name: form.name.trim() } }
+        });
+        signUpData = data; signUpError = error;
+        if (!error) break;
+        const msg = (error.message || '').toLowerCase();
+        // Retry only on ambiguous DB error (possible transient) once
+        if (attempt === 0 && /database error saving new user/.test(msg)) {
+          await new Promise(r => setTimeout(r, 600));
+          continue;
+        }
+        break;
+      }
       if (signUpError) {
         const msg = signUpError.message || '';
-        // Common duplicate / already registered patterns
-        if (/duplicate key|already registered|already exists|User already registered/i.test(msg)) {
+        if (import.meta.env.DEV) {
+          console.group('[Signup] signUpError');
+          console.debug('message:', signUpError.message);
+          // @ts-ignore
+          console.debug('status:', signUpError.status, 'name:', signUpError.name, 'code:', (signUpError as any).code);
+          console.debug('full object:', signUpError);
+          console.groupEnd();
+        }
+        // Duplicate detection
+        if (/duplicate key|already registered|already exists|user already registered|email.*exists|violates unique constraint/i.test(msg)) {
           setError('Email already registered. Please log in instead.');
           setSubmitting(false);
           return;
         }
+        // Password policy
         if (/password/i.test(msg) && /length/i.test(msg)) {
           setError('Password does not meet requirements. Use at least 6 characters.');
           setSubmitting(false);
           return;
         }
-        // Fallback generic message
-        throw signUpError;
+        // Ambiguous database error: show raw so we can learn real root cause (improves debugging)
+        if (/database error saving new user/i.test(msg)) {
+          setError('Signup failed (database). Try again once. If it persists, attempt to log in—account might have been partially created. Raw: ' + msg);
+          setSubmitting(false);
+          return;
+        }
+        // Generic fallback (use original for clarity)
+        setError('Signup failed: ' + msg);
+        setSubmitting(false);
+        return;
       }
       const authUser = signUpData.user;
       if (!authUser?.id) throw new Error("No user id returned from sign up");
@@ -131,7 +161,17 @@ export default function UserSignup() {
         }
         break;
       }
-      if (!upsertSuccess) throw new Error(`Profile save failed: ${lastUpsertErr?.message || 'unknown error'}`);
+      if (!upsertSuccess) {
+        // As a fallback, see if profile row exists already (race or previous attempt)
+        const { data: existingRow } = await supabase
+          .from('users')
+          .select('id')
+          .eq('auth_user_id', authUser.id)
+          .maybeSingle();
+        if (!existingRow) {
+          throw new Error(`Profile save failed: ${lastUpsertErr?.message || 'unknown error'}`);
+        }
+      }
 
       // Verify persistence (best-effort)
       const { data: verifyRow } = await supabase
@@ -152,7 +192,7 @@ export default function UserSignup() {
         if (/invalid input syntax for type/i.test(raw)) {
           setError('Invalid input. Please review your entries.');
         } else {
-          setError('Could not create account. If this email may already exist, try logging in.');
+          setError('Signup failed due to backend constraint. Try a different email or log in if you registered before.');
         }
       } else if (/network/i.test(raw)) {
         setError('Network issue creating account. Check your connection and try again.');

@@ -13,7 +13,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useAuth } from "@/context/AuthContext";
 
-interface VendorRecord { id: string; name: string; description: string | null; address: string | null; created_at?: string }
+interface VendorRecord { id: string; store_name: string; address: string | null; created_at?: string; owner_user_id?: string }
 interface ProductRecord { id: string; name: string; price: number; stock: number; status?: string }
 
 export default function VendorDashboard() {
@@ -37,8 +37,8 @@ export default function VendorDashboard() {
       // Fetch vendor row
       const { data: vendorData, error: vendorError } = await supabase
         .from('vendors')
-        .select('*')
-        .eq('owner_auth_user_id', profile.auth_user_id)
+        .select('id,store_name,address,created_at,owner_user_id')
+        .eq('owner_user_id', profile.auth_user_id)
         .maybeSingle();
       if (vendorError) { setError(vendorError.message); setLoading(false); return; }
       setVendor(vendorData as VendorRecord);
@@ -80,7 +80,7 @@ export default function VendorDashboard() {
                   <Store className="h-7 w-7" />
                 </div>
                 <div>
-                  <h1 className="text-xl font-semibold leading-tight">{vendor.name}</h1>
+                  <h1 className="text-xl font-semibold leading-tight">{vendor.store_name}</h1>
                   <p className="text-xs text-muted-foreground">Since {new Date(vendor.created_at || Date.now()).getFullYear()} • <span className="text-green-600 font-medium">Online</span></p>
                 </div>
               </div>
@@ -233,7 +233,7 @@ export default function VendorDashboard() {
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="storeName">Store Name</Label>
-                      <Input id="storeName" defaultValue={vendor.name} />
+                      <Input id="storeName" defaultValue={vendor.store_name} />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="contactNumber">Contact Number</Label>

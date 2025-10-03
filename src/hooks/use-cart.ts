@@ -29,7 +29,8 @@ interface UseCartOptions {
 
 export function useCart(options: UseCartOptions = {}) {
   const { vendorId = null, autoCreate = true } = options;
-  const { user } = useAuth();
+  const { session } = useAuth();
+  const authUser = session?.user;
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [cart, setCart] = useState<CartRow | null>(null);
@@ -37,14 +38,14 @@ export function useCart(options: UseCartOptions = {}) {
   const [error, setError] = useState<string | null>(null);
 
   const loadCart = useCallback(async () => {
-    if (!user) return;
+  if (!authUser) return;
     setLoading(true); setError(null);
     try {
       // For simplicity: single active cart per user (ignore vendor segmentation first)
       const { data: carts, error: cartErr } = await supabase
         .from('carts')
         .select('*')
-        .eq('user_id', user.id)
+  .eq('user_id', authUser.id)
         .limit(1);
       if (cartErr) throw cartErr;
       let current = carts?.[0] || null;
@@ -52,7 +53,7 @@ export function useCart(options: UseCartOptions = {}) {
       if (!current && autoCreate) {
         const { data: inserted, error: insertErr } = await supabase
           .from('carts')
-          .insert({ user_id: user.id, vendor_id: vendorId ?? null })
+          .insert({ user_id: authUser.id, vendor_id: vendorId ?? null })
           .select('*')
           .single();
         if (insertErr) throw insertErr;
@@ -77,12 +78,12 @@ export function useCart(options: UseCartOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [user, vendorId, autoCreate]);
+  }, [authUser, vendorId, autoCreate]);
 
   useEffect(() => { loadCart(); }, [loadCart]);
 
   const addItem = useCallback(async (productId: string, quantity = 1) => {
-    if (!user) {
+    if (!authUser) {
       toast({ title: 'Please login', description: 'You must be logged in to add items to cart', variant: 'destructive' });
       return;
     }
@@ -92,7 +93,7 @@ export function useCart(options: UseCartOptions = {}) {
       if (!current) {
         const { data: inserted, error: insertErr } = await supabase
           .from('carts')
-          .insert({ user_id: user.id, vendor_id: vendorId ?? null })
+          .insert({ user_id: authUser.id, vendor_id: vendorId ?? null })
           .select('*')
           .single();
         if (insertErr) throw insertErr;
@@ -127,7 +128,7 @@ export function useCart(options: UseCartOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [user, cart, items, vendorId, toast]);
+  }, [authUser, cart, items, vendorId, toast]);
 
   const updateQuantity = useCallback(async (itemId: string, quantity: number) => {
     if (quantity < 1) return removeItem(itemId);
@@ -189,7 +190,7 @@ export function useCart(options: UseCartOptions = {}) {
 
   // Checkout: create one order per vendor grouping, then order_items, decrement stock, finally clear cart
   const checkout = useCallback(async () => {
-    if (!user) {
+    if (!authUser) {
       toast({ title: 'Please login', description: 'Login required to checkout', variant: 'destructive' });
       return { orders: [] };
     }
@@ -213,7 +214,7 @@ export function useCart(options: UseCartOptions = {}) {
         // Create order
         const { data: order, error: orderErr } = await supabase
           .from('orders')
-          .insert({ user_id: user.id, vendor_id: vendorId, total, status: 'pending' })
+          .insert({ user_id: authUser.id, vendor_id: vendorId, total, status: 'pending' })
           .select('*')
           .single();
         if (orderErr) throw orderErr;
@@ -227,13 +228,31 @@ export function useCart(options: UseCartOptions = {}) {
         }));
         const { error: oiErr } = await supabase.from('order_items').insert(orderItemsPayload);
         if (oiErr) throw oiErr;
+        // Insert system message for vendor conversation (best effort; ignore failure)
+        try {
+          // Need vendor owner to receive; fetch vendor if unknown
+          const { data: vRow } = await supabase.from('vendors').select('id,owner_user_id,store_name').eq('id', vendorId).maybeSingle();
+          if (vRow?.owner_user_id) {
+            await supabase.from('messages').insert({
+              vendor_id: vRow.id,
+              sender_user_id: authUser.id,
+              receiver_user_id: vRow.owner_user_id,
+              content: `New order #${order.id} placed. Total ₱${total.toFixed(2)}`
+            });
+          }
+        } catch (msgErr) {
+          console.warn('system message insert failed', msgErr);
+        }
         // Decrement stock (best-effort, not transactional)
         for (const it of groupItems) {
           if (typeof it.product?.stock === 'number') {
-            await supabase.rpc('decrement_product_stock', { p_id: it.product_id, p_qty: it.quantity }).catch(async () => {
-              // Fallback manual update (non-atomic)
+            try {
+              const { error: rpcErr } = await supabase.rpc('decrement_product_stock', { p_id: it.product_id, p_qty: it.quantity });
+              if (rpcErr) throw rpcErr;
+            } catch (_) {
+              // Fallback manual update (non-atomic, race-prone)
               await supabase.from('products').update({ stock: (it.product!.stock as number) - it.quantity }).eq('id', it.product_id);
-            });
+            }
           }
         }
         createdOrders.push(order);
@@ -249,7 +268,7 @@ export function useCart(options: UseCartOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [user, items, clearCart, toast]);
+  }, [authUser, items, clearCart, toast]);
 
   return {
     loading,

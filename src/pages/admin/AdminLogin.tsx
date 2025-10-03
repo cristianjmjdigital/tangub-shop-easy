@@ -14,7 +14,7 @@ export default function AdminLogin() {
     e.preventDefault();
     if (!form.email || !form.password) return setError("Missing credentials");
     // Mock admin login (hard-coded) - later replace with Supabase auth/role claim
-    if (form.email === "admin@tangub.local" && form.password === "admin123") {
+    if (form.email === "admin@tangub.shopeasy" && form.password === "admin123") {
       localStorage.setItem("role", "admin");
       navigate("/admin");
     } else {
@@ -41,7 +41,6 @@ export default function AdminLogin() {
             {error && <div className="text-xs text-destructive">{error}</div>}
             <Button type="submit" className="w-full">Login</Button>
           </form>
-          <div className="mt-6 text-[10px] text-muted-foreground text-center">Prototype only – will integrate Supabase auth later.</div>
         </CardContent>
       </Card>
     </div>

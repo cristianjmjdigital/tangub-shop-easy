@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,119 +16,230 @@ import {
   Clock,
   CheckCheck
 } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/context/AuthContext";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/components/ui/use-toast";
+
+interface DbMessage {
+  id: string;
+  vendor_id: string | null;
+  sender_user_id: string;
+  receiver_user_id: string;
+  content: string;
+  created_at: string;
+  read_at: string | null;
+}
+
+interface VendorRow {
+  id: string;
+  store_name: string;
+  address?: string | null;
+  owner_user_id?: string;
+}
+
+interface ConversationSummary {
+  id: string; // vendor_id or synthetic other-user id
+  type: 'vendor' | 'direct';
+  vendor?: VendorRow;
+  otherUserId?: string; // when direct message (not implemented extensively)
+  lastMessage?: DbMessage;
+  unreadCount: number;
+  messages: DbMessage[]; // ordered asc
+}
 
 const Messages = () => {
-  const [selectedChat, setSelectedChat] = useState(1);
+  const { session, profile } = useAuth();
+  const [rawMessages, setRawMessages] = useState<DbMessage[]>([]);
+  const [vendors, setVendors] = useState<Record<string, VendorRow>>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedChat, setSelectedChat] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [sending, setSending] = useState(false);
+  const [optimistic, setOptimistic] = useState<Record<string, DbMessage>>({});
+  const { toast } = useToast();
+  const [showNewConv, setShowNewConv] = useState(false);
+  const [newVendorId, setNewVendorId] = useState("");
 
-  const conversations = [
-    {
-      id: 1,
-      businessName: "Tangub Delicacies",
-      businessAvatar: "TD",
-      lastMessage: "Your buko pie order is ready for pickup!",
-      timestamp: "2 min ago",
-      unreadCount: 2,
-      isOnline: true,
-      orderNumber: "#ORD-001",
-      orderStatus: "Ready for Pickup"
-    },
-    {
-      id: 2,
-      businessName: "Mountain Coffee",
-      businessAvatar: "MC",
-      lastMessage: "Thank you for your purchase! How was the coffee?",
-      timestamp: "1 hour ago",
-      unreadCount: 0,
-      isOnline: false,
-      orderNumber: "#ORD-002",
-      orderStatus: "Delivered"
-    },
-    {
-      id: 3,
-      businessName: "Local Crafts Co.",
-      businessAvatar: "LC",
-      lastMessage: "The banig mat you ordered will be ready tomorrow",
-      timestamp: "3 hours ago",
-      unreadCount: 1,
-      isOnline: true,
-      orderNumber: "#ORD-003",
-      orderStatus: "Processing"
-    },
-    {
-      id: 4,
-      businessName: "Eco Crafts",
-      businessAvatar: "EC",
-      lastMessage: "Hi! Do you have other bamboo products available?",
-      timestamp: "Yesterday",
-      unreadCount: 0,
-      isOnline: false,
-      orderNumber: null,
-      orderStatus: null
-    }
-  ];
-
-  const messages = {
-    1: [
-      {
-        id: 1,
-        content: "Hi! I'd like to order 2 buko pies for pickup tomorrow.",
-        sender: "customer",
-        timestamp: "10:30 AM",
-        status: "delivered"
-      },
-      {
-        id: 2,
-        content: "Hello! Yes, we can prepare 2 buko pies for you. What time would you like to pick them up?",
-        sender: "business",
-        timestamp: "10:32 AM",
-        status: "delivered"
-      },
-      {
-        id: 3,
-        content: "Around 2 PM would be perfect. How much is the total?",
-        sender: "customer",
-        timestamp: "10:35 AM",
-        status: "delivered"
-      },
-      {
-        id: 4,
-        content: "That's ₱500 for 2 buko pies. We'll have them ready by 2 PM tomorrow.",
-        sender: "business",
-        timestamp: "10:36 AM",
-        status: "delivered"
-      },
-      {
-        id: 5,
-        content: "Perfect! See you tomorrow at 2 PM.",
-        sender: "customer",
-        timestamp: "10:37 AM",
-        status: "delivered"
-      },
-      {
-        id: 6,
-        content: "Your buko pie order is ready for pickup!",
-        sender: "business",
-        timestamp: "1:55 PM",
-        status: "delivered"
+  // Fetch messages involving current user
+  useEffect(() => {
+    const user = session?.user;
+    if (!user) return;
+    let isMounted = true;
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const { data: rows, error: msgErr } = await supabase
+          .from('messages')
+          .select('*')
+          .or(`sender_user_id.eq.${user.id},receiver_user_id.eq.${user.id}`)
+          .order('created_at', { ascending: true }); // ascending so we can display naturally
+        if (msgErr) throw msgErr;
+        if (!isMounted) return;
+        setRawMessages(rows || []);
+        // Collect vendor ids
+        const vIds = Array.from(new Set((rows || []).map(r => r.vendor_id).filter(Boolean))) as string[];
+        if (vIds.length) {
+          const { data: vRows, error: vErr } = await supabase
+            .from('vendors')
+            .select('id,store_name,address,owner_user_id')
+            .in('id', vIds);
+          if (vErr) throw vErr;
+          if (!isMounted) return;
+            const map: Record<string, VendorRow> = {};
+            (vRows || []).forEach(v => { map[v.id] = v as VendorRow; });
+            setVendors(map);
+        } else {
+          setVendors({});
+        }
+      } catch (e: any) {
+        if (isMounted) setError(e.message || 'Failed to load messages');
+      } finally {
+        if (isMounted) setLoading(false);
       }
-    ]
-  };
+    };
+    load();
 
-  const currentConversation = conversations.find(c => c.id === selectedChat);
-  const currentMessages = messages[selectedChat as keyof typeof messages] || [];
+    // Basic realtime subscription (optional enhancements later)
+    const channel = supabase.channel('messages-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, payload => {
+        setRawMessages(prev => {
+          const newRow = payload.new as DbMessage | undefined;
+          if (!newRow) return prev;
+          // Avoid duplicates
+          if (prev.find(m => m.id === newRow.id)) return prev;
+          // Only add if relevant to this user
+          if (newRow.sender_user_id !== user.id && newRow.receiver_user_id !== user.id) return prev;
+          return [...prev, newRow].sort((a,b)=> new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        });
+      })
+      .subscribe();
 
-  const filteredConversations = conversations.filter(conv =>
-    conv.businessName.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+    return () => { isMounted = false; supabase.removeChannel(channel); };
+  }, [session]);
 
-  const sendMessage = () => {
-    if (newMessage.trim()) {
-      // Add message logic here
-      setNewMessage("");
+  const conversations: ConversationSummary[] = useMemo(() => {
+  const user = session?.user;
+  if (!user) return [];
+    const groups = new Map<string, ConversationSummary>();
+    for (const m of rawMessages) {
+      const key = m.vendor_id || (m.sender_user_id === user.id ? m.receiver_user_id : m.sender_user_id);
+      let summary = groups.get(key);
+      if (!summary) {
+        const vendor = m.vendor_id ? vendors[m.vendor_id] : undefined;
+        summary = {
+          id: key,
+            type: vendor ? 'vendor' : 'direct',
+            vendor,
+            otherUserId: vendor ? undefined : (m.sender_user_id === user.id ? m.receiver_user_id : m.sender_user_id),
+            lastMessage: m,
+            unreadCount: 0,
+            messages: []
+        };
+        groups.set(key, summary);
+      }
+      summary.messages.push(m);
+      // Update lastMessage (messages are ascending – last iteration wins)
+      summary.lastMessage = m;
+      if (m.receiver_user_id === user.id && !m.read_at) {
+        summary.unreadCount += 1;
+      }
     }
+    // Ensure messages arrays sorted (already ascending) but keep safety
+    const list = Array.from(groups.values());
+    return list.sort((a,b) => {
+      const at = a.lastMessage ? new Date(a.lastMessage.created_at).getTime() : 0;
+      const bt = b.lastMessage ? new Date(b.lastMessage.created_at).getTime() : 0;
+      return bt - at; // desc by last message
+    });
+  }, [rawMessages, vendors, session]);
+
+  // Filtered conversations by search
+  const filteredConversations = useMemo(() => {
+    if (!searchQuery) return conversations;
+    return conversations.filter(c => {
+      const name = c.vendor ? c.vendor.store_name : c.otherUserId || '';
+      return name.toLowerCase().includes(searchQuery.toLowerCase());
+    });
+  }, [conversations, searchQuery]);
+
+  // Selected conversation details
+  const currentConversation = useMemo(() => conversations.find(c => c.id === selectedChat) || null, [conversations, selectedChat]);
+
+  // Mark unread messages as read when opening
+  useEffect(() => {
+    const user = session?.user;
+    if (!user || !currentConversation) return;
+    const unread = currentConversation.messages.filter(m => m.receiver_user_id === user.id && !m.read_at);
+    if (!unread.length) return;
+    const ids = unread.map(m => m.id);
+    supabase.from('messages').update({ read_at: new Date().toISOString() }).in('id', ids).then();
+  }, [currentConversation, session]);
+
+  const sendMessage = useCallback(async () => {
+    const user = session?.user;
+    if (!user || !newMessage.trim() || !currentConversation) return;
+    try {
+      setSending(true);
+      let receiver: string | null = null;
+      if (currentConversation.vendor?.owner_user_id) receiver = currentConversation.vendor.owner_user_id;
+      else if (currentConversation.otherUserId) receiver = currentConversation.otherUserId;
+      if (!receiver) return;
+      const trimmed = newMessage.trim();
+      const tempId = `temp-${Date.now()}`;
+      const optimisticMsg: DbMessage = {
+        id: tempId,
+        vendor_id: currentConversation.vendor ? currentConversation.vendor.id : null,
+        sender_user_id: user.id,
+        receiver_user_id: receiver,
+        content: trimmed,
+        created_at: new Date().toISOString(),
+        read_at: null
+      };
+      setOptimistic(prev => ({ ...prev, [tempId]: optimisticMsg }));
+      setNewMessage("");
+      const { data, error: insErr } = await supabase
+        .from('messages')
+        .insert({ vendor_id: optimisticMsg.vendor_id, sender_user_id: user.id, receiver_user_id: receiver, content: trimmed })
+        .select()
+        .single();
+      if (insErr) throw insErr;
+      if (data) {
+        setRawMessages(prev => [...prev, data as DbMessage]);
+        setOptimistic(prev => { const cp = { ...prev }; delete cp[tempId]; return cp; });
+      }
+    } catch (e) {
+      console.error('Send message failed', e);
+      toast({ title: 'Message not sent', description: 'We could not deliver your message. Please retry.', variant: 'destructive' });
+      setOptimistic(prev => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith('temp-'))));
+    } finally {
+      setSending(false);
+    }
+  }, [session, newMessage, currentConversation]);
+
+  const formatRelative = (iso?: string) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const diffMs = Date.now() - d.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return 'just now';
+    if (diffMin < 60) return diffMin + 'm';
+    const diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24) return diffHr + 'h';
+    const diffDay = Math.floor(diffHr / 24);
+    if (diffDay === 1) return '1d';
+    return diffDay + 'd';
   };
+
+  // Auto-select first conversation when loaded
+  useEffect(() => {
+    if (!selectedChat && conversations.length) {
+      setSelectedChat(conversations[0].id);
+    }
+  }, [conversations, selectedChat]);
 
   return (
     <div className="min-h-screen bg-gradient-subtle">
@@ -139,11 +250,15 @@ const Messages = () => {
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-xl">Messages</CardTitle>
-                <Badge variant="secondary">
-                  {conversations.filter(c => c.unreadCount > 0).length} unread
-                </Badge>
+                {loading ? (
+                  <Skeleton className="h-5 w-16" />
+                ) : (
+                  <Badge variant="secondary">
+                    {conversations.filter(c => c.unreadCount > 0).length} unread
+                  </Badge>
+                )}
               </div>
-              <div className="relative">
+              <div className="relative space-y-2">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input
                   placeholder="Search conversations..."
@@ -151,59 +266,85 @@ const Messages = () => {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
                 />
+                <div className="flex gap-2 pt-1">
+                  <Button size="sm" variant="outline" type="button" onClick={()=> setShowNewConv(s=>!s)}>New</Button>
+                </div>
+                {showNewConv && (
+                  <div className="flex gap-2">
+                    <Input placeholder="Vendor ID" value={newVendorId} onChange={e=>setNewVendorId(e.target.value)} />
+                    <Button size="sm" type="button" disabled={!newVendorId.trim()} onClick={async ()=>{
+                      const id = newVendorId.trim();
+                      if (!id) return;
+                      if (!vendors[id]) {
+                        const { data: vRow } = await supabase.from('vendors').select('id,store_name,address,owner_user_id').eq('id', id).maybeSingle();
+                        if (vRow) setVendors(prev => ({ ...prev, [vRow.id]: vRow as VendorRow }));
+                      }
+                      setSelectedChat(id);
+                      setShowNewConv(false);
+                      setNewVendorId('');
+                    }}>Open</Button>
+                  </div>
+                )}
               </div>
             </CardHeader>
             <CardContent className="p-0">
               <ScrollArea className="h-[500px]">
-                {filteredConversations.map((conversation, index) => (
-                  <div key={conversation.id}>
-                    <div
-                      className={`p-4 cursor-pointer hover:bg-accent transition-colors ${
-                        selectedChat === conversation.id ? "bg-accent" : ""
-                      }`}
-                      onClick={() => setSelectedChat(conversation.id)}
-                    >
-                      <div className="flex items-start space-x-3">
-                        <div className="relative">
-                          <Avatar className="h-12 w-12">
-                            <AvatarFallback className="bg-primary text-primary-foreground">
-                              {conversation.businessAvatar}
-                            </AvatarFallback>
-                          </Avatar>
-                          {conversation.isOnline && (
-                            <div className="absolute -bottom-1 -right-1 h-4 w-4 bg-green-500 rounded-full border-2 border-background"></div>
-                          )}
+                {loading && (
+                  <div className="p-4 space-y-4">
+                    {[...Array(4)].map((_,i)=>(
+                      <div key={i} className="flex space-x-3">
+                        <Skeleton className="h-12 w-12 rounded-full" />
+                        <div className="flex-1 space-y-2">
+                          <Skeleton className="h-4 w-1/2" />
+                          <Skeleton className="h-3 w-full" />
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-1">
-                            <h4 className="font-medium truncate">{conversation.businessName}</h4>
-                            <span className="text-xs text-muted-foreground">{conversation.timestamp}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {!loading && !conversations.length && (
+                  <div className="p-6 text-sm text-muted-foreground">No messages yet.</div>
+                )}
+                {!loading && filteredConversations.map((conversation, index) => {
+                  const vendor = conversation.vendor;
+                  const name = vendor ? vendor.store_name : 'Direct chat';
+                  const initials = vendor ? vendor.store_name.slice(0,2).toUpperCase() : 'DM';
+                  const lastContent = conversation.lastMessage?.content || 'No messages';
+                  const time = formatRelative(conversation.lastMessage?.created_at);
+                  return (
+                    <div key={conversation.id}>
+                      <div
+                        className={`p-4 cursor-pointer hover:bg-accent transition-colors ${selectedChat === conversation.id ? 'bg-accent' : ''}`}
+                        onClick={() => setSelectedChat(conversation.id)}
+                      >
+                        <div className="flex items-start space-x-3">
+                          <div className="relative">
+                            <Avatar className="h-12 w-12">
+                              <AvatarFallback className="bg-primary text-primary-foreground">
+                                {initials}
+                              </AvatarFallback>
+                            </Avatar>
                           </div>
-                          {conversation.orderNumber && (
-                            <div className="flex items-center mb-1">
-                              <Package className="h-3 w-3 mr-1 text-primary" />
-                              <span className="text-xs text-primary font-medium">{conversation.orderNumber}</span>
-                              <Badge variant="outline" className="ml-2 text-xs">
-                                {conversation.orderStatus}
-                              </Badge>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <h4 className="font-medium truncate">{name}</h4>
+                              <span className="text-xs text-muted-foreground">{time}</span>
                             </div>
-                          )}
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm text-muted-foreground truncate pr-2">
-                              {conversation.lastMessage}
-                            </p>
-                            {conversation.unreadCount > 0 && (
-                              <Badge variant="destructive" className="text-xs min-w-[20px] h-5">
-                                {conversation.unreadCount}
-                              </Badge>
-                            )}
+                            <div className="flex items-center justify-between">
+                              <p className="text-sm text-muted-foreground truncate pr-2">{lastContent}</p>
+                              {conversation.unreadCount > 0 && (
+                                <Badge variant="destructive" className="text-xs min-w-[20px] h-5">
+                                  {conversation.unreadCount}
+                                </Badge>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
+                      {index < filteredConversations.length - 1 && <Separator />}
                     </div>
-                    {index < filteredConversations.length - 1 && <Separator />}
-                  </div>
-                ))}
+                  );
+                })}
               </ScrollArea>
             </CardContent>
           </Card>
@@ -212,29 +353,19 @@ const Messages = () => {
           <Card className="lg:col-span-2 flex flex-col">
             {currentConversation ? (
               <>
-                {/* Chat Header */}
                 <CardHeader className="pb-4 border-b">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
                       <Avatar className="h-10 w-10">
                         <AvatarFallback className="bg-primary text-primary-foreground">
-                          {currentConversation.businessAvatar}
+                          {currentConversation.vendor ? currentConversation.vendor.store_name.slice(0,2).toUpperCase() : 'DM'}
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <h3 className="font-semibold">{currentConversation.businessName}</h3>
+                        <h3 className="font-semibold">{currentConversation.vendor ? currentConversation.vendor.store_name : 'Conversation'}</h3>
                         <div className="flex items-center text-sm text-muted-foreground">
-                          {currentConversation.isOnline ? (
-                            <>
-                              <div className="h-2 w-2 bg-green-500 rounded-full mr-2"></div>
-                              Online
-                            </>
-                          ) : (
-                            <>
-                              <Clock className="h-3 w-3 mr-1" />
-                              Last seen 1 hour ago
-                            </>
-                          )}
+                          <Clock className="h-3 w-3 mr-1" />
+                          Updated {formatRelative(currentConversation.lastMessage?.created_at)}
                         </div>
                       </div>
                     </div>
@@ -250,64 +381,43 @@ const Messages = () => {
                       </Button>
                     </div>
                   </div>
-                  {currentConversation.orderNumber && (
-                    <div className="flex items-center mt-3 p-3 bg-accent rounded-lg">
-                      <Package className="h-4 w-4 mr-2 text-primary" />
-                      <span className="text-sm font-medium">Order {currentConversation.orderNumber}</span>
-                      <Badge variant="outline" className="ml-2">
-                        {currentConversation.orderStatus}
-                      </Badge>
-                    </div>
-                  )}
                 </CardHeader>
-
-                {/* Messages */}
                 <CardContent className="flex-1 p-0">
                   <ScrollArea className="h-[400px] p-4">
                     <div className="space-y-4">
-                      {currentMessages.map((message) => (
-                        <div
-                          key={message.id}
-                          className={`flex ${
-                            message.sender === "customer" ? "justify-end" : "justify-start"
-                          }`}
-                        >
-                          <div
-                            className={`max-w-[70%] p-3 rounded-lg ${
-                              message.sender === "customer"
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-muted"
-                            }`}
-                          >
-                            <p className="text-sm">{message.content}</p>
-                            <div className={`flex items-center justify-between mt-2 text-xs ${
-                              message.sender === "customer" 
-                                ? "text-primary-foreground/70" 
-                                : "text-muted-foreground"
-                            }`}>
-                              <span>{message.timestamp}</span>
-                              {message.sender === "customer" && (
-                                <CheckCheck className="h-3 w-3 ml-2" />
-                              )}
+                      {[...currentConversation.messages, ...Object.values(optimistic).filter(o => (o.vendor_id || '') === (currentConversation.vendor?.id || ''))]
+                        .sort((a,b)=> new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                        .map(m => {
+                        const mine = m.sender_user_id === session?.user?.id;
+                        const time = new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        return (
+                          <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-[70%] p-3 rounded-lg ${mine ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+                              <p className="text-sm whitespace-pre-wrap break-words">{m.content}</p>
+                              <div className={`flex items-center justify-between mt-2 text-xs ${mine ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                                <span>{time}</span>
+                                {mine && <CheckCheck className={`h-3 w-3 ml-2 ${m.id.startsWith('temp-') ? 'opacity-20 animate-pulse' : m.read_at ? 'opacity-100' : 'opacity-40'}`} />}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
+                      {!currentConversation.messages.length && (
+                        <div className="text-center text-xs text-muted-foreground">No messages yet. Say hello 👋</div>
+                      )}
                     </div>
                   </ScrollArea>
                 </CardContent>
-
-                {/* Message Input */}
                 <div className="p-4 border-t">
                   <div className="flex items-center space-x-2">
                     <Input
                       placeholder="Type your message..."
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
-                      onKeyPress={(e) => e.key === "Enter" && sendMessage()}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
                       className="flex-1"
                     />
-                    <Button onClick={sendMessage} disabled={!newMessage.trim()}>
+                    <Button onClick={sendMessage} disabled={!newMessage.trim() || sending}>
                       <Send className="h-4 w-4" />
                     </Button>
                   </div>
@@ -321,7 +431,7 @@ const Messages = () => {
                   </div>
                   <h3 className="text-lg font-semibold mb-2">Select a conversation</h3>
                   <p className="text-muted-foreground">
-                    Choose a business conversation to start messaging
+                    Choose a conversation to start messaging
                   </p>
                 </div>
               </div>
