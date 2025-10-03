@@ -22,7 +22,7 @@ export default function Access() {
           New here? <Link to="/signup/user" className="text-primary font-medium">Create an account</Link>
         </div>
       </div>
-      <div className="mt-8 text-xs text-muted-foreground">Prototype access screen</div>
+      <div className="mt-8 text-xs text-muted-foreground"><Link to="/admin/login">Admin Login</Link></div>
     </div>
   );
 }
