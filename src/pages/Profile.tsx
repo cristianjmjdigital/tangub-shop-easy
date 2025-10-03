@@ -22,16 +22,19 @@ import {
   CreditCard
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext";
 
 const Profile = () => {
   const { toast } = useToast();
+  const { profile, signOut } = useAuth();
+  const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [userInfo, setUserInfo] = useState({
-    name: "Cristian Daron",
-    email: "xtiandev@email.com",
-    phone: "+63 912 345 6789",
-    address: "123 Rizal Street, Poblacion, Tangub City, Misamis Occidental"
+    name: profile?.full_name || "", 
+    email: profile?.email || "", 
+    phone: profile?.phone || "", 
+    address: profile?.barangay ? `${profile.barangay}, Tangub City` : "Tangub City"
   });
 
   const recentOrders = [
@@ -334,7 +337,11 @@ const Profile = () => {
                         <Settings className="h-4 w-4 mr-2" />
                         Privacy Settings
                       </Button>
-                      <Button variant="outline" className="w-full justify-start text-destructive hover:text-destructive">
+                      <Button 
+                        variant="outline" 
+                        className="w-full justify-start text-destructive hover:text-destructive"
+                        onClick={async () => { await signOut(); navigate('/'); }}
+                      >
                         <LogOut className="h-4 w-4 mr-2" />
                         Log Out
                       </Button>

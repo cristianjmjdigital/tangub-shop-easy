@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link, useNavigate } from "react-router-dom";
+import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/context/AuthContext";
 
 const BARANGAYS = [
   "Aquino",
@@ -42,6 +44,7 @@ const BARANGAYS = [
 
 export default function UserSignup() {
   const navigate = useNavigate();
+  const { refreshProfile } = useAuth();
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -51,13 +54,65 @@ export default function UserSignup() {
     city: "Tangub City",
     barangay: "Aquino",
   });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const onSubmit = (e: React.FormEvent) => {
+  const validate = () => {
+    if (!form.name.trim()) return "Name required";
+    if (!form.email.trim()) return "Email required";
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email)) return "Invalid email";
+    if (form.password.length < 6) return "Password must be at least 6 characters";
+    if (form.password !== form.confirm) return "Passwords do not match";
+    return null;
+  };
+
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name || !form.email || !form.password || !form.confirm) return;
-    if (form.password !== form.confirm) return;
-    // Mock signup success
-    navigate("/home");
+    const v = validate();
+    if (v) { setError(v); return; }
+    setError(null);
+    setSubmitting(true);
+    try {
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email: form.email.trim(),
+        password: form.password,
+        options: { data: { full_name: form.name.trim() } }
+      });
+      if (signUpError) throw signUpError;
+      const authUser = signUpData.user;
+      if (!authUser?.id) throw new Error("No user id returned from sign up");
+
+      // Poll for trigger-created profile row
+      let profileFound = false;
+      for (let i = 0; i < 10; i++) {
+        const { data: prof } = await supabase
+          .from('users')
+          .select('id')
+          .eq('auth_user_id', authUser.id)
+          .maybeSingle();
+        if (prof) { profileFound = true; break; }
+        await new Promise(r => setTimeout(r, 300 * (i + 1)));
+      }
+      if (!profileFound) throw new Error('Profile creation delay. Please try signing in again shortly.');
+
+      // Update additional fields (barangay, phone) & full_name override to ensure match with form
+      await supabase
+        .from('users')
+        .update({
+          full_name: form.name.trim(),
+            barangay: form.barangay,
+          phone: form.phone || null
+        })
+        .eq('auth_user_id', authUser.id);
+
+      await refreshProfile();
+      navigate('/home');
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Signup failed');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -109,7 +164,8 @@ export default function UserSignup() {
                 </Select>
               </div>
             </div>
-            <Button className="w-full" type="submit">Sign Up</Button>
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            <Button className="w-full" type="submit" disabled={submitting}>{submitting ? 'Creating account...' : 'Sign Up'}</Button>
             <Button variant="outline" className="w-full" asChild>
               <Link to="/login/user">Back to Login</Link>
             </Button>

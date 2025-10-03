@@ -1,38 +1,68 @@
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Package, ShoppingCart, Settings, TrendingUp, Store, DollarSign, Users, Edit, Trash2 } from "lucide-react";
+import { Plus, ShoppingCart, Settings, TrendingUp, Store, DollarSign, Users, Edit, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { supabase } from "@/lib/supabaseClient";
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { useAuth } from "@/context/AuthContext";
+
+interface VendorRecord { id: string; name: string; description: string | null; address: string | null; created_at?: string }
+interface ProductRecord { id: string; name: string; price: number; stock: number; status?: string }
 
 export default function VendorDashboard() {
-  const store = {
-    name: "Burger King Tangub",
-    since: 2024,
-    todaySales: 1540.75,
-    orders: 27,
-    visitors: 123,
-  };
+  const { profile, signOut } = useAuth();
+  const [vendor, setVendor] = useState<VendorRecord | null>(null);
+  const [products, setProducts] = useState<ProductRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [newProduct, setNewProduct] = useState({ name: '', price: '', stock: '' });
 
-  const products = [
-    { id: 101, name: "Whopper Jr", price: 129, stock: 34, status: "Active" },
-    { id: 102, name: "Cheese Whopper", price: 149, stock: 12, status: "Low Stock" },
-    { id: 103, name: "King Fries Large", price: 89, stock: 0, status: "Out of Stock" },
-    { id: 104, name: "Iced Tea (22oz)", price: 55, stock: 58, status: "Active" },
-    { id: 105, name: "Mushroom Burger", price: 169, stock: 7, status: "Low Stock" },
-  ];
+  useEffect(() => {
+    const load = async () => {
+      if (!profile?.auth_user_id) return;
+      setLoading(true);
+      setError(null);
+      // Fetch vendor row
+      const { data: vendorData, error: vendorError } = await supabase
+        .from('vendors')
+        .select('*')
+        .eq('owner_auth_user_id', profile.auth_user_id)
+        .maybeSingle();
+      if (vendorError) { setError(vendorError.message); setLoading(false); return; }
+      setVendor(vendorData as VendorRecord);
+      if (vendorData?.id) {
+        const { data: productRows } = await supabase
+          .from('products')
+          .select('id,name,price,stock,status')
+          .eq('vendor_id', vendorData.id)
+          .order('created_at', { ascending: false });
+        setProducts((productRows as ProductRecord[]) || []);
+      }
+      setLoading(false);
+    };
+    load();
+  }, [profile?.auth_user_id]);
 
-  const orders = [
-    { id: 9001, customer: "Juan D.", total: 348, items: 3, status: "Preparing", placed: "10:12 AM" },
-    { id: 9002, customer: "Maria S.", total: 129, items: 1, status: "For Delivery", placed: "10:25 AM" },
-    { id: 9003, customer: "Alex T.", total: 478, items: 4, status: "Delivered", placed: "09:55 AM" },
-    { id: 9004, customer: "Chris P.", total: 89, items: 1, status: "Cancelled", placed: "09:41 AM" },
-    { id: 9005, customer: "Lara Q.", total: 214, items: 2, status: "For Delivery", placed: "10:31 AM" },
-  ];
+  if (loading) {
+    return <div className="p-6 text-sm text-muted-foreground">Loading vendor data...</div>;
+  }
+
+  if (error) {
+    return <div className="p-6 text-sm text-red-600">{error}</div>;
+  }
+
+  if (!vendor) {
+    return <div className="p-6 text-sm">No vendor record found. <Link to="/vendor/setup" className="text-primary underline">Create one</Link>.</div>;
+  }
 
   return (
     <div className="min-h-screen bg-background px-4 py-6">
@@ -46,20 +76,67 @@ export default function VendorDashboard() {
                   <Store className="h-7 w-7" />
                 </div>
                 <div>
-                  <h1 className="text-xl font-semibold leading-tight">{store.name}</h1>
-                  <p className="text-xs text-muted-foreground">Operating since {store.since} • <span className="text-green-600 font-medium">Online</span></p>
+                  <h1 className="text-xl font-semibold leading-tight">{vendor.name}</h1>
+                  <p className="text-xs text-muted-foreground">Since {new Date(vendor.created_at || Date.now()).getFullYear()} • <span className="text-green-600 font-medium">Online</span></p>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" asChild>
-                  <Link to="/home">User View</Link>
-                </Button>
-                <Button size="sm">
-                  <Plus className="h-4 w-4 mr-1" /> New Product
-                </Button>
-                <Button size="sm" variant="outline" asChild>
-                  <Link to="/">Logout</Link>
-                </Button>
+                <Button size="sm" variant="outline" asChild><Link to="/home">User View</Link></Button>
+                <Dialog open={open} onOpenChange={setOpen}>
+                  <DialogTrigger asChild>
+                    <Button size="sm">
+                      <Plus className="h-4 w-4 mr-1" /> New Product
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Add Product</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                      <div className="space-y-1">
+                        <Label htmlFor="prod-name">Name</Label>
+                        <Input id="prod-name" value={newProduct.name} onChange={e => setNewProduct(p => ({ ...p, name: e.target.value }))} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <Label htmlFor="prod-price">Price (₱)</Label>
+                          <Input id="prod-price" type="number" value={newProduct.price} onChange={e => setNewProduct(p => ({ ...p, price: e.target.value }))} />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="prod-stock">Stock</Label>
+                          <Input id="prod-stock" type="number" value={newProduct.stock} onChange={e => setNewProduct(p => ({ ...p, stock: e.target.value }))} />
+                        </div>
+                      </div>
+                      {creating && <p className="text-xs text-muted-foreground">Saving...</p>}
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setOpen(false)} type="button">Cancel</Button>
+                      <Button disabled={creating || !newProduct.name.trim()} onClick={async () => {
+                        if (!vendor?.id) return;
+                        setCreating(true);
+                        const priceNum = Number(newProduct.price);
+                        const stockNum = Number(newProduct.stock);
+                        const { data: inserted, error: insertErr } = await supabase
+                          .from('products')
+                          .insert({
+                            vendor_id: vendor.id,
+                            name: newProduct.name.trim(),
+                            price: isNaN(priceNum) ? 0 : priceNum,
+                            stock: isNaN(stockNum) ? 0 : stockNum,
+                          })
+                          .select('id,name,price,stock,status')
+                          .single();
+                        if (!insertErr && inserted) {
+                          setProducts(prev => [inserted as any, ...prev]);
+                          setOpen(false);
+                          setNewProduct({ name: '', price: '', stock: '' });
+                        }
+                        setCreating(false);
+                      }} type="button">Save</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+                <Button size="sm" variant="outline" onClick={() => signOut()}>Logout</Button>
               </div>
             </div>
             {/* Metrics */}
@@ -69,21 +146,21 @@ export default function VendorDashboard() {
                   <span>Today's Sales</span>
                   <DollarSign className="h-3 w-3" />
                 </div>
-                <div className="mt-1 text-lg font-semibold">₱{store.todaySales.toLocaleString()}</div>
+                <div className="mt-1 text-lg font-semibold">₱0.00</div>
               </div>
               <div className="rounded-lg border p-3 bg-muted/30">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>Orders</span>
                   <ShoppingCart className="h-3 w-3" />
                 </div>
-                <div className="mt-1 text-lg font-semibold">{store.orders}</div>
+                <div className="mt-1 text-lg font-semibold">0</div>
               </div>
               <div className="rounded-lg border p-3 bg-muted/30">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>Visitors</span>
                   <Users className="h-3 w-3" />
                 </div>
-                <div className="mt-1 text-lg font-semibold">{store.visitors}</div>
+                <div className="mt-1 text-lg font-semibold">0</div>
               </div>
               <div className="rounded-lg border p-3 bg-muted/30">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -140,42 +217,7 @@ export default function VendorDashboard() {
             </div>
           </TabsContent>
           <TabsContent value="orders">
-            <div className="flex justify-between items-center mb-3">
-              <h2 className="text-sm font-medium text-muted-foreground">Recent Orders: {orders.length}</h2>
-              <Button size="sm" variant="outline"><ShoppingCart className="h-4 w-4 mr-1" /> Refresh</Button>
-            </div>
-            <div className="space-y-4">
-              {orders.map(o => (
-                <Card key={o.id} className="border-l-4 relative pl-2 pr-2" style={{borderLeftColor: o.status === 'Preparing' ? '#d97706' : o.status === 'For Delivery' ? '#2563eb' : o.status === 'Delivered' ? '#15803d' : '#dc2626'}}>
-                  <CardContent className="py-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                      <div className="flex items-start gap-4">
-                        <div className="text-xs text-muted-foreground font-mono bg-muted px-2 py-1 rounded">#{o.id}</div>
-                        <div>
-                          <div className="font-medium leading-tight">{o.customer}</div>
-                          <div className="text-xs text-muted-foreground mt-0.5">{o.items} item{o.items>1? 's':''} • Placed {o.placed}</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <div className="text-sm font-semibold">₱{o.total}</div>
-                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Total</div>
-                        </div>
-                        <div>
-                          {o.status === "Preparing" && <Badge className="bg-amber-500 hover:bg-amber-500">Preparing</Badge>}
-                          {o.status === "For Delivery" && <Badge className="bg-blue-600 hover:bg-blue-600">For Delivery</Badge>}
-                          {o.status === "Delivered" && <Badge className="bg-green-600 hover:bg-green-600">Delivered</Badge>}
-                          {o.status === "Cancelled" && <Badge variant="destructive">Cancelled</Badge>}
-                        </div>
-                        <div className="flex gap-1">
-                          <Button size="icon" variant="ghost" className="h-8 w-8"><Edit className="h-4 w-4" /></Button>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+            <div className="text-sm text-muted-foreground p-4">Order integration pending.</div>
           </TabsContent>
           <TabsContent value="settings">
             <Card>
@@ -187,7 +229,7 @@ export default function VendorDashboard() {
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="storeName">Store Name</Label>
-                      <Input id="storeName" defaultValue={store.name} />
+                      <Input id="storeName" defaultValue={vendor.name} />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="contactNumber">Contact Number</Label>
