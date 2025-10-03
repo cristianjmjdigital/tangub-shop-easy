@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/components/ui/use-toast";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/context/AuthContext";
@@ -45,6 +46,7 @@ const BARANGAYS = [
 export default function UserSignup() {
   const navigate = useNavigate();
   const { refreshProfile } = useAuth();
+  const { toast } = useToast();
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -53,10 +55,10 @@ export default function UserSignup() {
     phone: "",
     city: "Tangub City",
     barangay: "Aquino",
+    role: "customer" // customer | vendor
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   const validate = () => {
     if (!form.name.trim()) return "Name required";
     if (!form.email.trim()) return "Email required";
@@ -73,43 +75,90 @@ export default function UserSignup() {
     setError(null);
     setSubmitting(true);
     try {
+      // Basic defensive check for missing env config to surface clearer error
+      if (!supabase) {
+        throw new Error('Supabase client not initialized');
+      }
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: form.email.trim(),
         password: form.password,
         options: { data: { full_name: form.name.trim() } }
       });
-      if (signUpError) throw signUpError;
+      if (signUpError) {
+        const msg = signUpError.message || '';
+        // Common duplicate / already registered patterns
+        if (/duplicate key|already registered|already exists|User already registered/i.test(msg)) {
+          setError('Email already registered. Please log in instead.');
+          setSubmitting(false);
+          return;
+        }
+        if (/password/i.test(msg) && /length/i.test(msg)) {
+          setError('Password does not meet requirements. Use at least 6 characters.');
+          setSubmitting(false);
+          return;
+        }
+        // Fallback generic message
+        throw signUpError;
+      }
       const authUser = signUpData.user;
       if (!authUser?.id) throw new Error("No user id returned from sign up");
 
-      // Poll for trigger-created profile row
-      let profileFound = false;
-      for (let i = 0; i < 10; i++) {
-        const { data: prof } = await supabase
-          .from('users')
-          .select('id')
-          .eq('auth_user_id', authUser.id)
-          .maybeSingle();
-        if (prof) { profileFound = true; break; }
-        await new Promise(r => setTimeout(r, 300 * (i + 1)));
-      }
-      if (!profileFound) throw new Error('Profile creation delay. Please try signing in again shortly.');
+      // Simplified: skip waiting for session (open RLS / email confirm disabled for school project)
 
-      // Update additional fields (barangay, phone) & full_name override to ensure match with form
-      await supabase
-        .from('users')
-        .update({
+      // Direct upsert of profile (idempotent) — avoids trigger timing/RLS race.
+      const desiredRole = form.role === 'vendor' ? 'vendor' : 'user';
+      let upsertSuccess = false;
+      let lastUpsertErr: any = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const profilePayload: any = {
+          auth_user_id: authUser.id,
+          email: authUser.email,
           full_name: form.name.trim(),
-            barangay: form.barangay,
-          phone: form.phone || null
-        })
-        .eq('auth_user_id', authUser.id);
+          role: desiredRole
+        };
+        // Only include barangay/phone if user entered (avoid errors if columns missing)
+        if (form.barangay) profilePayload.barangay = form.barangay;
+        if (form.phone) profilePayload.phone = form.phone;
+
+        const { error: upsertErr } = await supabase
+          .from('users')
+          .upsert([profilePayload], { onConflict: 'auth_user_id' });
+        if (!upsertErr) { upsertSuccess = true; break; }
+        lastUpsertErr = upsertErr;
+        if (upsertErr.message.toLowerCase().includes('row-level security') || upsertErr.message.toLowerCase().includes('foreign key')) {
+          await new Promise(r => setTimeout(r, 400 * (attempt + 1)));
+          continue;
+        }
+        break;
+      }
+      if (!upsertSuccess) throw new Error(`Profile save failed: ${lastUpsertErr?.message || 'unknown error'}`);
+
+      // Verify persistence (best-effort)
+      const { data: verifyRow } = await supabase
+        .from('users')
+        .select('id, role, barangay, phone')
+        .eq('auth_user_id', authUser.id)
+        .maybeSingle();
+      if (!verifyRow) console.warn('[signup] verify row missing after upsert');
 
       await refreshProfile();
-      navigate('/home');
+      toast({ title: 'Account created', description: 'Redirecting to home...', duration: 2500 });
+      setTimeout(() => navigate('/home'), 1400);
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Signup failed');
+      // Normalize some Postgres / network noise for end-user clarity
+      const raw = err.message || 'Signup failed';
+      if (/Database error saving new user/i.test(raw)) {
+        if (/invalid input syntax for type/i.test(raw)) {
+          setError('Invalid input. Please review your entries.');
+        } else {
+          setError('Could not create account. If this email may already exist, try logging in.');
+        }
+      } else if (/network/i.test(raw)) {
+        setError('Network issue creating account. Check your connection and try again.');
+      } else {
+        setError(raw);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -144,6 +193,18 @@ export default function UserSignup() {
             <div className="space-y-2">
               <Label htmlFor="phone">Phone (optional)</Label>
               <Input id="phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="09xx-xxx-xxxx" />
+            </div>
+            <div className="space-y-2">
+              <Label>Account Type</Label>
+              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="customer">Customer</SelectItem>
+                  <SelectItem value="vendor">Vendor</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">

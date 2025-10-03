@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,100 +18,44 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
+import { useCart } from "@/hooks/use-cart";
 
 const Cart = () => {
   const { toast } = useToast();
   const [deliveryMethod, setDeliveryMethod] = useState("pickup");
-  const [paymentMethod] = useState("cash"); // Cash only as per requirements
+  const [paymentMethod] = useState("cash");
+  const { items, updateQuantity, removeItem, subtotal, loading, checkout } = useCart();
 
-  const [cartItems, setCartItems] = useState([
-    {
-      id: 1,
-      name: "Fresh Buko Pie",
-      price: 250,
-      quantity: 2,
-      business: "Tangub Delicacies",
-      businessLocation: "Poblacion",
-      image: "/placeholder-food.jpg",
-      maxQuantity: 10
-    },
-    {
-      id: 2,
-      name: "Tangub Coffee Beans",
-      price: 380,
-      quantity: 1,
-      business: "Mountain Coffee",
-      businessLocation: "Katipunan",
-      image: "/placeholder-coffee.jpg",
-      maxQuantity: 5
-    },
-    {
-      id: 3,
-      name: "Bamboo Phone Stand",
-      price: 150,
-      quantity: 1,
-      business: "Eco Crafts",
-      businessLocation: "Bonga",
-      image: "/placeholder-bamboo.jpg",
-      maxQuantity: 8
-    }
-  ]);
+  const cartItems = items.map(i => ({
+    id: i.id,
+    name: i.product?.name || 'Product',
+    price: i.product?.price || 0,
+    quantity: i.quantity,
+    business: i.product?.vendor?.name || 'Vendor',
+    businessLocation: i.product?.vendor?.barangay || 'Location',
+    image: i.product?.image_url || '/placeholder.svg',
+    maxQuantity: i.product?.stock || 99,
+  }));
 
-  const updateQuantity = (id: number, newQuantity: number) => {
-    if (newQuantity < 1) return;
-    
-    setCartItems(items =>
-      items.map(item => {
-        if (item.id === id) {
-          const quantity = Math.min(newQuantity, item.maxQuantity);
-          return { ...item, quantity };
-        }
-        return item;
-      })
-    );
-  };
-
-  const removeItem = (id: number) => {
-    setCartItems(items => items.filter(item => item.id !== id));
-    toast({
-      title: "Item Removed",
-      description: "Item has been removed from your cart.",
-    });
-  };
-
-  const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const deliveryFee = deliveryMethod === "delivery" ? 50 : 0;
   const total = subtotal + deliveryFee;
 
-  const businessGroups = cartItems.reduce((groups, item) => {
+  const businessGroups = useMemo(() => cartItems.reduce((groups, item) => {
     const key = item.business;
-    if (!groups[key]) {
-      groups[key] = [];
-    }
+    if (!groups[key]) groups[key] = [];
     groups[key].push(item);
     return groups;
-  }, {} as Record<string, typeof cartItems>);
+  }, {} as Record<string, typeof cartItems>), [cartItems]);
 
-  const placeOrder = () => {
+  const placeOrder = async () => {
     if (cartItems.length === 0) {
-      toast({
-        title: "Cart is empty",
-        description: "Please add items to your cart before placing an order.",
-        variant: "destructive"
-      });
+      toast({ title: "Cart is empty", description: "Please add items to your cart before placing an order.", variant: "destructive" });
       return;
     }
-
-    toast({
-      title: "Order Placed Successfully!",
-      description: `Your order for ₱${total.toLocaleString()} has been placed. You will receive a confirmation message shortly.`,
-    });
-
-    // Clear cart after successful order
-    setCartItems([]);
+    await checkout();
   };
 
-  if (cartItems.length === 0) {
+  if (!loading && cartItems.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-subtle">
         <div className="container mx-auto px-4 py-6">

@@ -25,6 +25,9 @@ export default function VendorDashboard() {
   const [creating, setCreating] = useState(false);
   const [open, setOpen] = useState(false);
   const [newProduct, setNewProduct] = useState({ name: '', price: '', stock: '' });
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<ProductRecord | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -65,6 +68,7 @@ export default function VendorDashboard() {
   }
 
   return (
+    <>
     <div className="min-h-screen bg-background px-4 py-6">
       <div className="max-w-5xl mx-auto space-y-6">
         {/* Top Header */}
@@ -207,7 +211,7 @@ export default function VendorDashboard() {
                         <span className={`text-xs px-2 py-1 rounded-full border ${p.stock === 0 ? 'text-destructive border-destructive/40' : p.stock < 10 ? 'text-amber-600 border-amber-400/50' : 'text-muted-foreground border-border'}`}>{p.stock} in stock</span>
                       </div>
                       <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button size="sm" variant="secondary" className="h-7 px-2"><Edit className="h-3.5 w-3.5 mr-1" /> Edit</Button>
+                        <Button size="sm" variant="secondary" className="h-7 px-2" onClick={() => { setEditingProduct(p); setEditOpen(true); }}><Edit className="h-3.5 w-3.5 mr-1" /> Edit</Button>
                         <Button size="sm" variant="outline" className="h-7 px-2 text-destructive border-destructive/40"><Trash2 className="h-3.5 w-3.5 mr-1" /> Delete</Button>
                       </div>
                     </CardContent>
@@ -268,5 +272,51 @@ export default function VendorDashboard() {
         </Tabs>
       </div>
     </div>
+    {/* Edit Product Dialog */}
+    <Dialog open={editOpen} onOpenChange={setEditOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit Product</DialogTitle>
+        </DialogHeader>
+        {editingProduct && (
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <Label htmlFor="edit-name">Name</Label>
+              <Input id="edit-name" value={editingProduct.name} onChange={e => setEditingProduct(prev => prev ? { ...prev, name: e.target.value } : prev)} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label htmlFor="edit-price">Price (₱)</Label>
+                <Input id="edit-price" type="number" value={editingProduct.price} onChange={e => setEditingProduct(prev => prev ? { ...prev, price: Number(e.target.value) } : prev)} />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="edit-stock">Stock</Label>
+                <Input id="edit-stock" type="number" value={editingProduct.stock} onChange={e => setEditingProduct(prev => prev ? { ...prev, stock: Number(e.target.value) } : prev)} />
+              </div>
+            </div>
+            {savingEdit && <p className="text-xs text-muted-foreground">Saving...</p>}
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" type="button" onClick={() => setEditOpen(false)}>Cancel</Button>
+          <Button type="button" disabled={savingEdit || !editingProduct?.name.trim()} onClick={async () => {
+            if (!editingProduct) return;
+            setSavingEdit(true);
+            const { error: updErr, data } = await supabase
+              .from('products')
+              .update({ name: editingProduct.name.trim(), price: editingProduct.price, stock: editingProduct.stock })
+              .eq('id', editingProduct.id)
+              .select('id,name,price,stock,status')
+              .single();
+            if (!updErr && data) {
+              setProducts(prev => prev.map(p => p.id === data.id ? (data as any) : p));
+              setEditOpen(false);
+            }
+            setSavingEdit(false);
+          }}>Save Changes</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

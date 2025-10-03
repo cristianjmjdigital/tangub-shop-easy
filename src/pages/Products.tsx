@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,115 +8,141 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Star, MapPin, ShoppingCart, Filter, Heart } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/context/AuthContext";
+import { useCart } from "@/hooks/use-cart";
+
+interface RawProductRow {
+  id: string;
+  name: string;
+  price: number | null;
+  stock?: number | null;
+  vendor_id?: string | null;
+  // Optional columns that might exist
+  category?: string | null;
+  image_url?: string | null;
+  location?: string | null; // if product stores its own location
+  created_at?: string;
+}
+
+interface VendorRow { id: string; name: string; address?: string | null; barangay?: string | null }
+
+interface UIProduct {
+  id: string;
+  name: string;
+  price: number;
+  rating: number; // placeholder (no ratings table yet)
+  reviews: number; // placeholder
+  image: string;
+  business: string;
+  location: string;
+  category: string;
+  discount?: number;
+  featured?: boolean;
+}
 
 const Products = () => {
   const { toast } = useToast();
-  const [priceRange, setPriceRange] = useState([0, 10000]);
+  const { profile } = useAuth();
+  const { addItem } = useCart();
+  // store as generic number[] to satisfy Slider's (number[]) signature, but enforce length 2 logically
+  const [priceRange, setPriceRange] = useState<number[]>([0, 10000]);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedLocation, setSelectedLocation] = useState("all");
+  const [rawProducts, setRawProducts] = useState<RawProductRow[]>([]);
+  const [vendors, setVendors] = useState<Record<string, VendorRow>>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState("featured");
 
-  const categories = [
-    "Electronics", "Fashion", "Food & Beverage", "Home & Garden", 
-    "Health & Beauty", "Sports", "Books", "Automotive"
-  ];
+  // Fetch products + vendors (two queries to avoid depending on relationship naming)
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true); setError(null);
+      const { data: pData, error: pErr } = await supabase
+        .from('products')
+        .select('id,name,price,stock,vendor_id,main_image_url,created_at')
+        .limit(200);
+      if (pErr) { setError(pErr.message); setLoading(false); return; }
+      setRawProducts(pData as RawProductRow[]);
+      // Collect vendor_ids
+      const vendorIds = Array.from(new Set((pData || []).map(r => r.vendor_id).filter(Boolean))) as string[];
+      if (vendorIds.length) {
+        const { data: vRows, error: vErr } = await supabase
+          .from('vendors')
+          .select('id,name,address,barangay')
+          .in('id', vendorIds);
+        if (!vErr && vRows) {
+          const map: Record<string, VendorRow> = {};
+          vRows.forEach(v => { map[v.id] = v as VendorRow; });
+          setVendors(map);
+        }
+      }
+      setLoading(false);
+    };
+    load();
+  }, []);
 
-  const locations = [
-    "Poblacion", "Maloro", "Katipunan", "Silabay", "Bonga", 
-    "San Miguel", "Bagumbayan", "New Tangub"
-  ];
-
-  const products = [
-    {
-      id: 1,
-      name: "Fresh Buko Pie",
-      price: 250,
-      originalPrice: 300,
-      rating: 4.8,
-      reviews: 125,
-      image: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=400&q=80",
-      business: "Tangub Delicacies",
-      location: "Poblacion",
-      category: "Food & Beverage",
-      discount: 17,
-      featured: true
-    },
-    {
-      id: 2,
-      name: "Handwoven Banig Mat",
-      price: 450,
-      rating: 4.9,
-      reviews: 87,
-      image: "https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=400&q=80",
-      business: "Local Crafts Co.",
-      location: "Maloro",
-      category: "Home & Garden",
-      featured: false
-    },
-    {
-      id: 3,
-      name: "Tangub Coffee Beans",
-      price: 380,
-      rating: 4.7,
-      reviews: 203,
-      image: "https://images.unsplash.com/photo-1511920170033-f8396924c348?auto=format&fit=crop&w=400&q=80",
-      business: "Mountain Coffee",
-      location: "Katipunan",
-      category: "Food & Beverage",
-      featured: true
-    },
-    {
-      id: 4,
-      name: "Local Honey",
-      price: 320,
-      rating: 4.6,
-      reviews: 94,
-      image: "https://images.unsplash.com/photo-1464983953574-0892a716854b?auto=format&fit=crop&w=400&q=80",
-      business: "Bee Happy Farm",
-      location: "Silabay",
-      category: "Food & Beverage",
-      featured: false
-    },
-    {
-      id: 5,
-      name: "Bamboo Phone Stand",
-      price: 150,
-      originalPrice: 200,
-      rating: 4.5,
-      reviews: 67,
-      image: "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=400&q=80",
-      business: "Eco Crafts",
-      location: "Bonga",
-      category: "Electronics",
-      discount: 25,
-      featured: false
-    },
-    {
-      id: 6,
-      name: "Tangub T-Shirt",
-      price: 280,
-      rating: 4.4,
-      reviews: 156,
-      image: "https://images.unsplash.com/photo-1512436991641-6745cdb1723f?auto=format&fit=crop&w=400&q=80",
-      business: "City Pride Apparel",
-      location: "Poblacion",
-      category: "Fashion",
-      featured: true
-    }
-  ];
-
-  const addToCart = (product: any) => {
-    toast({
-      title: "Added to Cart",
-      description: `${product.name} has been added to your cart.`,
+  // Derive dynamic category & location sets from loaded data
+  const uiProducts: UIProduct[] = useMemo(() => {
+    return rawProducts.map(p => {
+      const vendor = p.vendor_id ? vendors[p.vendor_id] : undefined;
+      // Fallback heuristics
+  // Category column not present in current schema; use placeholder
+  const category = 'General';
+      const location = p.location || vendor?.barangay || vendor?.address || 'Unknown';
+      // Placeholder rating data (until ratings implemented)
+      return {
+        id: p.id,
+        name: p.name,
+        price: typeof p.price === 'number' ? p.price : 0,
+        rating: 0,
+        reviews: 0,
+  image: (p as any).main_image_url || '/placeholder.svg',
+        business: vendor?.name || 'Unknown Vendor',
+        location,
+        category,
+        featured: false,
+      };
     });
+  }, [rawProducts, vendors]);
+
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    uiProducts.forEach(p => set.add(p.category));
+    return Array.from(set).sort();
+  }, [uiProducts]);
+
+  const locations = useMemo(() => {
+    const set = new Set<string>();
+    uiProducts.forEach(p => set.add(p.location));
+    return Array.from(set).sort();
+  }, [uiProducts]);
+
+  const addToCart = async (product: UIProduct) => {
+    try {
+      await addItem(product.id, 1);
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message || 'Failed to add to cart', variant: 'destructive' });
+    }
   };
 
-  const filteredProducts = products.filter(product => {
-    const matchesCategory = selectedCategory === "all" || product.category === selectedCategory;
-    const matchesLocation = selectedLocation === "all" || product.location === selectedLocation;
-    const matchesPrice = product.price >= priceRange[0] && product.price <= priceRange[1];
-    return matchesCategory && matchesLocation && matchesPrice;
-  });
+  const filteredProducts = useMemo(() => {
+    let list = uiProducts.filter(product => {
+      const matchesCategory = selectedCategory === "all" || product.category === selectedCategory;
+      const matchesLocation = selectedLocation === "all" || product.location === selectedLocation;
+      const matchesPrice = product.price >= priceRange[0] && product.price <= priceRange[1];
+      return matchesCategory && matchesLocation && matchesPrice;
+    });
+    switch (sortKey) {
+      case 'price-low': list = [...list].sort((a,b)=>a.price-b.price); break;
+      case 'price-high': list = [...list].sort((a,b)=>b.price-a.price); break;
+      case 'newest': list = [...list]; /* could sort by created_at when available */ break;
+      case 'rating': list = [...list].sort((a,b)=>b.rating-a.rating); break;
+      default: break; // featured logic not yet implemented
+    }
+    return list;
+  }, [uiProducts, selectedCategory, selectedLocation, priceRange, sortKey]);
 
   return (
     <div className="min-h-screen bg-gradient-subtle">
@@ -169,7 +195,7 @@ const Products = () => {
                   <div className="mt-4">
                     <Slider
                       value={priceRange}
-                      onValueChange={setPriceRange}
+                      onValueChange={(vals: number[]) => setPriceRange([vals[0] ?? 0, vals[1] ?? priceRange[1]])}
                       max={10000}
                       min={0}
                       step={50}
@@ -214,10 +240,10 @@ const Products = () => {
               <h2 className="text-2xl font-bold">
                 Products in Tangub City
                 <span className="text-muted-foreground text-base ml-2">
-                  ({filteredProducts.length} items)
+                  {loading ? 'Loading...' : `(${filteredProducts.length} items)`}
                 </span>
               </h2>
-              <Select defaultValue="featured">
+              <Select value={sortKey} onValueChange={setSortKey}>
                 <SelectTrigger className="w-48">
                   <SelectValue />
                 </SelectTrigger>
@@ -230,9 +256,16 @@ const Products = () => {
                 </SelectContent>
               </Select>
             </div>
-
+            {error && (
+              <div className="p-4 mb-4 border border-destructive/40 text-sm text-destructive rounded-md bg-destructive/5">
+                Failed to load products: {error}
+              </div>
+            )}
+            {!error && loading && (
+              <div className="py-16 text-center text-muted-foreground">Loading products...</div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredProducts.map((product) => (
+              {!loading && !error && filteredProducts.map((product) => (
                 <Card key={product.id} className="overflow-hidden hover:shadow-elegant transition-all duration-300 group">
                   <div className="relative">
                     <div className="aspect-square bg-white relative overflow-hidden rounded-xl shadow-sm">
@@ -249,14 +282,7 @@ const Products = () => {
                       <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-80"></div>
                     </div>
                     {product.featured && (
-                      <Badge className="absolute top-2 left-2 bg-gradient-primary text-primary-foreground">
-                        Featured
-                      </Badge>
-                    )}
-                    {product.discount && (
-                      <Badge variant="destructive" className="absolute top-2 right-2">
-                        -{product.discount}%
-                      </Badge>
+                      <Badge className="absolute top-2 left-2 bg-gradient-primary text-primary-foreground">Featured</Badge>
                     )}
                     <Button
                       variant="ghost"
@@ -282,22 +308,15 @@ const Products = () => {
                     <div className="flex items-center mb-1">
                       <div className="flex items-center">
                         <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                        <span className="ml-1 text-sm font-medium">{product.rating}</span>
+                        <span className="ml-1 text-sm font-medium">{product.rating.toFixed(1)}</span>
                       </div>
-                      <span className="text-sm text-muted-foreground ml-2">
-                        ({product.reviews} reviews)
-                      </span>
+                      <span className="text-sm text-muted-foreground ml-2">({product.reviews})</span>
                     </div>
 
                     <div className="flex items-center mb-2">
                       <span className="text-xl font-bold text-primary">
                         ₱{product.price.toLocaleString()}
                       </span>
-                      {product.originalPrice && (
-                        <span className="text-sm text-muted-foreground line-through ml-2">
-                          ₱{product.originalPrice.toLocaleString()}
-                        </span>
-                      )}
                     </div>
                   </CardContent>
 
@@ -313,8 +332,7 @@ const Products = () => {
                 </Card>
               ))}
             </div>
-
-            {filteredProducts.length === 0 && (
+            {!loading && !error && filteredProducts.length === 0 && (
               <div className="text-center py-12">
                 <p className="text-muted-foreground text-lg">
                   No products found matching your filters.

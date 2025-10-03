@@ -19,8 +19,17 @@ export default function UserLogin() {
     setError(null);
     setLoading(true);
     try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-      if (signInError) throw signInError;
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) {
+        const msg = signInError.message.toLowerCase();
+        // If confirmation related, try to fetch session anyway (open project scenario)
+        if (msg.includes('confirm') || msg.includes('not confirmed')) {
+          const { data: sess } = await supabase.auth.getSession();
+          if (!sess.session) throw signInError; // still no session -> real error
+        } else {
+          throw signInError;
+        }
+      }
       await refreshProfile();
       navigate('/home');
     } catch (err: any) {

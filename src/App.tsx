@@ -21,6 +21,8 @@ import BusinessDetail from "./pages/BusinessDetail";
 import Messages from "./pages/Messages";
 import Cart from "./pages/Cart";
 import Profile from "./pages/Profile";
+import ProfileEdit from "./pages/ProfileEdit";
+import Orders from "./pages/Orders";
 import NotFound from "./pages/NotFound";
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -70,6 +72,8 @@ function AppShell() {
                   <Route path="/messages" element={<Messages />} />
                   <Route path="/cart" element={<Cart />} />
                   <Route path="/profile" element={<Profile />} />
+                  <Route path="/profile/edit" element={<ProfileEdit />} />
+                  <Route path="/orders" element={<Orders />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />
         </Routes>

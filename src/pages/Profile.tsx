@@ -206,7 +206,9 @@ const Profile = () => {
                     ))}
                     
                     <div className="text-center mt-6">
-                      <Button variant="outline">View All Orders</Button>
+                      <Button variant="outline" asChild>
+                        <Link to="/orders">View All Orders</Link>
+                      </Button>
                     </div>
                   </div>
                 </CardContent>

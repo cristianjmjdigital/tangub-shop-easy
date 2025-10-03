@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,126 +17,73 @@ import {
   Search
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { supabase } from "@/lib/supabaseClient";
+
+interface VendorRow { id: string; name: string; description?: string | null; address?: string | null; barangay?: string | null; created_at?: string }
+interface ProductRow { id: string; vendor_id: string }
 
 const Businesses = () => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [vendors, setVendors] = useState<VendorRow[]>([]);
+  const [productCounts, setProductCounts] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const businesses = [
-    {
-      id: 1,
-      name: "Tangub Delicacies",
-      category: "Food & Beverage",
-      rating: 4.8,
-      reviews: 325,
-      location: "Poblacion",
-      image: "/placeholder-business.jpg",
-      description: "Authentic Tangub delicacies and local specialties",
-      products: 45,
-      followers: 1250,
-      isVerified: true,
-      subscriptionPlan: "Premium",
-      openTime: "6:00 AM - 8:00 PM",
-      phone: "+63 912 345 6789",
-      email: "contact@tangubdelicacies.com",
-      featured: true
-    },
-    {
-      id: 2,
-      name: "Local Crafts Co.",
-      category: "Home & Garden",
-      rating: 4.9,
-      reviews: 187,
-      location: "Maloro",
-      image: "/placeholder-crafts.jpg",
-      description: "Handmade crafts and traditional Filipino home decor",
-      products: 23,
-      followers: 890,
-      isVerified: true,
-      subscriptionPlan: "Standard",
-      openTime: "8:00 AM - 6:00 PM",
-      phone: "+63 923 456 7890",
-      email: "info@localcrafts.ph",
-      featured: false
-    },
-    {
-      id: 3,
-      name: "Mountain Coffee",
-      category: "Food & Beverage",
-      rating: 4.7,
-      reviews: 403,
-      location: "Katipunan",
-      image: "/placeholder-coffee.jpg",
-      description: "Premium coffee beans from Tangub's mountain regions",
-      products: 12,
-      followers: 2100,
-      isVerified: true,
-      subscriptionPlan: "Premium",
-      openTime: "5:00 AM - 9:00 PM",
-      phone: "+63 934 567 8901",
-      email: "hello@mountaincoffee.ph",
-      featured: true
-    },
-    {
-      id: 4,
-      name: "Bee Happy Farm",
-      category: "Food & Beverage",
-      rating: 4.6,
-      reviews: 156,
-      location: "Silabay",
-      image: "/placeholder-farm.jpg",
-      description: "Pure honey and organic farm products",
-      products: 18,
-      followers: 675,
-      isVerified: false,
-      subscriptionPlan: "Basic",
-      openTime: "7:00 AM - 5:00 PM",
-      phone: "+63 945 678 9012",
-      email: "beehappy@gmail.com",
-      featured: false
-    },
-    {
-      id: 5,
-      name: "Eco Crafts",
-      category: "Electronics",
-      rating: 4.5,
-      reviews: 98,
-      location: "Bonga",
-      image: "/placeholder-eco.jpg",
-      description: "Sustainable and eco-friendly tech accessories",
-      products: 35,
-      followers: 420,
-      isVerified: true,
-      subscriptionPlan: "Standard",
-      openTime: "9:00 AM - 7:00 PM",
-      phone: "+63 956 789 0123",
-      email: "contact@ecocrafts.ph",
-      featured: false
-    },
-    {
-      id: 6,
-      name: "City Pride Apparel",
-      category: "Fashion",
-      rating: 4.4,
-      reviews: 289,
-      location: "Poblacion",
-      image: "/placeholder-apparel.jpg",
-      description: "Tangub-themed clothing and accessories",
-      products: 67,
-      followers: 1580,
-      isVerified: true,
-      subscriptionPlan: "Premium",
-      openTime: "10:00 AM - 9:00 PM",
-      phone: "+63 967 890 1234",
-      email: "shop@citypride.ph",
-      featured: true
-    }
-  ];
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true); setError(null);
+      const { data: vRows, error: vErr } = await supabase
+        .from('vendors')
+        .select('id,name,description,address,barangay,created_at')
+        .limit(200);
+      if (vErr) { setError(vErr.message); setLoading(false); return; }
+      setVendors(vRows as VendorRow[]);
+      // Fetch product counts
+      const { data: pRows, error: pErr } = await supabase
+        .from('products')
+        .select('id,vendor_id')
+        .limit(1000);
+      if (!pErr && pRows) {
+        const counts: Record<string, number> = {};
+        (pRows as ProductRow[]).forEach(p => {
+          counts[p.vendor_id] = (counts[p.vendor_id] || 0) + 1;
+        });
+        setProductCounts(counts);
+      }
+      setLoading(false);
+    };
+    load();
+  }, []);
 
-  const filteredBusinesses = businesses.filter(business =>
+  const derivedBusinesses = useMemo(() => {
+    return vendors.map(v => {
+      // Placeholder values for fields not yet modeled
+      return {
+        id: v.id,
+        name: v.name,
+        category: 'General',
+        rating: 0,
+        reviews: 0,
+        location: v.barangay || v.address || 'Tangub',
+        image: '/placeholder-business.jpg',
+        description: v.description || 'Local business in Tangub City',
+        products: productCounts[v.id] || 0,
+        followers: 0,
+        isVerified: true,
+        subscriptionPlan: 'Standard',
+        openTime: '—',
+        phone: '',
+        email: '',
+        featured: false,
+      };
+    });
+  }, [vendors, productCounts]);
+
+  const filteredBusinesses = useMemo(() => derivedBusinesses.filter(business =>
     business.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     business.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
     business.location.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  ), [derivedBusinesses, searchQuery]);
 
   const featuredBusinesses = filteredBusinesses.filter(b => b.featured);
   const allBusinesses = filteredBusinesses;
@@ -301,6 +248,24 @@ const Businesses = () => {
       </div>
     </div>
   );
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-subtle">
+        <div className="container mx-auto px-4 py-12 text-center text-muted-foreground">Loading businesses...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-subtle">
+        <div className="container mx-auto px-4 py-12">
+          <div className="max-w-lg mx-auto p-4 border border-destructive/40 rounded-md bg-destructive/5 text-destructive text-sm">Failed to load vendors: {error}</div>
+        </div>
+      </div>
+    );
+  }
 };
 
 export default Businesses;

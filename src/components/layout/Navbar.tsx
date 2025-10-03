@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
+import { useAuth } from "@/context/AuthContext";
 import { 
   Menu, 
   Search, 
@@ -19,6 +20,7 @@ const Navbar = () => {
   const [cartCount] = useState(3);
   const [messageCount] = useState(2);
   const location = useLocation();
+  const { profile, signOut } = useAuth();
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -60,7 +62,7 @@ const Navbar = () => {
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-6">
+          <div className="hidden md:flex items-center space-x-4">
             {navItems.map((item) => (
               <Link
                 key={item.path}
@@ -80,6 +82,14 @@ const Navbar = () => {
                 )}
               </Link>
             ))}
+            {!profile && (
+              <Link to="/login/user">
+                <Button variant="secondary" size="sm">Login</Button>
+              </Link>
+            )}
+            {profile && (
+              <Button variant="destructive" size="sm" onClick={signOut}>Logout</Button>
+            )}
           </div>
 
           {/* Cart and Mobile Menu */}
@@ -123,6 +133,16 @@ const Navbar = () => {
                       )}
                     </Link>
                   ))}
+                  <div className="flex items-center justify-between pt-2">
+                    {!profile && (
+                      <Link to="/login/user" className="w-full">
+                        <Button variant="secondary" className="w-full">Login</Button>
+                      </Link>
+                    )}
+                    {profile && (
+                      <Button variant="destructive" className="w-full" onClick={signOut}>Logout</Button>
+                    )}
+                  </div>
                 </div>
               </SheetContent>
             </Sheet>
