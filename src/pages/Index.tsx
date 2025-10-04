@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import ProductCard from '@/components/ui/ProductCard';
-import { ArrowRight, Shirt, Utensils, Home as HomeIcon, Gift, Smartphone, Heart } from 'lucide-react';
+import { ArrowRight, Shirt, Utensils, Home as HomeIcon, Gift, Smartphone, Heart, Building2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { useCart } from '@/hooks/use-cart';
@@ -29,6 +29,9 @@ export default function Index() {
   const [error, setError] = useState<string | null>(null);
   const { addItem, loading: cartLoading } = useCart();
   const [addingId, setAddingId] = useState<string | null>(null);
+  const [vendors, setVendors] = useState<any[]>([]);
+  const [vendorsLoading, setVendorsLoading] = useState(false);
+  const [vendorsError, setVendorsError] = useState<string|null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -61,8 +64,44 @@ export default function Index() {
     return () => { cancelled = true; };
   }, []);
 
+  // Fetch featured shops (top vendors by product count)
+  useEffect(() => {
+    let cancelled = false;
+    const loadVendors = async () => {
+      setVendorsLoading(true); setVendorsError(null);
+      // Aggregate: product counts per vendor
+      const { data, error } = await supabase
+        .from('products')
+        .select('vendor_id, vendors(store_name,address,logo_url), id');
+      if (cancelled) return;
+      if (error) { setVendorsError(error.message); setVendorsLoading(false); return; }
+      const grouped: Record<string, { id: string; name: string; address?: string; logo_url?: string; product_count: number; }>= {};
+      (data||[]).forEach((row: any) => {
+        if (!row.vendor_id) return;
+        if (!grouped[row.vendor_id]) {
+          grouped[row.vendor_id] = {
+            id: row.vendor_id,
+            name: row.vendors?.store_name || 'Vendor',
+            address: row.vendors?.address,
+            logo_url: row.vendors?.logo_url,
+            product_count: 0
+          };
+        }
+        grouped[row.vendor_id].product_count += 1;
+      });
+      const list = Object.values(grouped)
+        .sort((a,b)=> b.product_count - a.product_count)
+        .slice(0,9);
+      setVendors(list);
+      setVendorsLoading(false);
+    };
+    loadVendors();
+    return () => { cancelled = true; };
+  }, []);
+
   const popularProducts = products.slice(0, 12);
   const featuredProducts = products.slice(0, 9);
+  const featuredVendors = vendors;
 
   const handleScanClick = async () => {
     const input = document.createElement('input');
@@ -185,35 +224,73 @@ export default function Index() {
         </div>
       </section>
 
-      {/* Featured Products */}
+      {/* Featured Shops (replaces Featured Products) */}
       <section className="py-10 px-6">
         <div className="container mx-auto">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4 text-primary">Featured Products</h2>
-            <p className="text-xl text-gray-500">Discover the best products from local businesses in Tangub City</p>
+            <h2 className="text-3xl md:text-4xl font-bold mb-4 text-primary flex items-center justify-center gap-2">Featured Shops <Building2 className="h-8 w-8 text-primary" /></h2>
+            <p className="text-xl text-gray-500">Discover top local vendors and their offerings</p>
           </div>
-          {loading && <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto mb-8">{Array.from({length:6}).map((_,i)=>(<div key={i} className="h-96 bg-muted rounded-xl animate-pulse" />))}</div>}
-          {!loading && !error && (
+          {vendorsLoading && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto mb-8">
-              {featuredProducts.map(p => (
-                <ProductCard
-                  key={p.id}
-                  {...p}
-                  onAdd={async () => {
-                    setAddingId(p.id);
-                    await addItem(p.id, 1, p.name);
-                    setAddingId(id => (id === p.id ? null : id));
-                  }}
-                  adding={addingId === p.id || cartLoading}
-                />
-              ))}
-              {featuredProducts.length === 0 && <div className="col-span-full text-sm text-muted-foreground">No products to display.</div>}
+              {Array.from({length:6}).map((_,i)=>(<div key={i} className="h-40 bg-muted rounded-xl animate-pulse" />))}
             </div>
           )}
-          {error && <div className="text-center text-sm text-red-600 mb-8">{error}</div>}
+          {vendorsError && (
+            <div className="text-center mb-6">
+              <div className="text-sm text-red-600 mb-3">{vendorsError}</div>
+              <Button variant="outline" size="sm" onClick={() => {
+                // retry
+                setVendorsError(null);
+                setVendorsLoading(true);
+                // trigger effect by calling loader directly
+                (async ()=>{
+                  const { data, error } = await supabase
+                    .from('products')
+                    .select('vendor_id, vendors(store_name,address,logo_url), id');
+                  if (error) { setVendorsError(error.message); setVendorsLoading(false); return; }
+                  const grouped: Record<string, any> = {};
+                  (data||[]).forEach((row: any) => {
+                    if (!row.vendor_id) return;
+                    if (!grouped[row.vendor_id]) grouped[row.vendor_id] = { id: row.vendor_id, name: row.vendors?.store_name || 'Vendor', address: row.vendors?.address, logo_url: row.vendors?.logo_url, product_count: 0 };
+                    grouped[row.vendor_id].product_count += 1;
+                  });
+                  const list = Object.values(grouped).sort((a:any,b:any)=> b.product_count - a.product_count).slice(0,9);
+                  setVendors(list);
+                  setVendorsLoading(false);
+                })();
+              }}>Retry</Button>
+            </div>
+          )}
+          {!vendorsLoading && !vendorsError && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto mb-8">
+              {featuredVendors.map(v => (
+                <div key={v.id} className="group rounded-xl border bg-card hover:shadow-md transition p-6 flex flex-col justify-between">
+                  <div className="flex items-start gap-4">
+                    {v.logo_url ? (
+                      <img src={v.logo_url} alt={v.name} className="h-14 w-14 rounded-full object-cover border" />
+                    ) : (
+                      <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center font-semibold text-primary text-lg">{v.name.substring(0,2).toUpperCase()}</div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-lg truncate">{v.name}</h3>
+                      <p className="text-xs text-muted-foreground line-clamp-2">{v.address || 'Tangub City'}</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{v.product_count} {v.product_count === 1 ? 'product' : 'products'}</span>
+                    <Button size="sm" variant="secondary" className="group-hover:bg-primary group-hover:text-primary-foreground" asChild>
+                      <Link to={`/vendors/${v.id}`}>View Shop</Link>
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              {featuredVendors.length === 0 && <div className="col-span-full text-sm text-muted-foreground">No vendors available.</div>}
+            </div>
+          )}
           <div className="text-center">
             <Button variant="outline" size="lg" className="border-primary text-primary hover:bg-secondary" asChild>
-              <Link to="/products">View All Products<ArrowRight className="ml-2 h-4 w-4" /></Link>
+              <Link to="/vendors">View All Shops<ArrowRight className="ml-2 h-4 w-4" /></Link>
             </Button>
           </div>
         </div>
