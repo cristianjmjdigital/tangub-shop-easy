@@ -59,6 +59,7 @@ export default function UserSignup() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<any | null>(null);
   const validate = () => {
     if (!form.name.trim()) return "Name required";
     if (!form.email.trim()) return "Email required";
@@ -81,6 +82,8 @@ export default function UserSignup() {
       }
       const emailTrim = form.email.trim().toLowerCase();
       let signUpData, signUpError;
+  setDebugInfo(null);
+  let ambiguousDbError = false;
       for (let attempt = 0; attempt < 2; attempt++) {
         const { data, error } = await supabase.auth.signUp({
           email: emailTrim,
@@ -92,6 +95,7 @@ export default function UserSignup() {
         const msg = (error.message || '').toLowerCase();
         // Retry only on ambiguous DB error (possible transient) once
         if (attempt === 0 && /database error saving new user/.test(msg)) {
+          ambiguousDbError = true;
           await new Promise(r => setTimeout(r, 600));
           continue;
         }
@@ -106,6 +110,7 @@ export default function UserSignup() {
           console.debug('status:', signUpError.status, 'name:', signUpError.name, 'code:', (signUpError as any).code);
           console.debug('full object:', signUpError);
           console.groupEnd();
+          setDebugInfo({ phase: 'signUp', message: signUpError.message, status: (signUpError as any).status, code: (signUpError as any).code, full: signUpError });
         }
         // Duplicate detection
         if (/duplicate key|already registered|already exists|user already registered|email.*exists|violates unique constraint/i.test(msg)) {
@@ -121,14 +126,45 @@ export default function UserSignup() {
         }
         // Ambiguous database error: show raw so we can learn real root cause (improves debugging)
         if (/database error saving new user/i.test(msg)) {
-          setError('Signup failed (database). Try again once. If it persists, attempt to log in—account might have been partially created. Raw: ' + msg);
+          // Probe: see if session actually exists (sometimes auth succeeds but returns error due to downstream profile issue)
+          const { data: sessionCheck } = await supabase.auth.getSession();
+          if (sessionCheck?.session?.user?.email?.toLowerCase() === emailTrim) {
+            // Treat as success; proceed without re-signup
+            signUpData = { user: sessionCheck.session.user } as any;
+          } else {
+            // Attempt a sign-in (maybe account created but signUp error thrown late)
+            const { data: probeSignIn, error: probeErr } = await supabase.auth.signInWithPassword({ email: emailTrim, password: form.password });
+            if (probeSignIn?.user) {
+              signUpData = { user: probeSignIn.user } as any;
+            } else if (probeErr && /invalid login credentials/i.test(probeErr.message || '')) {
+              // Truly wasn't created; offer an automatic second attempt (already performed once in loop if ambiguousDbError true)
+              if (!ambiguousDbError) {
+                // Safety: shouldn't happen; just show message
+                setError('Signup failed (database). Please retry. Raw: ' + msg);
+                setSubmitting(false);
+                return;
+              }
+              if (import.meta.env.DEV) setDebugInfo((d:any) => ({ ...d, probe: 'invalid credentials', probeErr }));
+              const isInternal = signUpError.status === 500 || (signUpError as any).code === 'unexpected_failure';
+              setError(isInternal
+                ? 'Internal auth service error (500). Please wait a minute and retry. If this recurs, an admin must inspect Supabase Auth logs.'
+                : 'Signup failed due to a transient backend issue. Press Sign Up again. Raw: ' + msg);
+              setSubmitting(false);
+              return;
+            } else {
+              if (import.meta.env.DEV) setDebugInfo((d:any) => ({ ...d, probe: 'other probe state', probeErr }));
+              // Unknown probe state; surface raw but instruct retry
+              setError('Backend issue creating account. Retry once. Raw: ' + msg);
+              setSubmitting(false);
+              return;
+            }
+          }
+        } else {
+          // Generic fallback (use original for clarity)
+          setError('Signup failed: ' + msg);
           setSubmitting(false);
           return;
         }
-        // Generic fallback (use original for clarity)
-        setError('Signup failed: ' + msg);
-        setSubmitting(false);
-        return;
       }
       const authUser = signUpData.user;
       if (!authUser?.id) throw new Error("No user id returned from sign up");
@@ -266,6 +302,12 @@ export default function UserSignup() {
               </div>
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
+            {/* Dev debugging panel (only shown in dev mode) */}
+            {import.meta.env.DEV && debugInfo && (
+              <pre className="text-xs bg-muted p-2 rounded overflow-x-auto max-h-40">
+{JSON.stringify(debugInfo, null, 2)}
+              </pre>
+            )}
             <Button className="w-full" type="submit" disabled={submitting}>{submitting ? 'Creating account...' : 'Sign Up'}</Button>
             <Button variant="outline" className="w-full" asChild>
               <Link to="/login/user">Back to Login</Link>
