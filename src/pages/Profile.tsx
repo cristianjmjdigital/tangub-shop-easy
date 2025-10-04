@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ import {
   CreditCard
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabaseClient";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 
@@ -37,35 +38,112 @@ const Profile = () => {
     address: profile?.barangay ? `${profile.barangay}, Tangub City` : "Tangub City"
   });
 
-  const recentOrders = [
-    {
-      id: "#ORD-001",
-      business: "Tangub Delicacies",
-      items: "Fresh Buko Pie (2x)",
-      total: 500,
-      status: "Ready for Pickup",
-      date: "2024-01-15",
-      rating: 5
-    },
-    {
-      id: "#ORD-002",
-      business: "Mountain Coffee",
-      items: "Tangub Coffee Beans (1x)",
-      total: 380,
-      status: "Delivered",
-      date: "2024-01-14",
-      rating: 5
-    },
-    {
-      id: "#ORD-003",
-      business: "Local Crafts Co.",
-      items: "Handwoven Banig Mat (1x)",
-      total: 450,
-      status: "Processing",
-      date: "2024-01-13",
-      rating: null
-    }
-  ];
+  interface RecentOrderDisplay {
+    id: string;
+    business: string;
+    items: string;
+    total: number;
+    status: string;
+    date: string;
+    rating: number | null;
+  }
+  const [recentOrders, setRecentOrders] = useState<RecentOrderDisplay[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
+  const statusMapRef = useRef<Record<string,string>>({});
+  const initialLoadedRef = useRef(false);
+
+  // Determine user column (your schema might use profile_id instead of user_id)
+  const userColumn = 'user_id'; // change to 'profile_id' if your orders table uses that
+
+  // Load recent orders from DB for current user
+  useEffect(() => {
+    if (!profile?.id) return;
+    let cancelled = false;
+    const load = async () => {
+      setOrdersLoading(true); setOrdersError(null);
+      const { data, error } = await supabase
+        .from('orders')
+        .select(`id,total,status,created_at,vendor:vendors(store_name),order_items:order_items(quantity,unit_price,product:products(name))`)
+        .eq(userColumn, profile.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      if (cancelled) return;
+      if (error) { setOrdersError(error.message); setOrdersLoading(false); return; }
+      const display: RecentOrderDisplay[] = (data || []).map((o: any) => {
+        const itemsStr = (o.order_items || [])
+          .map((it: any) => `${it.product?.name || 'Item'} (x${it.quantity})`)
+          .join(', ');
+        statusMapRef.current[o.id] = o.status;
+        return {
+          id: o.id,
+            business: o.vendor?.store_name || 'Unknown Store',
+            items: itemsStr || '—',
+            total: Number(o.total) || 0,
+            status: o.status,
+            date: new Date(o.created_at).toLocaleString(),
+            rating: null
+        };
+      });
+      setRecentOrders(display);
+      setOrdersLoading(false);
+      initialLoadedRef.current = true;
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [profile?.id]);
+
+  // Realtime subscription to order status changes for this user
+  useEffect(() => {
+    if (!profile?.id) return;
+    const channel = supabase
+      .channel('user-orders-' + profile.id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `${userColumn}=eq.${profile.id}` }, async (payload: any) => {
+        console.log('[realtime][orders]', payload);
+        const newRow = payload.new;
+        setRecentOrders(prev => {
+          let next = [...prev];
+          const idx = next.findIndex(o => o.id === newRow.id);
+          if (idx >= 0) {
+            // Status change toast
+            const prevStatus = statusMapRef.current[newRow.id];
+            if (prevStatus && prevStatus !== newRow.status) {
+              toast({ title: 'Order Status Updated', description: `Order #${newRow.id} is now ${newRow.status}.` });
+            }
+            next[idx] = { ...next[idx], status: newRow.status };
+          } else {
+            // New order (prepend) - fetch items + vendor for richer display
+            let itemsStr = '—';
+            let vendorName = 'Order';
+            try {
+              const { data: full, error: fetchErr } = await supabase
+                .from('orders')
+                .select(`id,total,status,created_at,vendor:vendors(store_name),order_items:order_items(quantity,product:products(name))`)
+                .eq('id', newRow.id)
+                .single();
+              if (!fetchErr && full) {
+                vendorName = full.vendor?.store_name || vendorName;
+                itemsStr = (full.order_items || []).map((it: any) => `${it.product?.name || 'Item'} (x${it.quantity})`).join(', ');
+              }
+            } catch {}
+            next.unshift({
+              id: newRow.id,
+              business: vendorName,
+              items: itemsStr,
+              total: Number(newRow.total) || 0,
+              status: newRow.status,
+              date: new Date(newRow.created_at).toLocaleString(),
+              rating: null
+            });
+            next = next.slice(0,5); // keep size
+          }
+          statusMapRef.current[newRow.id] = newRow.status;
+          return next;
+        });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [profile?.id, toast]);
 
   const favoriteBusinesses = [
     {
@@ -97,11 +175,15 @@ const Profile = () => {
   };
 
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Delivered": return "bg-green-500";
-      case "Ready for Pickup": return "bg-blue-500";
-      case "Processing": return "bg-yellow-500";
-      default: return "bg-gray-500";
+    const s = status.toLowerCase();
+    switch (s) {
+      case 'delivered': return 'bg-green-600';
+      case 'for delivery': return 'bg-orange-500';
+      case 'preparing': return 'bg-amber-500';
+      case 'cancelled': return 'bg-red-600';
+      case 'new':
+      case 'created': return 'bg-slate-500';
+      default: return 'bg-muted text-foreground';
     }
   };
 
@@ -170,12 +252,21 @@ const Profile = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
+                    {ordersLoading && (
+                      <div className="text-xs text-muted-foreground">Loading recent orders...</div>
+                    )}
+                    {ordersError && (
+                      <div className="text-xs text-destructive">{ordersError}</div>
+                    )}
+                    {!ordersLoading && !ordersError && recentOrders.length === 0 && (
+                      <div className="text-sm text-muted-foreground">No recent orders.</div>
+                    )}
                     {recentOrders.map((order) => (
                       <div key={order.id} className="border rounded-lg p-4">
                         <div className="flex flex-col md:flex-row md:items-center justify-between space-y-3 md:space-y-0">
                           <div className="flex-1">
                             <div className="flex items-center space-x-3 mb-2">
-                              <span className="font-semibold">{order.id}</span>
+                              <span className="font-semibold">Order #{order.id}</span>
                               <Badge className={`${getStatusColor(order.status)} text-white`}>
                                 {order.status}
                               </Badge>

@@ -145,49 +145,60 @@ export default function VendorDashboard() {
   }, [vendorOrders]);
 
   const [updatingOrderIds, setUpdatingOrderIds] = useState<string[]>([]);
-  const changeOrderStatus = async (orderId: string, next: string) => {
-    if (updatingOrderIds.includes(orderId)) return; // prevent double-clicks
+  // Map internal keys -> DB enum labels (as defined in Postgres).
+  const DB_STATUS: Record<string,string> = {
+    preparing: 'Preparing',
+    for_delivery: 'For Delivery',
+    delivered: 'Delivered',
+    cancelled: 'Cancelled'
+  };
+  const normalizeStatus = (s: string) => (s || '').toLowerCase().replace(/\s+/g,'_');
+  const changeOrderStatus = async (orderId: string, internalNext: keyof typeof DB_STATUS) => {
+    if (updatingOrderIds.includes(orderId)) return;
+    const dbNext = DB_STATUS[internalNext];
+    if (!dbNext) return;
     setUpdatingOrderIds(ids => [...ids, orderId]);
     const prev = vendorOrders.find(o => o.id === orderId)?.status;
-    setVendorOrders(prevOrders => prevOrders.map(o => o.id === orderId ? { ...o, status: next } : o));
+    // Optimistic update with DB label
+    setVendorOrders(prevOrders => prevOrders.map(o => o.id === orderId ? { ...o, status: dbNext } : o));
     const { error } = await supabase
       .from('orders')
-      .update({ status: next })
+      .update({ status: dbNext })
       .eq('id', orderId);
     if (error) {
-      // rollback
       setVendorOrders(prevOrders => prevOrders.map(o => o.id === orderId ? { ...o, status: prev } : o));
       toast({ title: 'Status update failed', description: error.message, variant: 'destructive' });
-    }
-    else {
-      toast({ title: 'Order updated', description: `Order #${orderId} is now ${next}.` });
+    } else {
+      toast({ title: 'Order updated', description: `Order #${orderId} is now ${dbNext}.` });
     }
     setUpdatingOrderIds(ids => ids.filter(id => id !== orderId));
   };
 
-  // Unified status badge helper supporting both new sequence and any legacy values.
-  const vendorStatusBadge = (status: string) => {
-    switch (status) {
+  // Returns a badge element for a (possibly mixed-case) status.
+  const vendorStatusBadge = (rawStatus: string) => {
+    const norm = normalizeStatus(rawStatus);
+    switch (norm) {
       case 'new':
       case 'created':
         return <Badge variant="secondary" className="text-xs">New</Badge>;
       case 'preparing':
-        return <Badge className="bg-yellow-500 hover:bg-yellow-500 text-xs">Preparing</Badge>;
+        return <Badge className="bg-amber-500 hover:bg-amber-500 text-xs">Preparing</Badge>;
       case 'for_delivery':
         return <Badge className="bg-orange-500 hover:bg-orange-500 text-xs">For Delivery</Badge>;
       case 'delivered':
         return <Badge className="bg-green-600 hover:bg-green-600 text-xs">Delivered</Badge>;
-      // Legacy mapping support
-      case 'ready':
+      case 'cancelled':
+        return <Badge variant="destructive" className="text-xs">Cancelled</Badge>;
+      case 'ready': // legacy visual support
         return <Badge className="bg-orange-500 hover:bg-orange-500 text-xs">For Delivery</Badge>;
       case 'completed':
         return <Badge className="bg-green-600 hover:bg-green-600 text-xs">Delivered</Badge>;
-      case 'cancelled':
-        return <Badge variant="destructive" className="text-xs">Cancelled</Badge>;
       default:
-        return <Badge variant="outline" className="text-xs capitalize">{status}</Badge>;
+        return <Badge variant="outline" className="text-xs capitalize">{rawStatus}</Badge>;
     }
   };
+
+  // All orders now follow a single flow: new|created -> preparing -> for_delivery -> delivered
 
 
   useEffect(() => {
@@ -413,6 +424,7 @@ export default function VendorDashboard() {
                 {vendorOrders.map(o => {
                 const its = vendorOrderItems.filter(i => i.order_id === o.id);
                 const totalQty = its.reduce((s,i)=>s+i.quantity,0);
+                const normalized = normalizeStatus(o.status || '');
                 return (
                   <div key={o.id} className="border rounded-md p-3 space-y-3 bg-muted/20">
                   <div className="flex items-start justify-between gap-3">
@@ -436,8 +448,8 @@ export default function VendorDashboard() {
                     <span>₱{o.total.toLocaleString()}</span>
                   </div>
                   <div className="flex flex-wrap gap-2 pt-2">
-                    {/* Action buttons based on current status */}
-                    {(o.status === 'new' || o.status === 'created') && (
+                    {/* Action buttons with dual-flow + case-insensitive logic */}
+                    {(normalized === 'new' || normalized === 'created') && (
                       <Button
                         size="sm"
                         variant="secondary"
@@ -453,7 +465,7 @@ export default function VendorDashboard() {
                         Prep
                       </Button>
                     )}
-                    {o.status === 'preparing' && (
+                    {normalized === 'preparing' && (
                       <Button
                         size="sm"
                         variant="default"
@@ -469,7 +481,7 @@ export default function VendorDashboard() {
                         For Delivery
                       </Button>
                     )}
-                    {o.status === 'for_delivery' && (
+                    {normalized === 'for_delivery' && (
                       <Button
                         size="sm"
                         variant="default"
@@ -485,7 +497,7 @@ export default function VendorDashboard() {
                         Delivered
                       </Button>
                     )}
-                    {o.status !== 'cancelled' && o.status !== 'delivered' && (
+                    {normalized !== 'cancelled' && normalized !== 'delivered' && (
                       <Button
                         size="sm"
                         variant="outline"
