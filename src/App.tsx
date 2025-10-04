@@ -69,7 +69,7 @@ function AppShell() {
                   <Route path="/admin" element={<AdminDashboard />} />
                   <Route path="/products" element={<Products />} />
                   <Route path="/businesses" element={<Businesses />} />
-                  <Route path="/business-demo" element={<BusinessDetail />} />
+                  <Route path="/business/:id" element={<BusinessDetail />} />
                   <Route path="/messages" element={<Messages />} />
                   <Route path="/cart" element={<Cart />} />
                   <Route path="/profile" element={<Profile />} />

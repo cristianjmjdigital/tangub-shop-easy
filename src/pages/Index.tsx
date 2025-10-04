@@ -280,7 +280,7 @@ export default function Index() {
                   <div className="mt-4 flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">{v.product_count} {v.product_count === 1 ? 'product' : 'products'}</span>
                     <Button size="sm" variant="secondary" className="group-hover:bg-primary group-hover:text-primary-foreground" asChild>
-                      <Link to={`/vendors/${v.id}`}>View Shop</Link>
+                      <Link to={`/business/${v.id}`}>View Shop</Link>
                     </Button>
                   </div>
                 </div>

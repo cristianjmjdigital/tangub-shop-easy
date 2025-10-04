@@ -1,72 +1,131 @@
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import ProductCard from "@/components/ui/ProductCard";
-import { ArrowLeft, Clock, Heart, MapPin, Star } from "lucide-react";
-import { Link } from "react-router-dom";
+import { useParams, Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import ProductCard from '@/components/ui/ProductCard';
+import { ArrowLeft, Store, MapPin } from 'lucide-react';
 
-const menu = [
-  { id: 1, name: "Beef Burger", price: 160, rating: 4.8, business: "Burger King", location: "Poblacion", image: "https://images.unsplash.com/photo-1550547660-d9450f859349?q=80&w=600&auto=format&fit=crop" },
-  { id: 2, name: "Double Cheese Burger", price: 180, rating: 4.7, business: "Burger King", location: "Poblacion", image: "https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=600&auto=format&fit=crop" },
-  { id: 3, name: "Fries & Sides", price: 90, rating: 4.6, business: "Burger King", location: "Poblacion", image: "https://images.unsplash.com/photo-1550547660-3a06a9f4b2d8?q=80&w=600&auto=format&fit=crop" },
-];
+interface VendorInfo { id: string; store_name: string; description?: string | null; address?: string | null; logo_url?: string | null; created_at?: string }
+interface ProductRow { id: string; name: string; price: number; main_image_url?: string | null; description?: string | null; stock?: number | null; created_at?: string }
 
 export default function BusinessDetail() {
-  return (
-    <div className="min-h-screen bg-white">
-      {/* Header image */}
-      <div className="relative">
-        <img src="https://images.unsplash.com/photo-1550317138-10000687a72b?q=80&w=1200&auto=format&fit=crop" alt="cover" className="h-56 w-full object-cover" />
-        <div className="absolute top-3 left-3 flex gap-2">
-          <Link to="/home" className="inline-flex"><Button size="icon" variant="secondary" className="rounded-full"><ArrowLeft className="h-4 w-4" /></Button></Link>
-          <Button size="icon" variant="secondary" className="rounded-full"><Heart className="h-4 w-4" /></Button>
+  const { id } = useParams<{ id: string }>();
+  const [vendor, setVendor] = useState<VendorInfo | null>(null);
+  const [products, setProducts] = useState<ProductRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      if (!id) return;
+      setLoading(true); setError(null);
+      const { data: v, error: vErr } = await supabase
+        .from('vendors')
+        .select('id,store_name,description,address,logo_url,created_at')
+        .eq('id', id)
+        .single();
+      if (vErr) { if (!cancelled) { setError(vErr.message); setLoading(false); } return; }
+      if (!cancelled) setVendor(v as VendorInfo);
+      const { data: pRows, error: pErr } = await supabase
+        .from('products')
+        .select('id,name,price,main_image_url,description,stock,created_at')
+        .eq('vendor_id', id)
+        .order('created_at', { ascending: false });
+      if (!cancelled) {
+        if (pErr) setError(pErr.message); else setProducts(pRows as ProductRow[]);
+        setLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [id]);
+
+  if (!id) return <div className="container mx-auto px-4 py-12">Missing vendor id.</div>;
+
+  if (loading) return (
+    <div className="min-h-screen bg-gradient-subtle">
+      <div className="container mx-auto px-4 py-8">
+        <div className="animate-pulse space-y-6">
+          <div className="h-40 bg-muted rounded-xl" />
+          <div className="h-6 bg-muted rounded w-1/2" />
+          <div className="h-4 bg-muted rounded w-1/3" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+            {Array.from({length:6}).map((_,i)=>(<div key={i} className="h-72 bg-muted rounded-xl" />))}
+          </div>
         </div>
       </div>
+    </div>
+  );
 
-      <div className="px-6 -mt-8 relative z-10">
-        <Card className="rounded-2xl shadow-md">
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-xl font-semibold">Burger King</h1>
-                <div className="flex items-center text-sm text-muted-foreground gap-4 mt-1">
-                  <div className="flex items-center"><Star className="h-4 w-4 text-yellow-400 fill-yellow-400" /><span className="ml-1">4.8</span></div>
-                  <div className="flex items-center"><MapPin className="h-4 w-4" /><span className="ml-1">Free Delivery</span></div>
-                  <div className="flex items-center"><Clock className="h-4 w-4" /><span className="ml-1">20 mins</span></div>
-                </div>
-              </div>
-              <img src="/logo.jpg" alt="brand" className="h-12 w-12 rounded-full object-cover border" />
+  if (error) return (
+    <div className="min-h-screen bg-gradient-subtle">
+      <div className="container mx-auto px-4 py-12">
+        <div className="max-w-lg mx-auto p-4 border border-destructive/40 rounded-md bg-destructive/5 text-destructive text-sm mb-6">{error}</div>
+        <Button variant="outline" asChild>
+          <Link to="/businesses">Back to Businesses</Link>
+        </Button>
+      </div>
+    </div>
+  );
+
+  if (!vendor) return (
+    <div className="container mx-auto px-4 py-12">Vendor not found.</div>
+  );
+
+  return (
+    <div className="min-h-screen bg-gradient-subtle">
+      <div className="container mx-auto px-4 py-8">
+        <div className="mb-6 flex items-center justify-between">
+          <Button variant="ghost" asChild className="-ml-2">
+            <Link to="/businesses"><ArrowLeft className="h-4 w-4 mr-1" /> Back</Link>
+          </Button>
+        </div>
+        <div className="relative rounded-2xl overflow-hidden bg-muted h-48 md:h-56 flex items-center p-6 mb-8">
+          {vendor.logo_url && (
+            <img src={vendor.logo_url} alt={vendor.store_name} className="h-24 w-24 rounded-full object-cover border shadow-md" />
+          )}
+          {!vendor.logo_url && (
+            <div className="h-24 w-24 rounded-full bg-primary/10 flex items-center justify-center text-2xl font-bold text-primary">
+              {vendor.store_name.substring(0,2).toUpperCase()}
             </div>
+          )}
+          <div className="ml-6 text-white drop-shadow max-w-2xl">
+            <h1 className="text-3xl font-bold text-foreground mb-2 flex items-center gap-2">
+              <Store className="h-6 w-6" /> {vendor.store_name}
+            </h1>
+            <p className="text-muted-foreground mb-2 line-clamp-2">{vendor.description || 'Local business in Tangub City'}</p>
+            <div className="flex items-center text-sm text-muted-foreground"><MapPin className="h-4 w-4 mr-1" /> {vendor.address || 'Tangub City'}</div>
+          </div>
+        </div>
 
-            {/* Offer card */}
-            <div className="mt-5">
-              <div className="rounded-xl bg-secondary p-4 flex items-center justify-between">
-                <div>
-                  <Badge className="bg-accent text-accent-foreground">30% Off</Badge>
-                  <div className="font-semibold mt-2">The King's Combo!</div>
-                  <p className="text-sm text-muted-foreground">Burger + Fries + Drink. Limited time only!</p>
-                </div>
-                <Button className="rounded-full">View Offer</Button>
-              </div>
-            </div>
+        <h2 className="text-2xl font-semibold mb-4">Products</h2>
+        {products.length === 0 && (
+          <div className="text-sm text-muted-foreground mb-8">No products listed yet.</div>
+        )}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+          {products.map(p => (
+            <ProductCard
+              key={p.id}
+              id={p.id}
+              name={p.name}
+              price={p.price}
+              rating={4.9}
+              business={vendor.store_name}
+              location={vendor.address || 'Tangub'}
+              imageUrl={p.main_image_url || undefined}
+              description={p.description || ''}
+              stock={p.stock || 0}
+              created_at={p.created_at}
+            />
+          ))}
+        </div>
 
-            {/* Tabs */}
-            <Tabs defaultValue="burgers" className="mt-6">
-              <TabsList className="grid grid-cols-4">
-                <TabsTrigger value="burgers">Burgers</TabsTrigger>
-                <TabsTrigger value="meals">King Meals</TabsTrigger>
-                <TabsTrigger value="sides">Fries & Sides</TabsTrigger>
-                <TabsTrigger value="drinks">Drinks</TabsTrigger>
-              </TabsList>
-              <TabsContent value="burgers" className="mt-4">
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {menu.map((m) => (
-                    <ProductCard key={m.id} {...m} />
-                  ))}
-                </div>
-              </TabsContent>
-            </Tabs>
+        <Card className="mb-16">
+          <CardContent className="p-6 text-center">
+            <h3 className="text-lg font-semibold mb-2">About {vendor.store_name}</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">{vendor.description || 'This vendor has not added a description yet.'}</p>
           </CardContent>
         </Card>
       </div>
