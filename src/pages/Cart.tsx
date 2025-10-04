@@ -17,7 +17,7 @@ import {
   Clock
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "@/hooks/use-cart";
 
 const Cart = () => {
@@ -25,6 +25,7 @@ const Cart = () => {
   const [deliveryMethod, setDeliveryMethod] = useState("pickup");
   const [paymentMethod] = useState("cash");
   const { items, updateQuantity, removeItem, subtotal, loading, checkout } = useCart();
+  const navigate = useNavigate();
 
   const cartItems = items.map(i => ({
     id: i.id,
@@ -52,7 +53,10 @@ const Cart = () => {
       toast({ title: "Cart is empty", description: "Please add items to your cart before placing an order.", variant: "destructive" });
       return;
     }
-    await checkout();
+    const { orders } = await checkout();
+    if (orders.length) {
+      navigate('/order/confirmation', { state: { orderIds: orders.map((o:any)=>o.id), summary: orders.map((o:any)=>({ id: o.id, total: o.total })) } });
+    }
   };
 
   if (!loading && cartItems.length === 0) {

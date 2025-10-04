@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, ShoppingCart, Settings, TrendingUp, Store, DollarSign, Users, Edit, Trash2 } from "lucide-react";
+import { Plus, ShoppingCart, Settings, Store, DollarSign, Edit, Trash2, RefreshCw, CheckCircle2, Hourglass, XCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabaseClient";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/components/ui/use-toast";
 
 interface VendorRecord { id: string; store_name: string; address: string | null; created_at?: string; owner_user_id?: string; contact_phone?: string | null; accepting_orders?: boolean; base_delivery_fee?: number | null; logo_url?: string | null; hero_image_url?: string | null; description?: string | null }
 interface ProductRecord { id: string; name: string; price: number; stock: number; description?: string | null; main_image_url?: string | null }
@@ -28,45 +29,11 @@ export default function VendorDashboard() {
   const [editOpen, setEditOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductRecord | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
-
-  useEffect(() => {
-    const load = async () => {
-      if (!profile?.id) return;
-      setLoading(true);
-      setError(null);
-      // Fetch vendor row
-      const { data: vendorData, error: vendorError } = await supabase
-        .from('vendors')
-  .select('id,store_name,address,created_at,owner_user_id,contact_phone,accepting_orders,base_delivery_fee,logo_url,hero_image_url,description')
-        .eq('owner_user_id', profile.id)
-        .maybeSingle();
-      if (vendorError) { setError(vendorError.message); setLoading(false); return; }
-      setVendor(vendorData as VendorRecord);
-      if (vendorData?.id) {
-        const { data: productRows } = await supabase
-          .from('products')
-          .select('id,name,price,stock,description,main_image_url')
-          .eq('vendor_id', vendorData.id)
-          .order('created_at', { ascending: false });
-        setProducts((productRows as ProductRecord[]) || []);
-        // Load simple order / sales metrics
-        const { data: salesRows } = await supabase
-          .from('order_items')
-          .select('quantity,price_at_purchase')
-          .eq('vendor_id', vendorData.id);
-        let totalSales = 0; let totalOrders = 0;
-        if (salesRows) {
-          totalSales = salesRows.reduce((sum: number, r: any) => sum + (r.quantity * Number(r.price_at_purchase)), 0);
-          totalOrders = salesRows.length; // simplistic: each row counts; could distinct on order_id
-        }
-        setMetrics(m => ({ ...m, salesToday: totalSales, orders: totalOrders }));
-      }
-      setLoading(false);
-    };
-    load();
-  }, [profile?.id]);
-
-  const [metrics, setMetrics] = useState({ salesToday: 0, orders: 0, visitors: 0, trend: 12 });
+  const [vendorOrders, setVendorOrders] = useState<any[]>([]);
+  const [vendorOrderItems, setVendorOrderItems] = useState<any[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
+  const [metrics, setMetrics] = useState({ salesToday: 0, ordersToday: 0, totalSales: 0, totalOrders: 0 });
   const [savingSettings, setSavingSettings] = useState(false);
   const [settings, setSettings] = useState({
     store_name: '',
@@ -78,6 +45,150 @@ export default function VendorDashboard() {
     logo_url: '',
     hero_image_url: ''
   });
+  const { toast } = useToast();
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      // If profile not yet loaded, stop showing infinite loading and allow re-run once id appears.
+      if (!profile?.id) { if (!cancelled) { setLoading(false); } return; }
+      setLoading(true);
+      setError(null);
+      try {
+        const { data: vendorData, error: vendorError } = await supabase
+          .from('vendors')
+          .select('id,store_name,address,created_at,owner_user_id,contact_phone,accepting_orders,base_delivery_fee,logo_url,hero_image_url,description')
+          .eq('owner_user_id', profile.id)
+          .maybeSingle();
+        if (vendorError) throw vendorError;
+        if (cancelled) return;
+        setVendor(vendorData as VendorRecord);
+        if (vendorData?.id) {
+          const { data: productRows } = await supabase
+            .from('products')
+            .select('id,name,price,stock,description,main_image_url')
+            .eq('vendor_id', vendorData.id)
+            .order('created_at', { ascending: false });
+          if (!cancelled) setProducts((productRows as ProductRecord[]) || []);
+          // Load orders separately (will set its own loading flags)
+          if (!cancelled) await loadVendorOrders(vendorData.id);
+        }
+      } catch (e: any) {
+        if (!cancelled) setError(e.message || 'Failed to load vendor');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [profile?.id]);
+
+  // Realtime subscription for orders when vendor is known
+  useEffect(() => {
+    if (!vendor?.id) return;
+    const channel = supabase
+      .channel('vendor-orders-' + vendor.id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `vendor_id=eq.${vendor.id}` }, (payload: any) => {
+        setVendorOrders(prev => {
+          const next = [...prev];
+          const idx = next.findIndex(o => o.id === payload.new.id);
+          if (idx >= 0) next[idx] = payload.new; else next.unshift(payload.new);
+          return next;
+        });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [vendor?.id]);
+
+  const loadVendorOrders = async (vendorId: string) => {
+    setOrdersLoading(true); setOrdersError(null);
+    try {
+      const { data: rows, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('vendor_id', vendorId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setVendorOrders(rows || []);
+      if (rows?.length) {
+        const ids = rows.map(r => r.id);
+        const { data: itemRows } = await supabase
+          .from('order_items')
+          .select('*, product:products(name)')
+          .in('order_id', ids);
+        setVendorOrderItems(itemRows || []);
+      } else {
+        setVendorOrderItems([]);
+      }
+    } catch (e: any) {
+      setOrdersError(e.message || 'Failed to load orders');
+    } finally {
+      setOrdersLoading(false);
+    }
+  };
+
+  // Recompute metrics whenever orders list changes
+  useEffect(() => {
+    if (!vendorOrders.length) {
+      setMetrics({ salesToday: 0, ordersToday: 0, totalSales: 0, totalOrders: 0 });
+      return;
+    }
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const salesToday = vendorOrders
+      .filter(o => { const d = new Date(o.created_at); return d >= today; })
+      .reduce((sum: number, o: any) => sum + Number(o.total || 0), 0);
+    const ordersToday = vendorOrders.filter(o => { const d = new Date(o.created_at); return d >= today; }).length;
+    const totalSales = vendorOrders.reduce((sum: number, o: any) => sum + Number(o.total || 0), 0);
+    const totalOrders = vendorOrders.length;
+    setMetrics({ salesToday, ordersToday, totalSales, totalOrders });
+  }, [vendorOrders]);
+
+  const [updatingOrderIds, setUpdatingOrderIds] = useState<string[]>([]);
+  const changeOrderStatus = async (orderId: string, next: string) => {
+    if (updatingOrderIds.includes(orderId)) return; // prevent double-clicks
+    setUpdatingOrderIds(ids => [...ids, orderId]);
+    const prev = vendorOrders.find(o => o.id === orderId)?.status;
+    setVendorOrders(prevOrders => prevOrders.map(o => o.id === orderId ? { ...o, status: next } : o));
+    const { error } = await supabase
+      .from('orders')
+      .update({ status: next })
+      .eq('id', orderId);
+    if (error) {
+      // rollback
+      setVendorOrders(prevOrders => prevOrders.map(o => o.id === orderId ? { ...o, status: prev } : o));
+      toast({ title: 'Status update failed', description: error.message, variant: 'destructive' });
+    }
+    else {
+      toast({ title: 'Order updated', description: `Order #${orderId} is now ${next}.` });
+    }
+    setUpdatingOrderIds(ids => ids.filter(id => id !== orderId));
+  };
+
+  // Unified status badge helper supporting both new sequence and any legacy values.
+  const vendorStatusBadge = (status: string) => {
+    switch (status) {
+      case 'new':
+      case 'created':
+        return <Badge variant="secondary" className="text-xs">New</Badge>;
+      case 'preparing':
+        return <Badge className="bg-yellow-500 hover:bg-yellow-500 text-xs">Preparing</Badge>;
+      case 'for_delivery':
+        return <Badge className="bg-orange-500 hover:bg-orange-500 text-xs">For Delivery</Badge>;
+      case 'delivered':
+        return <Badge className="bg-green-600 hover:bg-green-600 text-xs">Delivered</Badge>;
+      // Legacy mapping support
+      case 'ready':
+        return <Badge className="bg-orange-500 hover:bg-orange-500 text-xs">For Delivery</Badge>;
+      case 'completed':
+        return <Badge className="bg-green-600 hover:bg-green-600 text-xs">Delivered</Badge>;
+      case 'cancelled':
+        return <Badge variant="destructive" className="text-xs">Cancelled</Badge>;
+      default:
+        return <Badge variant="outline" className="text-xs capitalize">{status}</Badge>;
+    }
+  };
+
 
   useEffect(() => {
     if (vendor) {
@@ -96,6 +207,10 @@ export default function VendorDashboard() {
 
   if (loading) {
     return <div className="p-6 text-sm text-muted-foreground">Loading vendor data...</div>;
+  }
+
+  if (!loading && !profile?.id) {
+    return <div className="p-6 text-sm text-muted-foreground">User profile not loaded yet. Try refreshing or re-login.</div>;
   }
 
   if (error) {
@@ -199,28 +314,28 @@ export default function VendorDashboard() {
                   <span>Today's Sales</span>
                   <DollarSign className="h-3 w-3" />
                 </div>
-                <div className="mt-1 text-lg font-semibold">₱{metrics.salesToday.toFixed(2)}</div>
+                <div className="mt-1 text-lg font-semibold">₱{metrics.salesToday.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</div>
               </div>
               <div className="rounded-lg border p-3 bg-muted/30">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Orders</span>
+                  <span>Today's Orders</span>
                   <ShoppingCart className="h-3 w-3" />
                 </div>
-                <div className="mt-1 text-lg font-semibold">{metrics.orders}</div>
+                <div className="mt-1 text-lg font-semibold">{metrics.ordersToday}</div>
               </div>
               <div className="rounded-lg border p-3 bg-muted/30">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Visitors</span>
-                  <Users className="h-3 w-3" />
+                  <span>Total Sales</span>
+                  <DollarSign className="h-3 w-3" />
                 </div>
-                <div className="mt-1 text-lg font-semibold">0</div>
+                <div className="mt-1 text-lg font-semibold">₱{metrics.totalSales.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</div>
               </div>
               <div className="rounded-lg border p-3 bg-muted/30">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Trend</span>
-                  <TrendingUp className="h-3 w-3" />
+                  <span>Total Orders</span>
+                  <ShoppingCart className="h-3 w-3" />
                 </div>
-                <div className="mt-1 text-lg font-semibold text-green-600">+12%</div>
+                <div className="mt-1 text-lg font-semibold">{metrics.totalOrders}</div>
               </div>
             </div>
           </CardContent>
@@ -282,9 +397,118 @@ export default function VendorDashboard() {
               })}
             </div>
           </TabsContent>
-          <TabsContent value="orders">
-            <div className="text-sm text-muted-foreground p-4">Order integration pending.</div>
-          </TabsContent>
+            <TabsContent value="orders">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between py-4">
+              <CardTitle className="text-base flex items-center gap-2"><ShoppingCart className="h-4 w-4" /> Orders</CardTitle>
+              <Button size="sm" variant="outline" disabled={ordersLoading} onClick={() => vendor && loadVendorOrders(vendor.id)}>
+                <RefreshCw className="h-4 w-4 mr-1" /> Refresh
+              </Button>
+              </CardHeader>
+              <CardContent className="space-y-4">
+              {ordersError && <div className="text-xs text-destructive border border-destructive/40 p-2 rounded bg-destructive/5">{ordersError}</div>}
+              {ordersLoading && <div className="text-xs text-muted-foreground">Loading orders...</div>}
+              {!ordersLoading && vendorOrders.length === 0 && <div className="text-xs text-muted-foreground">No orders yet.</div>}
+              <div className="space-y-4">
+                {vendorOrders.map(o => {
+                const its = vendorOrderItems.filter(i => i.order_id === o.id);
+                const totalQty = its.reduce((s,i)=>s+i.quantity,0);
+                return (
+                  <div key={o.id} className="border rounded-md p-3 space-y-3 bg-muted/20">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                    <div className="text-xs font-medium">Order #{o.id}</div>
+                    <div className="text-[10px] text-muted-foreground">{new Date(o.created_at).toLocaleString()}</div>
+                    <div className="text-[10px] text-muted-foreground">Items: {its.length} • Qty: {totalQty}</div>
+                    </div>
+                    {vendorStatusBadge(o.status)}
+                  </div>
+                  <div className="space-y-2 text-xs">
+                    {its.map(it => (
+                    <div key={it.id} className="flex justify-between">
+                      <span className="truncate mr-2">{it.product?.name || it.product_id} × {it.quantity}</span>
+                      <span>₱{(it.unit_price * it.quantity).toLocaleString()}</span>
+                    </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between text-xs font-semibold pt-1 border-t mt-2">
+                    <span>Total</span>
+                    <span>₱{o.total.toLocaleString()}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    {/* Action buttons based on current status */}
+                    {(o.status === 'new' || o.status === 'created') && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="h-7"
+                        disabled={updatingOrderIds.includes(o.id)}
+                        onClick={()=>changeOrderStatus(o.id,'preparing')}
+                      >
+                        {updatingOrderIds.includes(o.id) ? (
+                          <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />
+                        ) : (
+                          <Hourglass className="h-3.5 w-3.5 mr-1" />
+                        )}
+                        Prep
+                      </Button>
+                    )}
+                    {o.status === 'preparing' && (
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="h-7 bg-orange-500 hover:bg-orange-500"
+                        disabled={updatingOrderIds.includes(o.id)}
+                        onClick={()=>changeOrderStatus(o.id,'for_delivery')}
+                      >
+                        {updatingOrderIds.includes(o.id) ? (
+                          <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                        )}
+                        For Delivery
+                      </Button>
+                    )}
+                    {o.status === 'for_delivery' && (
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="h-7 bg-green-600 hover:bg-green-600"
+                        disabled={updatingOrderIds.includes(o.id)}
+                        onClick={()=>changeOrderStatus(o.id,'delivered')}
+                      >
+                        {updatingOrderIds.includes(o.id) ? (
+                          <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                        )}
+                        Delivered
+                      </Button>
+                    )}
+                    {o.status !== 'cancelled' && o.status !== 'delivered' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-destructive border-destructive/40"
+                        disabled={updatingOrderIds.includes(o.id)}
+                        onClick={()=>changeOrderStatus(o.id,'cancelled')}
+                      >
+                        {updatingOrderIds.includes(o.id) ? (
+                          <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />
+                        ) : (
+                          <XCircle className="h-3.5 w-3.5 mr-1" />
+                        )}
+                        Cancel
+                      </Button>
+                    )}
+                  </div>
+                  </div>
+                );
+                })}
+              </div>
+              </CardContent>
+            </Card>
+            </TabsContent>
           <TabsContent value="settings">
             <Card>
               <CardHeader>

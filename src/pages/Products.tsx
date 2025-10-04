@@ -25,7 +25,7 @@ interface RawProductRow {
   created_at?: string;
 }
 
-interface VendorRow { id: string; name: string; address?: string | null; barangay?: string | null }
+interface VendorRow { id: string; store_name: string; address?: string | null; barangay?: string | null }
 
 interface UIProduct {
   id: string;
@@ -70,7 +70,7 @@ const Products = () => {
       if (vendorIds.length) {
         const { data: vRows, error: vErr } = await supabase
           .from('vendors')
-          .select('id,name,address,barangay')
+          .select('id,store_name,address,barangay')
           .in('id', vendorIds);
         if (!vErr && vRows) {
           const map: Record<string, VendorRow> = {};
@@ -86,11 +86,11 @@ const Products = () => {
   // Derive dynamic category & location sets from loaded data
   const uiProducts: UIProduct[] = useMemo(() => {
     return rawProducts.map(p => {
-      const vendor = p.vendor_id ? vendors[p.vendor_id] : undefined;
+  const vendor = p.vendor_id ? vendors[p.vendor_id] : undefined;
       // Fallback heuristics
   // Category column not present in current schema; use placeholder
   const category = 'General';
-      const location = p.location || vendor?.barangay || vendor?.address || 'Unknown';
+  const location = p.location || vendor?.barangay || vendor?.address || 'Unknown';
       // Placeholder rating data (until ratings implemented)
       return {
         id: p.id,
@@ -99,7 +99,7 @@ const Products = () => {
         rating: 0,
         reviews: 0,
   image: (p as any).main_image_url || '/placeholder.svg',
-        business: vendor?.name || 'Unknown Vendor',
+  business: vendor?.store_name || 'Unknown Vendor',
         location,
         category,
         featured: false,

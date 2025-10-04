@@ -13,6 +13,8 @@ interface ProductCardProps {
   discount?: number;
   imageUrl?: string;
   image?: string; // alias used by some pages
+  onAdd?: () => void;
+  adding?: boolean;
 }
 
 const ProductCard = ({
@@ -24,7 +26,9 @@ const ProductCard = ({
   location,
   discount,
   imageUrl,
-  image
+  image,
+  onAdd,
+  adding
 }: ProductCardProps) => {
   const src = imageUrl || image || "/placeholder.svg";
   return (
@@ -47,11 +51,14 @@ const ProductCard = ({
             -{discount}%
           </Badge>
         )}
+        <Badge className="absolute top-2 left-2 bg-primary/90 text-primary-foreground backdrop-blur-sm max-w-[70%] truncate">
+          {business}
+        </Badge>
       </div>
       <CardHeader className="pb-4">
-        <div className="flex items-center text-sm text-muted-foreground mb-2">
-          <MapPin className="h-3 w-3 mr-1" />
-          {location}
+        <div className="flex items-center text-xs text-muted-foreground mb-2 gap-1">
+          <MapPin className="h-3 w-3" />
+          <span className="truncate">{location}</span>
         </div>
         <CardTitle className="text-lg">{name}</CardTitle>
         <CardDescription>by {business}</CardDescription>
@@ -69,9 +76,11 @@ const ProductCard = ({
             </span>
           )}
         </div>
-        <Button className="mt-4 w-full" variant="default" size="sm">
-          Add to Cart
-        </Button>
+        {onAdd && (
+          <Button className="mt-4 w-full" variant="default" size="sm" disabled={adding} onClick={onAdd}>
+            {adding ? 'Adding...' : 'Add to Cart'}
+          </Button>
+        )}
       </CardHeader>
     </Card>
   );

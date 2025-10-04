@@ -52,13 +52,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loadProfile = async (authUserId: string) => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('auth_user_id', authUserId)
-      .single();
-    if (!error) setProfile(data as Profile);
-    setLoading(false);
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('auth_user_id', authUserId)
+        .maybeSingle();
+      if (error) throw error;
+      if (data) {
+        setProfile(data as Profile);
+      } else {
+        // Try creating a minimal profile row if it truly doesn't exist yet
+        const { data: inserted, error: insertErr } = await supabase
+          .from('users')
+          .insert({ auth_user_id: authUserId, full_name: 'New User', email: session?.user?.email, role: 'user' })
+          .select('*')
+          .single();
+        if (!insertErr && inserted) setProfile(inserted as Profile);
+      }
+    } catch (e) {
+      // swallow; profile remains null
+    } finally {
+      setLoading(false);
+    }
   };
 
   const refreshProfile = async () => {

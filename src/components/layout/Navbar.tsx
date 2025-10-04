@@ -14,13 +14,16 @@ import {
   Store,
   MapPin 
 } from "lucide-react";
+import { useCart } from "@/hooks/use-cart";
+import { Skeleton } from "@/components/ui/skeleton";
 const logo = "/logo.jpg"; // served from public/
 
 const Navbar = () => {
-  const [cartCount] = useState(3);
+  const { items } = useCart({ autoCreate: false });
+  const cartCount = items.reduce((sum, i) => sum + i.quantity, 0);
   const [messageCount] = useState(2);
   const location = useLocation();
-  const { profile, signOut } = useAuth();
+  const { profile, loading, signOut } = useAuth();
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -82,7 +85,13 @@ const Navbar = () => {
                 )}
               </Link>
             ))}
-            {!profile && (
+            {loading && (
+              <div className="flex gap-2 items-center">
+                <Skeleton className="h-8 w-24 rounded" />
+                <Skeleton className="h-8 w-20 rounded" />
+              </div>
+            )}
+            {!loading && !profile && (
               <div className="flex gap-2">
                 <Link to="/login/user">
                   <Button variant="secondary" size="sm">User Login</Button>
@@ -92,7 +101,7 @@ const Navbar = () => {
                 </Link>
               </div>
             )}
-            {profile && (
+            {!loading && profile && (
               <div className="flex gap-2 items-center">
                 {profile.role === 'vendor' && (
                   <>
@@ -149,7 +158,7 @@ const Navbar = () => {
                     </Link>
                   ))}
                   <div className="flex items-center justify-between pt-2">
-                    {!profile && (
+                    {!loading && !profile && (
                       <div className="w-full flex flex-col gap-2">
                         <Link to="/login/user" className="w-full">
                           <Button variant="secondary" className="w-full">User Login</Button>
@@ -159,7 +168,7 @@ const Navbar = () => {
                         </Link>
                       </div>
                     )}
-                    {profile && (
+                    {!loading && profile && (
                       <div className="w-full flex flex-col gap-2">
                         {profile.role === 'vendor' && (
                           <div className="w-full flex flex-col gap-1">
