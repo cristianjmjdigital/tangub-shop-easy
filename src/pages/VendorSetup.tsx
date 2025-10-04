@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -21,33 +21,50 @@ export default function VendorSetup() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profile?.auth_user_id) { setError('Not authenticated'); return; }
+    if (!profile?.id) { setError('Not authenticated'); return; }
     if (!form.business_name.trim()) { setError('Business name required'); return; }
     setError(null);
     setLoading(true);
     try {
-      // Insert vendor row
-      const { data: vendorInsert, error: vendorError } = await supabase
+      // Insert vendor row with correct columns (owner_user_id, store_name, description, address)
+      const payload: any = {
+        owner_user_id: profile.id,
+        store_name: form.business_name.trim(),
+        address: form.address.trim() || null,
+      };
+      if (form.description.trim()) payload.description = form.description.trim();
+      // Prevent duplicate vendor row for same user
+      const { data: existingVendor } = await supabase
         .from('vendors')
-        .insert({
-          owner_auth_user_id: profile.auth_user_id,
-          name: form.business_name.trim(),
-          description: form.description.trim() || null,
-          address: form.address.trim() || null
-        })
         .select('id')
-        .single();
+        .eq('owner_user_id', profile.id)
+        .maybeSingle();
+      if (existingVendor) {
+        setError('Vendor already exists for this account. Redirecting...');
+        await refreshProfile();
+        setTimeout(() => navigate('/vendor'), 800);
+        return;
+      }
+
+      const { error: vendorError } = await supabase
+        .from('vendors')
+        .insert(payload);
       if (vendorError) throw vendorError;
 
-      // Update user role to vendor
+      // Update user role to vendor (idempotent)
       const { error: roleError } = await supabase
         .from('users')
         .update({ role: 'vendor' })
-        .eq('auth_user_id', profile.auth_user_id);
+        .eq('id', profile.id);
       if (roleError) throw roleError;
 
       await refreshProfile();
-      navigate('/vendor');
+      const { data: createdVendor } = await supabase
+        .from('vendors')
+        .select('id')
+        .eq('owner_user_id', profile.id)
+        .maybeSingle();
+      if (createdVendor?.id) navigate('/vendor');
     } catch (err: any) {
       console.error(err);
       setError(err.message || 'Failed to set up vendor');
@@ -63,11 +80,21 @@ export default function VendorSetup() {
       </div>
     );
   }
-
-  if (profile.role === 'vendor') {
-    navigate('/vendor');
-    return null;
-  }
+  // Only redirect if user is vendor AND vendor row actually exists (avoid loop if row missing)
+  useEffect(() => {
+    const check = async () => {
+      if (profile?.role === 'vendor' && profile.id) {
+        const { data } = await supabase
+          .from('vendors')
+          .select('id')
+          .eq('owner_user_id', profile.id)
+          .maybeSingle();
+        if (data?.id) navigate('/vendor', { replace: true });
+      }
+    };
+    check();
+  }, [profile?.role, profile?.id, navigate]);
+  // Keep form visible even if role already updated but vendor row missing
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">

@@ -59,7 +59,7 @@ export default function UserSignup() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [debugInfo, setDebugInfo] = useState<any | null>(null);
+  // Debug panel removed after stabilization
   const validate = () => {
     if (!form.name.trim()) return "Name required";
     if (!form.email.trim()) return "Email required";
@@ -82,7 +82,7 @@ export default function UserSignup() {
       }
       const emailTrim = form.email.trim().toLowerCase();
       let signUpData, signUpError;
-  setDebugInfo(null);
+  // (removed debug panel logic)
   let ambiguousDbError = false;
       for (let attempt = 0; attempt < 2; attempt++) {
         const { data, error } = await supabase.auth.signUp({
@@ -103,15 +103,7 @@ export default function UserSignup() {
       }
       if (signUpError) {
         const msg = signUpError.message || '';
-        if (import.meta.env.DEV) {
-          console.group('[Signup] signUpError');
-          console.debug('message:', signUpError.message);
-          // @ts-ignore
-          console.debug('status:', signUpError.status, 'name:', signUpError.name, 'code:', (signUpError as any).code);
-          console.debug('full object:', signUpError);
-          console.groupEnd();
-          setDebugInfo({ phase: 'signUp', message: signUpError.message, status: (signUpError as any).status, code: (signUpError as any).code, full: signUpError });
-        }
+        // (debug logging removed)
         // Duplicate detection
         if (/duplicate key|already registered|already exists|user already registered|email.*exists|violates unique constraint/i.test(msg)) {
           setError('Email already registered. Please log in instead.');
@@ -144,7 +136,7 @@ export default function UserSignup() {
                 setSubmitting(false);
                 return;
               }
-              if (import.meta.env.DEV) setDebugInfo((d:any) => ({ ...d, probe: 'invalid credentials', probeErr }));
+              // (debug info removed)
               const isInternal = signUpError.status === 500 || (signUpError as any).code === 'unexpected_failure';
               setError(isInternal
                 ? 'Internal auth service error (500). Please wait a minute and retry. If this recurs, an admin must inspect Supabase Auth logs.'
@@ -152,7 +144,7 @@ export default function UserSignup() {
               setSubmitting(false);
               return;
             } else {
-              if (import.meta.env.DEV) setDebugInfo((d:any) => ({ ...d, probe: 'other probe state', probeErr }));
+              // (debug info removed)
               // Unknown probe state; surface raw but instruct retry
               setError('Backend issue creating account. Retry once. Raw: ' + msg);
               setSubmitting(false);
@@ -302,12 +294,7 @@ export default function UserSignup() {
               </div>
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
-            {/* Dev debugging panel (only shown in dev mode) */}
-            {import.meta.env.DEV && debugInfo && (
-              <pre className="text-xs bg-muted p-2 rounded overflow-x-auto max-h-40">
-{JSON.stringify(debugInfo, null, 2)}
-              </pre>
-            )}
+            {/* Debug panel removed */}
             <Button className="w-full" type="submit" disabled={submitting}>{submitting ? 'Creating account...' : 'Sign Up'}</Button>
             <Button variant="outline" className="w-full" asChild>
               <Link to="/login/user">Back to Login</Link>

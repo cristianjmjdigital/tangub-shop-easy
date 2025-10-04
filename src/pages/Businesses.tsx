@@ -19,7 +19,7 @@ import {
 import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 
-interface VendorRow { id: string; name: string; description?: string | null; address?: string | null; barangay?: string | null; created_at?: string }
+interface VendorRow { id: string; store_name: string; description?: string | null; address?: string | null; barangay?: string | null; created_at?: string; logo_url?: string | null }
 interface ProductRow { id: string; vendor_id: string }
 
 const Businesses = () => {
@@ -34,7 +34,7 @@ const Businesses = () => {
       setLoading(true); setError(null);
       const { data: vRows, error: vErr } = await supabase
         .from('vendors')
-        .select('id,name,description,address,barangay,created_at')
+        .select('id,store_name,description,address,created_at,logo_url')
         .limit(200);
       if (vErr) { setError(vErr.message); setLoading(false); return; }
       setVendors(vRows as VendorRow[]);
@@ -60,12 +60,12 @@ const Businesses = () => {
       // Placeholder values for fields not yet modeled
       return {
         id: v.id,
-        name: v.name,
+        name: v.store_name,
         category: 'General',
         rating: 0,
         reviews: 0,
-        location: v.barangay || v.address || 'Tangub',
-        image: '/placeholder-business.jpg',
+        location: v.address || 'Tangub City',
+        image: v.logo_url || '/placeholder-business.jpg',
         description: v.description || 'Local business in Tangub City',
         products: productCounts[v.id] || 0,
         followers: 0,
@@ -90,8 +90,9 @@ const Businesses = () => {
 
   const BusinessCard = ({ business }: { business: any }) => (
     <Card className="overflow-hidden hover:shadow-elegant transition-all duration-300 group">
-      <div className="relative">
-        <div className="h-48 bg-gradient-primary opacity-20"></div>
+      <div className="relative h-40 bg-muted">
+        <img src={business.image} alt={business.name} className="absolute inset-0 h-full w-full object-cover" onError={(e) => { e.currentTarget.style.display='none'; }} />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/10 to-black/40" />
         <div className="absolute top-4 left-4">
           {business.isVerified && (
             <Badge className="bg-primary text-primary-foreground">

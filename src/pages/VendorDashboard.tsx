@@ -13,8 +13,8 @@ import { supabase } from "@/lib/supabaseClient";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useAuth } from "@/context/AuthContext";
 
-interface VendorRecord { id: string; store_name: string; address: string | null; created_at?: string; owner_user_id?: string }
-interface ProductRecord { id: string; name: string; price: number; stock: number; status?: string }
+interface VendorRecord { id: string; store_name: string; address: string | null; created_at?: string; owner_user_id?: string; contact_phone?: string | null; accepting_orders?: boolean; base_delivery_fee?: number | null; logo_url?: string | null; hero_image_url?: string | null; description?: string | null }
+interface ProductRecord { id: string; name: string; price: number; stock: number; description?: string | null; main_image_url?: string | null }
 
 export default function VendorDashboard() {
   const { profile, signOut } = useAuth();
@@ -24,36 +24,75 @@ export default function VendorDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [open, setOpen] = useState(false);
-  const [newProduct, setNewProduct] = useState({ name: '', price: '', stock: '' });
+  const [newProduct, setNewProduct] = useState({ name: '', price: '', stock: '', description: '', main_image_url: '' });
   const [editOpen, setEditOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductRecord | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => {
     const load = async () => {
-      if (!profile?.auth_user_id) return;
+      if (!profile?.id) return;
       setLoading(true);
       setError(null);
       // Fetch vendor row
       const { data: vendorData, error: vendorError } = await supabase
         .from('vendors')
-        .select('id,store_name,address,created_at,owner_user_id')
-        .eq('owner_user_id', profile.auth_user_id)
+  .select('id,store_name,address,created_at,owner_user_id,contact_phone,accepting_orders,base_delivery_fee,logo_url,hero_image_url,description')
+        .eq('owner_user_id', profile.id)
         .maybeSingle();
       if (vendorError) { setError(vendorError.message); setLoading(false); return; }
       setVendor(vendorData as VendorRecord);
       if (vendorData?.id) {
         const { data: productRows } = await supabase
           .from('products')
-          .select('id,name,price,stock,status')
+          .select('id,name,price,stock,description,main_image_url')
           .eq('vendor_id', vendorData.id)
           .order('created_at', { ascending: false });
         setProducts((productRows as ProductRecord[]) || []);
+        // Load simple order / sales metrics
+        const { data: salesRows } = await supabase
+          .from('order_items')
+          .select('quantity,price_at_purchase')
+          .eq('vendor_id', vendorData.id);
+        let totalSales = 0; let totalOrders = 0;
+        if (salesRows) {
+          totalSales = salesRows.reduce((sum: number, r: any) => sum + (r.quantity * Number(r.price_at_purchase)), 0);
+          totalOrders = salesRows.length; // simplistic: each row counts; could distinct on order_id
+        }
+        setMetrics(m => ({ ...m, salesToday: totalSales, orders: totalOrders }));
       }
       setLoading(false);
     };
     load();
-  }, [profile?.auth_user_id]);
+  }, [profile?.id]);
+
+  const [metrics, setMetrics] = useState({ salesToday: 0, orders: 0, visitors: 0, trend: 12 });
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settings, setSettings] = useState({
+    store_name: '',
+    contact_phone: '',
+    address: '',
+    accepting_orders: true,
+    base_delivery_fee: '',
+    description: '',
+    logo_url: '',
+    hero_image_url: ''
+  });
+
+  useEffect(() => {
+    if (vendor) {
+      setSettings({
+        store_name: vendor.store_name || '',
+        contact_phone: vendor.contact_phone || '',
+        address: vendor.address || '',
+        accepting_orders: vendor.accepting_orders ?? true,
+        base_delivery_fee: vendor.base_delivery_fee?.toString() || '',
+        description: vendor.description || '',
+        logo_url: vendor.logo_url || '',
+        hero_image_url: vendor.hero_image_url || ''
+      });
+    }
+  }, [vendor]);
 
   if (loading) {
     return <div className="p-6 text-sm text-muted-foreground">Loading vendor data...</div>;
@@ -111,6 +150,14 @@ export default function VendorDashboard() {
                           <Input id="prod-stock" type="number" value={newProduct.stock} onChange={e => setNewProduct(p => ({ ...p, stock: e.target.value }))} />
                         </div>
                       </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="prod-image">Main Image URL</Label>
+                        <Input id="prod-image" value={newProduct.main_image_url} onChange={e => setNewProduct(p => ({ ...p, main_image_url: e.target.value }))} placeholder="https://.../image.jpg" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="prod-desc">Description</Label>
+                        <Textarea id="prod-desc" value={newProduct.description} onChange={e => setNewProduct(p => ({ ...p, description: e.target.value }))} placeholder="Short product description" />
+                      </div>
                       {creating && <p className="text-xs text-muted-foreground">Saving...</p>}
                     </div>
                     <DialogFooter>
@@ -127,13 +174,15 @@ export default function VendorDashboard() {
                             name: newProduct.name.trim(),
                             price: isNaN(priceNum) ? 0 : priceNum,
                             stock: isNaN(stockNum) ? 0 : stockNum,
+                            description: newProduct.description.trim() ? newProduct.description.trim() : null,
+                            main_image_url: newProduct.main_image_url.trim() ? newProduct.main_image_url.trim() : null,
                           })
-                          .select('id,name,price,stock,status')
+                          .select('id,name,price,stock,description,main_image_url')
                           .single();
                         if (!insertErr && inserted) {
                           setProducts(prev => [inserted as any, ...prev]);
                           setOpen(false);
-                          setNewProduct({ name: '', price: '', stock: '' });
+                          setNewProduct({ name: '', price: '', stock: '', description: '', main_image_url: '' });
                         }
                         setCreating(false);
                       }} type="button">Save</Button>
@@ -150,14 +199,14 @@ export default function VendorDashboard() {
                   <span>Today's Sales</span>
                   <DollarSign className="h-3 w-3" />
                 </div>
-                <div className="mt-1 text-lg font-semibold">₱0.00</div>
+                <div className="mt-1 text-lg font-semibold">₱{metrics.salesToday.toFixed(2)}</div>
               </div>
               <div className="rounded-lg border p-3 bg-muted/30">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>Orders</span>
                   <ShoppingCart className="h-3 w-3" />
                 </div>
-                <div className="mt-1 text-lg font-semibold">0</div>
+                <div className="mt-1 text-lg font-semibold">{metrics.orders}</div>
               </div>
               <div className="rounded-lg border p-3 bg-muted/30">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -189,20 +238,26 @@ export default function VendorDashboard() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
               {products.map(p => {
-                const statusBadge = p.status === "Active" ? (
-                  <Badge className="bg-green-600 hover:bg-green-600">Active</Badge>
-                ) : p.status === "Low Stock" ? (
-                  <Badge variant="destructive" className="bg-amber-500 hover:bg-amber-500">Low Stock</Badge>
-                ) : (
+                const statusBadge = p.stock === 0 ? (
                   <Badge variant="destructive">Out of Stock</Badge>
+                ) : p.stock < 10 ? (
+                  <Badge className="bg-amber-500 hover:bg-amber-500">Low Stock</Badge>
+                ) : (
+                  <Badge className="bg-green-600 hover:bg-green-600">In Stock</Badge>
                 );
                 return (
                   <Card key={p.id} className="relative group">
                     <CardContent className="pt-4 space-y-3">
+                      {p.main_image_url && (
+                        <div className="aspect-video w-full overflow-hidden rounded-md border bg-muted">
+                          <img src={p.main_image_url} alt={p.name} className="w-full h-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display='none'; }} />
+                        </div>
+                      )}
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="text-xs text-muted-foreground">#{p.id}</div>
                           <h3 className="font-medium leading-snug">{p.name}</h3>
+                          {p.description && <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{p.description}</p>}
                         </div>
                         {statusBadge}
                       </div>
@@ -212,7 +267,14 @@ export default function VendorDashboard() {
                       </div>
                       <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Button size="sm" variant="secondary" className="h-7 px-2" onClick={() => { setEditingProduct(p); setEditOpen(true); }}><Edit className="h-3.5 w-3.5 mr-1" /> Edit</Button>
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-destructive border-destructive/40"><Trash2 className="h-3.5 w-3.5 mr-1" /> Delete</Button>
+                        <Button size="sm" variant="outline" className="h-7 px-2 text-destructive border-destructive/40" onClick={async () => {
+                          if (!confirm('Delete this product?')) return;
+                          const { error: delErr } = await supabase
+                            .from('products')
+                            .delete()
+                            .eq('id', p.id);
+                          if (!delErr) setProducts(prev => prev.filter(pr => pr.id !== p.id));
+                        }}><Trash2 className="h-3.5 w-3.5 mr-1" /> Delete</Button>
                       </div>
                     </CardContent>
                   </Card>
@@ -232,39 +294,85 @@ export default function VendorDashboard() {
                 <div className="grid gap-6 md:grid-cols-2">
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="storeName">Store Name</Label>
-                      <Input id="storeName" defaultValue={vendor.store_name} />
+                        <Label htmlFor="storeName">Store Name</Label>
+                        <Input id="storeName" value={settings.store_name} onChange={e => setSettings(s => ({ ...s, store_name: e.target.value }))} />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="contactNumber">Contact Number</Label>
-                      <Input id="contactNumber" placeholder="e.g. 09xx-xxx-xxxx" />
+                        <Label htmlFor="contactNumber">Contact Number</Label>
+                        <Input id="contactNumber" value={settings.contact_phone} onChange={e => setSettings(s => ({ ...s, contact_phone: e.target.value }))} placeholder="e.g. 09xx-xxx-xxxx" />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="address">Address</Label>
-                      <Textarea id="address" placeholder="Full business address" />
+                        <Label htmlFor="address">Address</Label>
+                        <Textarea id="address" value={settings.address} onChange={e => setSettings(s => ({ ...s, address: e.target.value }))} placeholder="Full business address" />
                     </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="logo">Logo URL</Label>
+                        <Input id="logo" value={settings.logo_url} onChange={e => setSettings(s => ({ ...s, logo_url: e.target.value }))} placeholder="https://.../logo.png" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="hero">Hero Image URL</Label>
+                        <Input id="hero" value={settings.hero_image_url} onChange={e => setSettings(s => ({ ...s, hero_image_url: e.target.value }))} placeholder="https://.../cover.jpg" />
+                      </div>
                   </div>
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label>Accepting Orders</Label>
                       <div className="flex items-center gap-3 rounded-lg border p-3">
-                        <Switch id="accepting" defaultChecked />
+                          <Switch id="accepting" checked={settings.accepting_orders} onCheckedChange={(v) => setSettings(s => ({ ...s, accepting_orders: !!v }))} />
                         <Label htmlFor="accepting" className="font-normal text-sm text-muted-foreground">Toggle to pause or resume incoming orders.</Label>
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="deliveryFee">Base Delivery Fee (₱)</Label>
-                      <Input id="deliveryFee" type="number" placeholder="e.g. 20" />
+                        <Label htmlFor="deliveryFee">Base Delivery Fee (₱)</Label>
+                        <Input id="deliveryFee" type="number" value={settings.base_delivery_fee} onChange={e => setSettings(s => ({ ...s, base_delivery_fee: e.target.value }))} placeholder="e.g. 20" />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="about">About Store</Label>
-                      <Textarea id="about" placeholder="Short description for customers" />
+                        <Label htmlFor="about">About Store</Label>
+                        <Textarea id="about" value={settings.description} onChange={e => setSettings(s => ({ ...s, description: e.target.value }))} placeholder="Short description for customers" />
                     </div>
+                      {settings.logo_url && (
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                          <img src={settings.logo_url} alt="logo preview" className="h-10 w-10 rounded object-cover border" onError={(e) => { e.currentTarget.style.display='none'; }} />
+                          <span>Preview</span>
+                        </div>
+                      )}
                   </div>
                 </div>
                 <div className="flex justify-end mt-6 gap-2">
-                  <Button variant="outline" size="sm">Reset</Button>
-                  <Button size="sm">Save Changes</Button>
+                    <Button variant="outline" size="sm" disabled={savingSettings} onClick={() => vendor && setSettings({
+                      store_name: vendor.store_name || '',
+                      contact_phone: vendor.contact_phone || '',
+                      address: vendor.address || '',
+                      accepting_orders: vendor.accepting_orders ?? true,
+                      base_delivery_fee: vendor.base_delivery_fee?.toString() || '',
+                      description: vendor.description || '',
+                      logo_url: vendor.logo_url || '',
+                      hero_image_url: vendor.hero_image_url || ''
+                    })}>Reset</Button>
+                    <Button size="sm" disabled={savingSettings} onClick={async () => {
+                      if (!vendor) return;
+                      setSavingSettings(true);
+                      const updatePayload: any = {
+                        store_name: settings.store_name.trim() || vendor.store_name,
+                        contact_phone: settings.contact_phone.trim() || null,
+                        address: settings.address.trim() || null,
+                        accepting_orders: settings.accepting_orders,
+                        base_delivery_fee: settings.base_delivery_fee === '' ? 0 : Number(settings.base_delivery_fee),
+                        description: settings.description.trim() || null,
+                        logo_url: settings.logo_url.trim() || null,
+                        hero_image_url: settings.hero_image_url.trim() || null
+                      };
+                      const { error: updErr, data: updRow } = await supabase
+                        .from('vendors')
+                        .update(updatePayload)
+                        .eq('id', vendor.id)
+                        .select('id,store_name,address,created_at,owner_user_id,contact_phone,accepting_orders,base_delivery_fee,logo_url,hero_image_url,description')
+                        .single();
+                      if (!updErr && updRow) {
+                        setVendor(updRow as VendorRecord);
+                      }
+                      setSavingSettings(false);
+                    }}>{savingSettings ? 'Saving...' : 'Save Changes'}</Button>
                 </div>
               </CardContent>
             </Card>
@@ -294,6 +402,14 @@ export default function VendorDashboard() {
                 <Input id="edit-stock" type="number" value={editingProduct.stock} onChange={e => setEditingProduct(prev => prev ? { ...prev, stock: Number(e.target.value) } : prev)} />
               </div>
             </div>
+            <div className="space-y-1">
+              <Label htmlFor="edit-image">Main Image URL</Label>
+              <Input id="edit-image" value={editingProduct.main_image_url || ''} onChange={e => setEditingProduct(prev => prev ? { ...prev, main_image_url: e.target.value } : prev)} placeholder="https://.../image.jpg" />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="edit-desc">Description</Label>
+              <Textarea id="edit-desc" value={editingProduct.description || ''} onChange={e => setEditingProduct(prev => prev ? { ...prev, description: e.target.value } : prev)} placeholder="Short product description" />
+            </div>
             {savingEdit && <p className="text-xs text-muted-foreground">Saving...</p>}
           </div>
         )}
@@ -304,9 +420,15 @@ export default function VendorDashboard() {
             setSavingEdit(true);
             const { error: updErr, data } = await supabase
               .from('products')
-              .update({ name: editingProduct.name.trim(), price: editingProduct.price, stock: editingProduct.stock })
+              .update({ 
+                name: editingProduct.name.trim(), 
+                price: editingProduct.price, 
+                stock: editingProduct.stock, 
+                description: editingProduct.description?.trim() || null, 
+                main_image_url: editingProduct.main_image_url?.trim() || null 
+              })
               .eq('id', editingProduct.id)
-              .select('id,name,price,stock,status')
+              .select('id,name,price,stock,description,main_image_url')
               .single();
             if (!updErr && data) {
               setProducts(prev => prev.map(p => p.id === data.id ? (data as any) : p));

@@ -83,12 +83,27 @@ const Navbar = () => {
               </Link>
             ))}
             {!profile && (
-              <Link to="/login/user">
-                <Button variant="secondary" size="sm">Login</Button>
-              </Link>
+              <div className="flex gap-2">
+                <Link to="/login/user">
+                  <Button variant="secondary" size="sm">User Login</Button>
+                </Link>
+                <Link to="/login/vendor">
+                  <Button variant="outline" size="sm" className="border-white/40 text-white hover:bg-white/10">Vendor</Button>
+                </Link>
+              </div>
             )}
             {profile && (
-              <Button variant="destructive" size="sm" onClick={signOut}>Logout</Button>
+              <div className="flex gap-2 items-center">
+                {profile.role === 'vendor' && (
+                  <>
+                    <Link to="/vendor">
+                      <Button variant="secondary" size="sm">Vendor Panel</Button>
+                    </Link>
+                    <Badge variant="outline" className="border-white/50 text-white/90">Vendor</Badge>
+                  </>
+                )}
+                <Button variant="destructive" size="sm" onClick={signOut}>Logout</Button>
+              </div>
             )}
           </div>
 
@@ -135,12 +150,27 @@ const Navbar = () => {
                   ))}
                   <div className="flex items-center justify-between pt-2">
                     {!profile && (
-                      <Link to="/login/user" className="w-full">
-                        <Button variant="secondary" className="w-full">Login</Button>
-                      </Link>
+                      <div className="w-full flex flex-col gap-2">
+                        <Link to="/login/user" className="w-full">
+                          <Button variant="secondary" className="w-full">User Login</Button>
+                        </Link>
+                        <Link to="/login/vendor" className="w-full">
+                          <Button variant="outline" className="w-full">Vendor Login</Button>
+                        </Link>
+                      </div>
                     )}
                     {profile && (
-                      <Button variant="destructive" className="w-full" onClick={signOut}>Logout</Button>
+                      <div className="w-full flex flex-col gap-2">
+                        {profile.role === 'vendor' && (
+                          <div className="w-full flex flex-col gap-1">
+                            <Link to="/vendor" className="w-full">
+                              <Button variant="secondary" className="w-full">Vendor Panel</Button>
+                            </Link>
+                            <Badge variant="outline" className="self-start">Vendor</Badge>
+                          </div>
+                        )}
+                        <Button variant="destructive" className="w-full" onClick={signOut}>Logout</Button>
+                      </div>
                     )}
                   </div>
                 </div>
