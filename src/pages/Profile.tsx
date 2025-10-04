@@ -52,46 +52,64 @@ const Profile = () => {
   const [ordersError, setOrdersError] = useState<string | null>(null);
   const statusMapRef = useRef<Record<string,string>>({});
   const initialLoadedRef = useRef(false);
+  const lastUpdatedRef = useRef<Record<string, number>>({});
+  const pendingChangesRef = useRef<{id:string; status:string}[]>([]);
+  const flushTimerRef = useRef<number | null>(null);
+  const [showActiveOnly, setShowActiveOnly] = useState(true);
 
   // Determine user column (your schema might use profile_id instead of user_id)
   const userColumn = 'user_id'; // change to 'profile_id' if your orders table uses that
 
   // Load recent orders from DB for current user
-  useEffect(() => {
+  const loadRecentOrders = async () => {
     if (!profile?.id) return;
-    let cancelled = false;
-    const load = async () => {
-      setOrdersLoading(true); setOrdersError(null);
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`id,total,status,created_at,vendor:vendors(store_name),order_items:order_items(quantity,unit_price,product:products(name))`)
-        .eq(userColumn, profile.id)
-        .order('created_at', { ascending: false })
-        .limit(5);
-      if (cancelled) return;
-      if (error) { setOrdersError(error.message); setOrdersLoading(false); return; }
-      const display: RecentOrderDisplay[] = (data || []).map((o: any) => {
-        const itemsStr = (o.order_items || [])
-          .map((it: any) => `${it.product?.name || 'Item'} (x${it.quantity})`)
-          .join(', ');
-        statusMapRef.current[o.id] = o.status;
-        return {
-          id: o.id,
-            business: o.vendor?.store_name || 'Unknown Store',
-            items: itemsStr || '—',
-            total: Number(o.total) || 0,
-            status: o.status,
-            date: new Date(o.created_at).toLocaleString(),
-            rating: null
-        };
-      });
-      setRecentOrders(display);
-      setOrdersLoading(false);
-      initialLoadedRef.current = true;
-    };
-    load();
-    return () => { cancelled = true; };
-  }, [profile?.id]);
+    setOrdersLoading(true); setOrdersError(null);
+    const { data, error } = await supabase
+      .from('orders')
+      .select(`id,total,status,created_at,vendor:vendors(store_name),order_items:order_items(quantity,unit_price,product:products(name))`)
+      .eq(userColumn, profile.id)
+      .order('created_at', { ascending: false })
+      .limit(5);
+    if (error) { setOrdersError(error.message); setOrdersLoading(false); return; }
+    const display: RecentOrderDisplay[] = (data || []).map((o: any) => {
+      const itemsStr = (o.order_items || [])
+        .map((it: any) => `${it.product?.name || 'Item'} (x${it.quantity})`)
+        .join(', ');
+      statusMapRef.current[o.id] = o.status;
+      return {
+        id: o.id,
+        business: o.vendor?.store_name || 'Unknown Store',
+        items: itemsStr || '—',
+        total: Number(o.total) || 0,
+        status: o.status,
+        date: new Date(o.created_at).toLocaleString(),
+        rating: null
+      };
+    });
+    setRecentOrders(display);
+    setOrdersLoading(false);
+    initialLoadedRef.current = true;
+  };
+
+  useEffect(() => { loadRecentOrders(); }, [profile?.id]);
+
+  const enqueueStatusChangeToast = (id: string, status: string) => {
+    pendingChangesRef.current.push({ id, status });
+    if (flushTimerRef.current) window.clearTimeout(flushTimerRef.current);
+    flushTimerRef.current = window.setTimeout(() => {
+      const changes = pendingChangesRef.current;
+      pendingChangesRef.current = [];
+      flushTimerRef.current = null;
+      if (changes.length === 0) return;
+      if (changes.length === 1) {
+        const c = changes[0];
+        toast({ title: 'Order Status Updated', description: `Order #${c.id} is now ${c.status}.` });
+      } else {
+        const summary = changes.map(c => `#${c.id.slice(0,6)}→${c.status}`).join(', ');
+        toast({ title: 'Orders Updated', description: summary });
+      }
+    }, 600); // group rapid changes within 600ms
+  };
 
   // Realtime subscription to order status changes for this user
   useEffect(() => {
@@ -101,45 +119,43 @@ const Profile = () => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `${userColumn}=eq.${profile.id}` }, async (payload: any) => {
         console.log('[realtime][orders]', payload);
         const newRow = payload.new;
-        setRecentOrders(prev => {
-          let next = [...prev];
-          const idx = next.findIndex(o => o.id === newRow.id);
-          if (idx >= 0) {
-            // Status change toast
-            const prevStatus = statusMapRef.current[newRow.id];
-            if (prevStatus && prevStatus !== newRow.status) {
-              toast({ title: 'Order Status Updated', description: `Order #${newRow.id} is now ${newRow.status}.` });
+        const orderId = newRow.id;
+        const prevStatus = statusMapRef.current[orderId];
+        // If existing order status changed
+        if (prevStatus && prevStatus !== newRow.status) {
+          enqueueStatusChangeToast(orderId, newRow.status);
+          lastUpdatedRef.current[orderId] = Date.now();
+          statusMapRef.current[orderId] = newRow.status;
+          setRecentOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newRow.status } : o));
+          return;
+        }
+        // New order (or we didn't have it cached) – fetch full details then add
+        if (!prevStatus) {
+          try {
+            const { data: full, error: fetchErr } = await supabase
+              .from('orders')
+              .select(`id,total,status,created_at,vendor:vendors(store_name),order_items:order_items(quantity,product:products(name))`)
+              .eq('id', orderId)
+              .single();
+            if (!fetchErr && full) {
+              const itemsStr = (full.order_items || []).map((it: any) => `${it.product?.name || 'Item'} (x${it.quantity})`).join(', ');
+              statusMapRef.current[orderId] = full.status;
+              lastUpdatedRef.current[orderId] = Date.now();
+              enqueueStatusChangeToast(orderId, full.status);
+              setRecentOrders(prev => [{
+                id: full.id,
+                business: full.vendor?.store_name || 'Order',
+                items: itemsStr || '—',
+                total: Number(full.total) || 0,
+                status: full.status,
+                date: new Date(full.created_at).toLocaleString(),
+                rating: null
+              }, ...prev].slice(0,5));
             }
-            next[idx] = { ...next[idx], status: newRow.status };
-          } else {
-            // New order (prepend) - fetch items + vendor for richer display
-            let itemsStr = '—';
-            let vendorName = 'Order';
-            try {
-              const { data: full, error: fetchErr } = await supabase
-                .from('orders')
-                .select(`id,total,status,created_at,vendor:vendors(store_name),order_items:order_items(quantity,product:products(name))`)
-                .eq('id', newRow.id)
-                .single();
-              if (!fetchErr && full) {
-                vendorName = full.vendor?.store_name || vendorName;
-                itemsStr = (full.order_items || []).map((it: any) => `${it.product?.name || 'Item'} (x${it.quantity})`).join(', ');
-              }
-            } catch {}
-            next.unshift({
-              id: newRow.id,
-              business: vendorName,
-              items: itemsStr,
-              total: Number(newRow.total) || 0,
-              status: newRow.status,
-              date: new Date(newRow.created_at).toLocaleString(),
-              rating: null
-            });
-            next = next.slice(0,5); // keep size
+          } catch (e) {
+            console.warn('Failed to hydrate new order', e);
           }
-          statusMapRef.current[newRow.id] = newRow.status;
-          return next;
-        });
+        }
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -186,6 +202,10 @@ const Profile = () => {
       default: return 'bg-muted text-foreground';
     }
   };
+
+  const filteredOrders = showActiveOnly
+    ? recentOrders.filter(o => !['Delivered','Cancelled'].includes(o.status))
+    : recentOrders;
 
   return (
     <div className="min-h-screen bg-gradient-subtle">
@@ -249,6 +269,14 @@ const Profile = () => {
                     <Package className="h-5 w-5 mr-2" />
                     Recent Orders
                   </CardTitle>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                    <Button variant="outline" size="sm" onClick={loadRecentOrders} disabled={ordersLoading}>
+                      {ordersLoading ? 'Refreshing...' : 'Refresh'}
+                    </Button>
+                    <Button variant={showActiveOnly ? 'default' : 'outline'} size="sm" onClick={()=>setShowActiveOnly(v=>!v)}>
+                      {showActiveOnly ? 'Showing Active' : 'Showing All'}
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
@@ -261,8 +289,14 @@ const Profile = () => {
                     {!ordersLoading && !ordersError && recentOrders.length === 0 && (
                       <div className="text-sm text-muted-foreground">No recent orders.</div>
                     )}
-                    {recentOrders.map((order) => (
-                      <div key={order.id} className="border rounded-lg p-4">
+                    {filteredOrders.map((order) => {
+                      const updatedAge = Date.now() - (lastUpdatedRef.current[order.id] || 0);
+                      const recentlyUpdated = updatedAge < 4000; // 4s highlight
+                      return (
+                      <div key={order.id} className={`border rounded-lg p-4 relative ${recentlyUpdated ? 'ring-1 ring-primary/40 bg-primary/5 animate-pulse-subtle' : ''}`}>
+                        {recentlyUpdated && (
+                          <span className="absolute top-1 right-2 text-[10px] text-primary/80">Updated just now</span>
+                        )}
                         <div className="flex flex-col md:flex-row md:items-center justify-between space-y-3 md:space-y-0">
                           <div className="flex-1">
                             <div className="flex items-center space-x-3 mb-2">
@@ -294,7 +328,8 @@ const Profile = () => {
                           </div>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                     
                     <div className="text-center mt-6">
                       <Button variant="outline" asChild>
