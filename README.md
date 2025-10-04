@@ -168,6 +168,56 @@ Add broader policies for admin role with a JWT claim (e.g. `role = 'admin'`).
 
 Simply open [Lovable](https://lovable.dev/projects/99fd4d57-12d9-43d7-aa86-79223f45c17f) and click on Share -> Publish.
 
+### SPA Routing (Netlify / Vercel) – Avoid 404 on Refresh
+
+Because this is a Single Page Application (SPA) built with Vite + React, direct navigation or refreshing a deep link (e.g. `/products/123` or `/profile`) on static hosts can return a 404 unless all unknown paths are rewritten to `index.html`.
+
+Netlify (already configured):
+
+We added `public/_redirects` with the line:
+
+```
+/*  /index.html  200
+```
+
+When you build/deploy, Netlify copies this file and serves `index.html` for any route it does not recognize, allowing the client router to take over.
+
+Alternative (Netlify) using `netlify.toml` (optional):
+
+```toml
+[[redirects]]
+	from = "/*"
+	to = "/index.html"
+	status = 200
+```
+
+Vercel:
+
+Create a `vercel.json` (at the project root) if you deploy there:
+
+```json
+{
+	"rewrites": [
+		{ "source": "/(.*)", "destination": "/index.html" }
+	]
+}
+```
+
+Static Hosting (e.g. S3 / CloudFront):
+
+- Configure the distribution / bucket to use `index.html` as both the index and error document.
+- CloudFront: set 404/403 custom error responses to return `/index.html` (HTTP 200).
+
+Local Preview Tip:
+
+Vite already handles this in dev mode; the issue only appears in production-like static hosting environments.
+
+Troubleshooting:
+
+- Still seeing 404? Confirm the `_redirects` file is present in the published artifact (Netlify Deploy log > Published files list).
+- Ensure there are no other conflicting redirect rules above the SPA catch-all.
+- Clear CDN / browser cache after adding rewrites.
+
 ## Can I connect a custom domain to my Lovable project?
 
 Yes, you can!
