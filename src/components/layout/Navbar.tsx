@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,21 +16,55 @@ import {
 } from "lucide-react";
 import { useCart } from "@/hooks/use-cart";
 import { Skeleton } from "@/components/ui/skeleton";
+import { computeUnreadForUser } from '@/pages/Messages';
+import { supabase } from '@/lib/supabaseClient';
 const logo = "/logo.jpg"; // served from public/
 
 const Navbar = () => {
   const { items } = useCart({ autoCreate: false });
   const cartCount = items.reduce((sum, i) => sum + i.quantity, 0);
-  const [messageCount] = useState(2);
+  const [messageCount, setMessageCount] = useState(0);
   const location = useLocation();
   const { profile, loading, signOut } = useAuth();
+
+  // subscribe to unread messages
+  useEffect(()=>{
+    let userId = profile?.id; // fallback later once profile loads
+    if (!userId) return; // wait for profile
+    let isMounted = true;
+    const load = async () => {
+      const { data } = await supabase
+        .from('messages')
+        .select('id,receiver_user_id,read_at')
+        .eq('receiver_user_id', userId)
+        .is('read_at', null);
+      if (isMounted) setMessageCount((data||[]).length);
+    };
+    load();
+    const channel = supabase.channel('navbar-messages-' + userId)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `receiver_user_id=eq.${userId}` }, payload => {
+        setMessageCount(prev => {
+          const newRow: any = payload.new;
+          if (!newRow) return prev;
+          // If message inserted for this user and unread
+          if (payload.eventType === 'INSERT' && !newRow.read_at) return prev + 1;
+          // If message updated (read_at set) reduce count
+            if (payload.eventType === 'UPDATE') {
+              if (newRow.read_at) return Math.max(0, prev - 1);
+            }
+          return prev;
+        });
+      })
+      .subscribe();
+    return () => { isMounted = false; supabase.removeChannel(channel); };
+  }, [profile?.id]);
 
   const isActive = (path: string) => location.pathname === path;
 
   const navItems = [
     { path: "/home", label: "Home", icon: null },
     { path: "/products", label: "Products", icon: null },
-    { path: "/businesses", label: "Businesses", icon: Store },
+    // { path: "/businesses", label: "Businesses", icon: Store },
     { path: "/messages", label: "Messages", icon: MessageCircle },
     { path: "/profile", label: "Profile", icon: User },
   ];
@@ -80,7 +114,7 @@ const Navbar = () => {
                 <span>{item.label}</span>
                 {item.path === "/messages" && messageCount > 0 && (
                   <Badge variant="destructive" className="ml-1 h-5 w-5 p-0 text-xs flex items-center justify-center">
-                    {messageCount}
+                    {messageCount > 99 ? '99+' : messageCount}
                   </Badge>
                 )}
               </Link>
@@ -152,7 +186,7 @@ const Navbar = () => {
                       <span className="font-medium">{item.label}</span>
                       {item.path === "/messages" && messageCount > 0 && (
                         <Badge variant="destructive" className="ml-auto">
-                          {messageCount}
+                          {messageCount > 99 ? '99+' : messageCount}
                         </Badge>
                       )}
                     </Link>

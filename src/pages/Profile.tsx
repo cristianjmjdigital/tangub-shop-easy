@@ -19,8 +19,13 @@ import {
   Settings,
   LogOut,
   Store,
-  CreditCard
+  CreditCard,
+  MessageSquare,
+  Send,
+  X
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import { Link, useNavigate } from "react-router-dom";
@@ -56,6 +61,10 @@ const Profile = () => {
   const pendingChangesRef = useRef<{id:string; status:string}[]>([]);
   const flushTimerRef = useRef<number | null>(null);
   const [showActiveOnly, setShowActiveOnly] = useState(true);
+  const [messageOrderId, setMessageOrderId] = useState<string | null>(null);
+  const [messageVendorName, setMessageVendorName] = useState<string>('');
+  const [messageText, setMessageText] = useState('');
+  const [sendingMsg, setSendingMsg] = useState(false);
 
   // Determine user column (your schema might use profile_id instead of user_id)
   const userColumn = 'user_id'; // change to 'profile_id' if your orders table uses that
@@ -207,6 +216,37 @@ const Profile = () => {
     ? recentOrders.filter(o => !['Delivered','Cancelled'].includes(o.status))
     : recentOrders;
 
+  const openMessageDialog = (orderId: string) => {
+    const ord = recentOrders.find(o => o.id === orderId);
+    if (!ord) return;
+    setMessageOrderId(orderId);
+    setMessageVendorName(ord.business);
+    setMessageText('');
+  };
+
+  const sendOrderMessage = async () => {
+    if (!messageOrderId || !profile?.id || !messageText.trim()) return;
+    // We assume messages table: vendor_id, sender_user_id, receiver_user_id, content
+    // Need vendor_id & receiver_user_id (vendor owner). Fetch vendor to get owner.
+    try {
+      setSendingMsg(true);
+      // fetch order to get vendor_id
+      const { data: ord, error: ordErr } = await supabase.from('orders').select('id,vendor_id').eq('id', messageOrderId).single();
+      if (ordErr) throw ordErr;
+      // fetch vendor to get owner_user_id
+      const { data: vend, error: vendErr } = await supabase.from('vendors').select('id,owner_user_id').eq('id', ord.vendor_id).single();
+      if (vendErr) throw vendErr;
+      const content = messageText.trim();
+      await supabase.from('messages').insert({ vendor_id: ord.vendor_id, sender_user_id: profile.id, receiver_user_id: vend.owner_user_id, content });
+      toast({ title: 'Message sent', description: `Sent to ${messageVendorName}` });
+      setMessageOrderId(null);
+    } catch (e: any) {
+      toast({ title: 'Failed to send', description: e.message || 'Please retry', variant: 'destructive' });
+    } finally {
+      setSendingMsg(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-subtle">
       <div className="container mx-auto px-4 py-6">
@@ -321,9 +361,14 @@ const Profile = () => {
                                 <span className="ml-1 text-sm">{order.rating}</span>
                               </div>
                             ) : (
-                              <Button variant="outline" size="sm" className="mt-1">
-                                Rate Order
-                              </Button>
+                              <div className="flex flex-col gap-2 mt-1">
+                                <Button variant="outline" size="sm">
+                                  Rate Order
+                                </Button>
+                                <Button variant="secondary" size="sm" onClick={() => openMessageDialog(order.id)} className="flex items-center gap-1">
+                                  <MessageSquare className="h-3.5 w-3.5" /> Message
+                                </Button>
+                              </div>
                             )}
                           </div>
                         </div>
@@ -505,8 +550,29 @@ const Profile = () => {
           </Tabs>
         </div>
       </div>
+      <Dialog open={!!messageOrderId} onOpenChange={(o)=>{ if(!o){ setMessageOrderId(null);} }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">Message {messageVendorName || 'Vendor'}
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={()=>setMessageOrderId(null)}><X className="h-4 w-4" /></Button>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Textarea value={messageText} onChange={e=>setMessageText(e.target.value)} placeholder="Type your message about this order..." rows={4} />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={()=>setMessageOrderId(null)}>Cancel</Button>
+              <Button size="sm" disabled={!messageText.trim() || sendingMsg} onClick={sendOrderMessage}>
+                {sendingMsg ? 'Sending...' : (<span className="inline-flex items-center gap-1"><Send className="h-3.5 w-3.5" /> Send</span>)}
+              </Button>
+            </div>
+            <p className="text-[10px] text-muted-foreground">Your message will appear in Messages. Vendor can reply there.</p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
+
+// (Messaging dialog integrated above) single default export below.
 
 export default Profile;

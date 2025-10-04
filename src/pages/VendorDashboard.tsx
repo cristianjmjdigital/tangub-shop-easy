@@ -3,14 +3,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, ShoppingCart, Settings, Store, DollarSign, Edit, Trash2, RefreshCw, CheckCircle2, Hourglass, XCircle } from "lucide-react";
+import { Plus, ShoppingCart, Settings, Store, DollarSign, Edit, Trash2, RefreshCw, CheckCircle2, Hourglass, XCircle, MessageSquare, Send, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabaseClient";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -46,6 +46,9 @@ export default function VendorDashboard() {
     hero_image_url: ''
   });
   const { toast } = useToast();
+  const [msgOrderId, setMsgOrderId] = useState<string | null>(null);
+  const [msgText, setMsgText] = useState('');
+  const [sendingMsg, setSendingMsg] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -172,6 +175,29 @@ export default function VendorDashboard() {
       toast({ title: 'Order updated', description: `Order #${orderId} is now ${dbNext}.` });
     }
     setUpdatingOrderIds(ids => ids.filter(id => id !== orderId));
+  };
+
+  const openMessage = (orderId: string) => {
+    setMsgOrderId(orderId);
+    setMsgText('');
+  };
+
+  const sendVendorMessage = async () => {
+    if (!msgOrderId || !profile?.id || !vendor?.id || !msgText.trim()) return;
+    try {
+      setSendingMsg(true);
+      // fetch order to get user_id to receive message
+      const { data: orderRow, error: ordErr } = await supabase.from('orders').select('id,user_id').eq('id', msgOrderId).single();
+      if (ordErr) throw ordErr;
+      const content = msgText.trim();
+      await supabase.from('messages').insert({ vendor_id: vendor.id, sender_user_id: profile.id, receiver_user_id: orderRow.user_id, content });
+      toast({ title: 'Message sent', description: 'Customer notified.' });
+      setMsgOrderId(null);
+    } catch (e: any) {
+      toast({ title: 'Send failed', description: e.message || 'Please retry', variant: 'destructive' });
+    } finally {
+      setSendingMsg(false);
+    }
   };
 
   // Returns a badge element for a (possibly mixed-case) status.
@@ -513,6 +539,9 @@ export default function VendorDashboard() {
                         Cancel
                       </Button>
                     )}
+                    <Button size="sm" variant="secondary" className="h-7" onClick={()=>openMessage(o.id)}>
+                      <MessageSquare className="h-3.5 w-3.5 mr-1" /> Message
+                    </Button>
                   </div>
                   </div>
                 );
@@ -673,6 +702,26 @@ export default function VendorDashboard() {
             setSavingEdit(false);
           }}>Save Changes</Button>
         </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    {/* Order Messaging Dialog */}
+    <Dialog open={!!msgOrderId} onOpenChange={(o)=>{ if(!o) setMsgOrderId(null); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center justify-between">Message Customer
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={()=>setMsgOrderId(null)}><X className="h-4 w-4" /></Button>
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <Textarea value={msgText} onChange={e=>setMsgText(e.target.value)} placeholder="Type a message about this order (e.g., clarification, delay notice)..." rows={4} />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={()=>setMsgOrderId(null)}>Cancel</Button>
+            <Button size="sm" disabled={!msgText.trim() || sendingMsg} onClick={sendVendorMessage}>
+              {sendingMsg ? 'Sending...' : (<span className="inline-flex items-center gap-1"><Send className="h-3.5 w-3.5" /> Send</span>)}
+            </Button>
+          </div>
+          <p className="text-[10px] text-muted-foreground">Message will appear in both your Messages and the customer's inbox.</p>
+        </div>
       </DialogContent>
     </Dialog>
     </>
