@@ -150,10 +150,6 @@ Add broader policies for admin role with a JWT claim (e.g. `role = 'admin'`).
 
 ## Development Scripts
 
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/99fd4d57-12d9-43d7-aa86-79223f45c17f) and click on Share -> Publish.
-
 ### SPA Routing (Netlify / Vercel) – Avoid 404 on Refresh
 
 Because this is a Single Page Application (SPA) built with Vite + React, direct navigation or refreshing a deep link (e.g. `/products/123` or `/profile`) on static hosts can return a 404 unless all unknown paths are rewritten to `index.html`.
@@ -203,11 +199,3 @@ Troubleshooting:
 - Still seeing 404? Confirm the `_redirects` file is present in the published artifact (Netlify Deploy log > Published files list).
 - Ensure there are no other conflicting redirect rules above the SPA catch-all.
 - Clear CDN / browser cache after adding rewrites.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
