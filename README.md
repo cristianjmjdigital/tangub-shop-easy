@@ -1,18 +1,4 @@
-# Welcome to your Lovable project
-
-## Project info
-
-**URL**: https://lovable.dev/projects/99fd4d57-12d9-43d7-aa86-79223f45c17f
-
-## How can I edit this code?
-
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/99fd4d57-12d9-43d7-aa86-79223f45c17f) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
+# TANGUB SHOP EASY
 
 **Use your preferred IDE**
 
