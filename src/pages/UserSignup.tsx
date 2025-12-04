@@ -52,6 +52,7 @@ export default function UserSignup() {
     email: "",
     password: "",
     confirm: "",
+    id_number: "",
     phone: "",
     city: "Tangub City",
     barangay: "Aquino",
@@ -65,6 +66,7 @@ export default function UserSignup() {
     if (!form.email.trim()) return "Email required";
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email)) return "Invalid email";
     if (form.password.length < 6) return "Password must be at least 6 characters";
+    if (!form.id_number.trim()) return "Government/Valid ID number is required";
     if (form.password !== form.confirm) return "Passwords do not match";
     return null;
   };
@@ -177,6 +179,7 @@ export default function UserSignup() {
         // Only include barangay/phone if user entered (avoid errors if columns missing)
         if (form.barangay) profilePayload.barangay = form.barangay;
         if (form.phone) profilePayload.phone = form.phone;
+        if (form.id_number) profilePayload.id_number = form.id_number.trim();
 
         const { error: upsertErr } = await supabase
           .from('users')
@@ -243,6 +246,10 @@ export default function UserSignup() {
             <div className="space-y-2">
               <Label htmlFor="name">Full Name</Label>
               <Input id="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="idnum">Government/Valid ID Number</Label>
+              <Input id="idnum" value={form.id_number} onChange={(e) => setForm({ ...form, id_number: e.target.value })} placeholder="e.g., National ID / Driver's License" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>

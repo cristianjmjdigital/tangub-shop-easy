@@ -216,6 +216,15 @@ export default function AdminDashboard() {
     return Array.from(map.entries()).map(([status, value])=>({ status, value }));
   }, [ordersData]);
 
+  const usersByBarangay = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const u of usersData) {
+      const key = (u.barangay || 'Unknown');
+      map.set(key, (map.get(key) || 0) + 1);
+    }
+    return Array.from(map.entries()).map(([barangay, count]) => ({ barangay, count })).sort((a,b)=> b.count - a.count).slice(0,8);
+  }, [usersData]);
+
   // Filter logic (simple text contains across main fields)
   const normalizedFilter = filter.trim().toLowerCase();
   const filterMatch = (val: string | null | undefined) => (val||'').toLowerCase().includes(normalizedFilter);
@@ -359,6 +368,33 @@ export default function AdminDashboard() {
                         <ChartLegend content={<ChartLegendContent nameKey="status" />} />
                       </PieChart>
                     </ChartContainer>
+                  </Card>
+                </div>
+                <div className="grid md:grid-cols-2 gap-4 mt-4">
+                  <Card className="p-4">
+                    <h3 className="font-semibold mb-2">Users by Barangay</h3>
+                    <ChartContainer className="h-[260px]" config={{ users: { label: 'Users', color: 'hsl(var(--primary))' }}}>
+                      <BarChart data={usersByBarangay}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="barangay" hide />
+                        <YAxis width={45} />
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                        <Bar dataKey="count" fill="var(--color-users)" radius={[4,4,0,0]} />
+                      </BarChart>
+                    </ChartContainer>
+                  </Card>
+                  <Card className="p-4">
+                    <h3 className="font-semibold mb-2">Recent Orderers</h3>
+                    <div className="text-xs text-muted-foreground mb-2">Emails from latest orders</div>
+                    <div className="space-y-2">
+                      {ordersData.slice(0,10).map((o)=> (
+                        <div key={o.id} className="flex items-center justify-between text-sm">
+                          <span className="font-mono text-muted-foreground">{o.id.slice(0,8)}…</span>
+                          <span className="">₱{(o.total||0).toLocaleString()}</span>
+                        </div>
+                      ))}
+                      {ordersData.length === 0 && <div className="text-xs text-muted-foreground">No recent orders yet.</div>}
+                    </div>
                   </Card>
                 </div>
               </SectionCard>
