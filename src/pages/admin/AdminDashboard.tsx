@@ -9,6 +9,8 @@ import { Search, Users, Store, Package, ShoppingCart, BarChart2, LogOut, Wallet,
 import { supabase } from "@/lib/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatDistanceToNow } from "date-fns";
+import { StatusTimeline } from "@/components/ui/status-timeline";
 import {
   SidebarProvider,
   Sidebar,
@@ -481,7 +483,8 @@ export default function AdminDashboard() {
                       <span className="font-medium">Order #{o.id}</span>
                       <Badge>{o.status || 'n/a'}</Badge>
                     </div>
-                    <div className="text-xs text-muted-foreground">Total: ₱{o.total || 0}</div>
+                    <div className="text-xs text-muted-foreground">Placed {o.created_at ? formatDistanceToNow(new Date(o.created_at), { addSuffix: true }) : ''} • Total: ₱{o.total || 0}</div>
+                    <div className="pt-1"><StatusTimeline status={o.status || 'pending'} /></div>
                     <div className="flex gap-2 mt-1">
                       <Button size="sm" variant="outline" className="h-7 px-2">Details</Button>
                       <Button size="sm" variant="secondary" className="h-7 px-2">Advance</Button>

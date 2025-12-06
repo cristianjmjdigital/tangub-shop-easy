@@ -7,6 +7,8 @@ import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { ShoppingBag, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { formatDistanceToNow } from 'date-fns';
+import { StatusTimeline } from '@/components/ui/status-timeline';
 
 interface OrderRow { id: string; vendor_id: string; total: number; status: string; created_at: string }
 interface OrderItemRow { id: string; order_id: string; product_id: string; quantity: number; unit_price: number; subtotal: number; product?: { name: string; price: number } }
@@ -135,9 +137,12 @@ export default function Orders() {
                   {statusBadge(g.order.status)}
                 </div>
                 <div className='text-xs text-muted-foreground'>Vendor: {g.vendor?.store_name || g.order.vendor_id}</div>
-                <div className='text-xs text-muted-foreground'>Placed: {new Date(g.order.created_at).toLocaleString()}</div>
+                <div className='text-xs text-muted-foreground'>Placed {formatDistanceToNow(new Date(g.order.created_at), { addSuffix: true })}</div>
               </CardHeader>
               <CardContent className='p-4 pt-0 space-y-3'>
+                <div className='py-2'>
+                  <StatusTimeline status={g.order.status} />
+                </div>
                 {g.items.map(it => (
                   <div key={it.id} className='flex items-center justify-between text-sm border rounded-md p-3'>
                     <div>
