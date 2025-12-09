@@ -191,7 +191,7 @@ export function useCart(options: UseCartOptions = {}) {
 
   const subtotal = useMemo(() => items.reduce((sum, i) => sum + (i.product?.price ?? 0) * i.quantity, 0), [items]);
 
-  // Checkout: create one order per vendor grouping, then order_items, decrement stock, finally clear cart
+  // Checkout: try RPC to finalize server-side (creates order, copies items, clears cart), fallback to client flow
   const checkout = useCallback(async () => {
     if (!authUser) {
       toast({ title: 'Please login', description: 'Login required to checkout', variant: 'destructive' });
@@ -201,35 +201,55 @@ export function useCart(options: UseCartOptions = {}) {
       toast({ title: 'Cart empty', description: 'Add items before checkout', variant: 'destructive' });
       return { orders: [] };
     }
-    // Optimistic snapshot (outside try for rollback access)
+
     const snapshotItems = [...items];
     const snapshotCart = cart;
+    const userRowId = profile?.id || authUser.id;
     try {
       setLoading(true);
-      // Optimistic clear (UX responsiveness)
-      setItems([]);
-      // Group items by vendor_id
+
+      // Ensure cart exists
+      let currentCart = cart;
+      if (!currentCart) {
+        await loadCart();
+        currentCart = cart;
+      }
+
+      // Preferred: server-side finalize (also clears cart_items)
+      const { data: orderId, error: rpcErr } = await supabase.rpc('finalize_checkout_bigint', {
+        p_user_id: userRowId,
+        p_vendor_id: currentCart?.vendor_id ?? null,
+      });
+
+      if (!rpcErr && orderId) {
+        // Best effort refetch cart to update UI
+        setItems([]);
+        await loadCart();
+        toast({ title: 'Order placed', description: 'Checkout completed.' });
+        return { orders: [{ id: orderId }] };
+      }
+
+      // Fallback to client-side flow per vendor grouping
       const groups: Record<string, CartItemRow[]> = {};
       for (const it of items) {
         const vId = it.product?.vendor_id || 'unknown';
         if (!groups[vId]) groups[vId] = [];
         groups[vId].push(it);
       }
+
       const createdOrders: any[] = [];
-      const userRowId = profile?.id || authUser.id;
+      setItems([]);
+
       for (const [vendorId, groupItems] of Object.entries(groups)) {
-        if (vendorId === 'unknown') continue; // skip items without vendor
+        if (vendorId === 'unknown') continue;
         const total = groupItems.reduce((sum, it) => sum + (it.product?.price ?? 0) * it.quantity, 0);
-        // Create order
-        // Omit status to let DB enum default handle initial value
         const { data: order, error: orderErr } = await supabase
           .from('orders')
           .insert({ user_id: userRowId, vendor_id: vendorId, total })
           .select('*')
           .single();
         if (orderErr) throw orderErr;
-        // Create order_items
-        // subtotal is likely a generated column (unit_price * quantity); omit from insert
+
         const orderItemsPayload = groupItems.map(it => ({
           order_id: order.id,
           product_id: it.product_id,
@@ -238,42 +258,26 @@ export function useCart(options: UseCartOptions = {}) {
         }));
         const { error: oiErr } = await supabase.from('order_items').insert(orderItemsPayload);
         if (oiErr) throw oiErr;
-        // Insert system message for vendor conversation (best effort; ignore failure)
-        try {
-          // Need vendor owner to receive; fetch vendor if unknown
-          const { data: vRow } = await supabase.from('vendors').select('id,owner_user_id,store_name').eq('id', vendorId).maybeSingle();
-          if (vRow?.owner_user_id) {
-            await supabase.from('messages').insert({
-              vendor_id: vRow.id,
-              sender_user_id: userRowId,
-              receiver_user_id: vRow.owner_user_id,
-              content: `New order #${order.id} placed. Total ₱${total.toFixed(2)}`
-            });
-          }
-        } catch (msgErr) {
-          console.warn('system message insert failed', msgErr);
-        }
-        // Decrement stock (best-effort, not transactional)
+
+        // Decrement stock (best-effort)
         for (const it of groupItems) {
           if (typeof it.product?.stock === 'number') {
             try {
-              const { error: rpcErr } = await supabase.rpc('decrement_product_stock', { p_id: it.product_id, p_qty: it.quantity });
-              if (rpcErr) throw rpcErr;
+              const { error: rpcDecErr } = await supabase.rpc('decrement_product_stock', { p_id: it.product_id, p_qty: it.quantity });
+              if (rpcDecErr) throw rpcDecErr;
             } catch (_) {
-              // Fallback manual update (non-atomic, race-prone)
               await supabase.from('products').update({ stock: (it.product!.stock as number) - it.quantity }).eq('id', it.product_id);
             }
           }
         }
         createdOrders.push(order);
       }
-      // Clear cart items after all orders
+
       await clearCart();
       toast({ title: 'Order placed', description: `${createdOrders.length} order(s) created.` });
       return { orders: createdOrders };
     } catch (e: any) {
       console.error('checkout error', e);
-      // Rollback if failure
       if (items.length === 0 && snapshotItems.length) {
         setItems(snapshotItems);
         if (!cart && snapshotCart) setCart(snapshotCart);
@@ -283,7 +287,7 @@ export function useCart(options: UseCartOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [authUser, items, clearCart, toast, cart, profile?.id]);
+  }, [authUser, items, clearCart, toast, cart, profile?.id, loadCart]);
 
   return {
     loading,
