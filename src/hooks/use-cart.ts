@@ -112,7 +112,7 @@ export function useCart(options: UseCartOptions = {}) {
           .update({ quantity: existing.quantity + quantity })
           .eq('id', existing.id)
           .select('*, product:products(id,name,price,stock,vendor_id)')
-          .maybeSingle();
+          .single();
         if (updErr) throw updErr;
         setItems(prev => prev.map(i => i.id === existing.id ? (data as any) : i));
       } else {
@@ -120,7 +120,7 @@ export function useCart(options: UseCartOptions = {}) {
           .from('cart_items')
           .insert({ cart_id: current.id, product_id: productId, quantity })
           .select('*, product:products(id,name,price,stock,vendor_id)')
-          .maybeSingle();
+          .single();
         if (insErr) throw insErr;
         setItems(prev => [...prev, data as any]);
       }
@@ -142,7 +142,7 @@ export function useCart(options: UseCartOptions = {}) {
         .update({ quantity })
         .eq('id', itemId)
         .select('*, product:products(id,name,price,stock,vendor_id)')
-        .maybeSingle();
+        .single();
       if (updErr) throw updErr;
       setItems(prev => prev.map(i => i.id === itemId ? (data as any) : i));
     } catch (e: any) {
