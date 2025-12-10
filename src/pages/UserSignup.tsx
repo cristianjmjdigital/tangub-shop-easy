@@ -12,7 +12,7 @@ import Tesseract from "tesseract.js";
 
 const BARANGAYS = [
   "Aquino",
-  "Balat-ok",
+  "BarangayI - City Hall (Poblacion)",
   "Bintana",
   "Bourbon",
   "Caniangan",
