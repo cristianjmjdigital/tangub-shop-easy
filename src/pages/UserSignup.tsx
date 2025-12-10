@@ -11,7 +11,7 @@ import { useAuth } from "@/context/AuthContext";
 import Tesseract from "tesseract.js";
 
 const BARANGAYS = [
-  "Aquino",
+  "Sample",
   "Balat-ok",
   "Bintana",
   "Bourbon",
