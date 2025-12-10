@@ -49,7 +49,7 @@ const BARANGAYS = [
   "Paiton",
   "Panalsalan",
   "Pangabuan",
-  "Sumirap",
+  "Prenza",
   "Sumirap",
   "Sumirap",
   "Sumirap",
