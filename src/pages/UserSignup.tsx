@@ -43,7 +43,7 @@ const BARANGAYS = [
   "Mantic",
   "Maquilao",
   "Matugnao",
-  "Santo Niño",
+  "Migcanaway",
   "Silanga",
   "Silanga",
   "Silanga",
