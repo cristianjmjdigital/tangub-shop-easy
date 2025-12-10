@@ -53,7 +53,7 @@ const BARANGAYS = [
   "Salimpuno",
   "San Antonio",
   "San Apolinario",
-  "Sumirap",
+  "San Vicente",
   "Sumirap",
   "Sumirap",
   "Sumirap",
