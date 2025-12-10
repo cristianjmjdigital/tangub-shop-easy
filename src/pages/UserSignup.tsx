@@ -45,6 +45,9 @@ const BARANGAYS = [
   "Matugnao",
   "Santo Niño",
   "Silanga",
+  "Silanga",
+  "Silanga",
+  "Sumirap",
   "Sumirap",
   "Tinacla-an",
   "Villar"
