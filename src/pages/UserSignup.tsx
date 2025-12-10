@@ -55,6 +55,13 @@ const BARANGAYS = [
   "Sumirap",
   "Sumirap",
   "Tinacla-an",
+  "Tinacla-an",
+  "Tinacla-an",
+  "Tinacla-an",
+  "Tinacla-an",
+  "Tinacla-an",
+  "Tinacla-an",
+  "Tinacla-an",
   "Villar"
 ];
 
