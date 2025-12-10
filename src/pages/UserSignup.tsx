@@ -12,9 +12,9 @@ import Tesseract from "tesseract.js";
 
 const BARANGAYS = [
   "Aquino",
-  "Barangay I - City Hall (Poblacion)",
-  "Barangay II - Marilou Annex (Poblacion)",
-  "Bourbon",
+  "Barangay I - City Hall",
+  "Barangay II - Marilou Annex",
+  "Barangay III- Market Kalubian",
   "Caniangan",
   "Capalaran",
   "Catagan",
