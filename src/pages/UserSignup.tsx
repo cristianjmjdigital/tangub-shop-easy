@@ -67,7 +67,7 @@ const BARANGAYS = [
   "Tugas",
   "Villaba",
   "Tinacla-an",
-  "Tinacla-an",
+  
   
 ];
 
