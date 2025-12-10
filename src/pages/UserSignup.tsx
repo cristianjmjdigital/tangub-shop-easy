@@ -33,7 +33,7 @@ const BARANGAYS = [
   "Garang",
   "Guinabot",
   "Guinalaban",
-  "San Apolinario",
+  "Kausawagan",
   "San Antonio",
   "San Vicente Bajo",
   "San Vicente Alto",
