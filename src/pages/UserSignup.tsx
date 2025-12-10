@@ -68,8 +68,7 @@ const BARANGAYS = [
   "Villaba",
   "Tinacla-an",
   "Tinacla-an",
-  "Tinacla-an",
-  "Tinacla-an",
+  
 ];
 
 export default function UserSignup() {
