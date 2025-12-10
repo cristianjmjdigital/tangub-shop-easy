@@ -52,7 +52,7 @@ const BARANGAYS = [
   "Prenza",
   "Salimpuno",
   "San Antonio",
-  "Sumirap",
+  "San Apolinario",
   "Sumirap",
   "Tinacla-an",
   "Tinacla-an",
