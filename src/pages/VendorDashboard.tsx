@@ -158,6 +158,7 @@ export default function VendorDashboard() {
   const [updatingOrderIds, setUpdatingOrderIds] = useState<string[]>([]);
   // Map internal keys -> DB enum labels (as defined in Postgres).
   const DB_STATUS: Record<string,string> = {
+    pending: 'Pending',
     preparing: 'Preparing',
     for_delivery: 'For Delivery',
     delivered: 'Delivered',
@@ -212,6 +213,8 @@ export default function VendorDashboard() {
   const vendorStatusBadge = (rawStatus: string) => {
     const norm = normalizeStatus(rawStatus);
     switch (norm) {
+      case 'pending':
+        return <Badge variant="outline" className="text-xs">Pending</Badge>;
       case 'new':
       case 'created':
         return <Badge variant="secondary" className="text-xs">New</Badge>;
@@ -486,7 +489,7 @@ export default function VendorDashboard() {
                   </div>
                   <div className="flex flex-wrap gap-2 pt-2">
                     {/* Action buttons with dual-flow + case-insensitive logic */}
-                    {(normalized === 'new' || normalized === 'created') && (
+                    {(normalized === 'pending' || normalized === 'new' || normalized === 'created') && (
                       <Button
                         size="sm"
                         variant="secondary"
