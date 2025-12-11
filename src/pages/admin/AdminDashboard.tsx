@@ -249,7 +249,10 @@ export default function AdminDashboard() {
     return Array.from(map.entries())
       .map(([userId, agg]) => ({
         userId,
-        name: agg.name || userNameById.get(userId) || agg.email || 'Unknown',
+        name: agg.name
+          || userNameById.get(userId)
+          || agg.email
+          || (userId === 'unknown' ? 'Unknown' : `User ${userId}`),
         ...agg,
       }))
       .sort((a,b)=> b.count - a.count)
