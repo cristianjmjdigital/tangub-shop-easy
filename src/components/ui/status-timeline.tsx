@@ -3,7 +3,7 @@ import React from "react";
 const DEFAULT_STEPS = [
   { key: "pending", label: "Pending" },
   { key: "preparing", label: "Preparing" },
-  { key: "for delivery", label: "For Delivery" },
+  { key: "for_delivery", label: "For Delivery" },
   { key: "delivered", label: "Delivered" },
 ] as const;
 
