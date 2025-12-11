@@ -66,10 +66,27 @@ export default function AdminDashboard() {
   const [filter, setFilter] = useState("");
   const qc = useQueryClient();
   const [tab, setTab] = useState<"dashboard"|"users"|"vendors"|"products"|"orders"|"reports">("dashboard");
+  const [authReady, setAuthReady] = useState(false);
 
-  // Gate (still insecure placeholder) – keep localStorage role check
+  // Gate: require Supabase session with admin role
   useEffect(() => {
-    if (localStorage.getItem("role") !== "admin") { navigate("/admin/login"); }
+    const verify = async () => {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData?.user) { navigate("/admin/login"); return; }
+      const { data: profile } = await supabase
+        .from('users')
+        .select('role')
+        .eq('auth_user_id', userData.user.id)
+        .single();
+      if (!profile || profile.role !== 'admin') {
+        await supabase.auth.signOut();
+        navigate("/admin/login");
+        return;
+      }
+      localStorage.setItem("role", "admin");
+      setAuthReady(true);
+    };
+    void verify();
   }, [navigate]);
 
   const usersQuery = useQuery({
@@ -77,21 +94,24 @@ export default function AdminDashboard() {
     queryFn: async () => {
       const { data, error } = await supabase.from('users').select('id,full_name,email,role,barangay').limit(500);
       if (error) throw error; return data as UserRow[];
-    }
+    },
+    enabled: authReady,
   });
   const vendorsQuery = useQuery({
     queryKey: ['admin','vendors'],
     queryFn: async () => {
       const { data, error } = await supabase.from('vendors').select('id,store_name,address').limit(500);
       if (error) throw error; return data as VendorRow[];
-    }
+    },
+    enabled: authReady,
   });
   const productsQuery = useQuery({
     queryKey: ['admin','products'],
     queryFn: async () => {
       const { data, error } = await supabase.from('products').select('id,name,price,vendor_id').limit(500);
       if (error) throw error; return data as ProductRow[];
-    }
+    },
+    enabled: authReady,
   });
   const ordersQuery = useQuery({
     queryKey: ['admin','orders'],
@@ -102,7 +122,8 @@ export default function AdminDashboard() {
         .order('created_at',{ascending:false})
         .limit(500);
       if (error) throw error; return data as OrderRow[];
-    }
+    },
+    enabled: authReady,
   });
 
   // Mutations: USERS
@@ -177,7 +198,7 @@ export default function AdminDashboard() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin','products'] }),
   });
 
-  const loading = usersQuery.isLoading || vendorsQuery.isLoading || productsQuery.isLoading || ordersQuery.isLoading;
+  const loading = !authReady || usersQuery.isLoading || vendorsQuery.isLoading || productsQuery.isLoading || ordersQuery.isLoading;
   const errorMessage = useMemo(() => {
     const e = usersQuery.error ?? vendorsQuery.error ?? productsQuery.error ?? ordersQuery.error;
     if (!e) return null;
@@ -294,6 +315,14 @@ export default function AdminDashboard() {
     localStorage.removeItem("role");
     navigate("/admin/login");
   };
+
+  if (!authReady) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-sm text-muted-foreground">
+        Checking admin access...
+      </div>
+    );
+  }
 
   return (
     <SidebarProvider>
