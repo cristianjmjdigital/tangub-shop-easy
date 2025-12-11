@@ -346,8 +346,10 @@ export default function UserSignup() {
       if (!verifyRow) console.warn('[signup] verify row missing after upsert');
 
       await refreshProfile();
-      toast({ title: 'Account created', description: 'Redirecting to home...', duration: 2500 });
-      setTimeout(() => navigate('/home'), 1400);
+      const targetPath = desiredRole === 'vendor' ? '/vendor' : '/home';
+      const targetLabel = desiredRole === 'vendor' ? 'vendor dashboard' : 'home';
+      toast({ title: 'Account created', description: `Redirecting to ${targetLabel}...`, duration: 2500 });
+      setTimeout(() => navigate(targetPath), 1400);
     } catch (err: any) {
       console.error(err);
       // Normalize some Postgres / network noise for end-user clarity
