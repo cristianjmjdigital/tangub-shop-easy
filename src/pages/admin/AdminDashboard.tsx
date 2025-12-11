@@ -59,7 +59,7 @@ import {
 interface UserRow { id: string; full_name: string; email: string; role: string; barangay: string | null }
 interface VendorRow { id: string; store_name: string; address: string | null }
 interface ProductRow { id: string; name: string; price: number; vendor_id: string }
-interface OrderRow { id: string; total: number; status: string | null; created_at?: string }
+interface OrderRow { id: string | number; total: number; status: string | null; created_at?: string; user_id?: string | number | null }
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -96,7 +96,11 @@ export default function AdminDashboard() {
   const ordersQuery = useQuery({
     queryKey: ['admin','orders'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('orders').select('id,total,status,created_at').order('created_at',{ascending:false}).limit(500);
+      const { data, error } = await supabase
+        .from('orders')
+        .select('id,total,status,created_at,user_id')
+        .order('created_at',{ascending:false})
+        .limit(500);
       if (error) throw error; return data as OrderRow[];
     }
   });
@@ -189,6 +193,18 @@ export default function AdminDashboard() {
   const productsData = productsQuery.data || [];
   const ordersData = ordersQuery.data || [];
 
+  // Lookup helpers
+  const userNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const u of usersData) { m.set(String(u.id), u.full_name || 'Unknown'); }
+    return m;
+  }, [usersData]);
+  const userBarangayById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const u of usersData) { m.set(String(u.id), u.barangay || 'Unknown'); }
+    return m;
+  }, [usersData]);
+
   // Aggregations
   const totalSales = useMemo(() => ordersData.reduce((sum,o)=> sum + (o.total||0),0), [ordersData]);
   const activeToday = useMemo(() => {
@@ -217,6 +233,32 @@ export default function AdminDashboard() {
     }
     return Array.from(map.entries()).map(([status, value])=>({ status, value }));
   }, [ordersData]);
+
+  const ordersByUser = useMemo(() => {
+    const map = new Map<string, { count: number; total: number }>();
+    for (const o of ordersData) {
+      const key = o.user_id ? String(o.user_id) : 'unknown';
+      const prev = map.get(key) || { count: 0, total: 0 };
+      map.set(key, { count: prev.count + 1, total: prev.total + Number(o.total || 0) });
+    }
+    return Array.from(map.entries())
+      .map(([userId, agg]) => ({ userId, name: userNameById.get(userId) || 'Unknown', ...agg }))
+      .sort((a,b)=> b.count - a.count)
+      .slice(0,8);
+  }, [ordersData, userNameById]);
+
+  const ordersByBarangay = useMemo(() => {
+    const map = new Map<string, { count: number; total: number }>();
+    for (const o of ordersData) {
+      const barangay = o.user_id ? (userBarangayById.get(String(o.user_id)) || 'Unknown') : 'Unknown';
+      const prev = map.get(barangay) || { count: 0, total: 0 };
+      map.set(barangay, { count: prev.count + 1, total: prev.total + Number(o.total || 0) });
+    }
+    return Array.from(map.entries())
+      .map(([barangay, agg]) => ({ barangay, ...agg }))
+      .sort((a,b)=> b.count - a.count)
+      .slice(0,8);
+  }, [ordersData, userBarangayById]);
 
   const usersByBarangay = useMemo(() => {
     const map = new Map<string, number>();
@@ -386,13 +428,42 @@ export default function AdminDashboard() {
                     </ChartContainer>
                   </Card>
                   <Card className="p-4">
-                    <h3 className="font-semibold mb-2">Recent Orderers</h3>
-                    <div className="text-xs text-muted-foreground mb-2">Emails from latest orders</div>
+                    <h3 className="font-semibold mb-2">Orders by Barangay</h3>
+                    <ChartContainer className="h-[260px]" config={{ orders: { label: 'Orders', color: 'hsl(var(--primary))' }}}>
+                      <BarChart data={ordersByBarangay}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="barangay" hide />
+                        <YAxis width={45} />
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                        <Bar dataKey="count" fill="var(--color-orders)" radius={[4,4,0,0]} />
+                      </BarChart>
+                    </ChartContainer>
+                  </Card>
+                </div>
+                <div className="grid md:grid-cols-2 gap-4 mt-4">
+                  <Card className="p-4">
+                    <h3 className="font-semibold mb-2">Top Customers (by orders)</h3>
+                    <div className="space-y-2 text-sm">
+                      {ordersByUser.map((row, idx) => (
+                        <div key={row.userId + idx} className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground w-5 text-right">{idx+1}.</span>
+                            <span className="font-medium truncate max-w-[180px]">{row.name}</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground">{row.count} orders • ₱{row.total.toLocaleString()}</div>
+                        </div>
+                      ))}
+                      {ordersByUser.length === 0 && <div className="text-xs text-muted-foreground">No orders yet.</div>}
+                    </div>
+                  </Card>
+                  <Card className="p-4">
+                    <h3 className="font-semibold mb-2">Recent Orders</h3>
+                    <div className="text-xs text-muted-foreground mb-2">Latest order IDs and totals</div>
                     <div className="space-y-2">
                       {ordersData.slice(0,10).map((o)=> (
-                        <div key={o.id} className="flex items-center justify-between text-sm">
-                          <span className="font-mono text-muted-foreground">{o.id.slice(0,8)}…</span>
-                          <span className="">₱{(o.total||0).toLocaleString()}</span>
+                        <div key={String(o.id)} className="flex items-center justify-between text-sm">
+                          <span className="font-mono text-muted-foreground">{String(o.id).slice(0,8)}…</span>
+                          <span>₱{(o.total||0).toLocaleString()}</span>
                         </div>
                       ))}
                       {ordersData.length === 0 && <div className="text-xs text-muted-foreground">No recent orders yet.</div>}

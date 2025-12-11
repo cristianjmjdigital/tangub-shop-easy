@@ -35,6 +35,7 @@ export default function VendorDashboard() {
   const [ordersError, setOrdersError] = useState<string | null>(null);
   const [metrics, setMetrics] = useState({ salesToday: 0, ordersToday: 0, totalSales: 0, totalOrders: 0 });
   const [savingSettings, setSavingSettings] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [settings, setSettings] = useState({
     store_name: '',
     contact_phone: '',
@@ -50,60 +51,7 @@ export default function VendorDashboard() {
   const [msgText, setMsgText] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      // If profile not yet loaded, stop showing infinite loading and allow re-run once id appears.
-      if (!profile?.id) { if (!cancelled) { setLoading(false); } return; }
-      setLoading(true);
-      setError(null);
-      try {
-        const { data: vendorData, error: vendorError } = await supabase
-          .from('vendors')
-          .select('id,store_name,address,created_at,owner_user_id,contact_phone,accepting_orders,base_delivery_fee,logo_url,hero_image_url,description')
-          .eq('owner_user_id', profile.id)
-          .maybeSingle();
-        if (vendorError) throw vendorError;
-        if (cancelled) return;
-        setVendor(vendorData as VendorRecord);
-        if (vendorData?.id) {
-          const { data: productRows } = await supabase
-            .from('products')
-            .select('id,name,price,stock,description,main_image_url')
-            .eq('vendor_id', vendorData.id)
-            .order('created_at', { ascending: false });
-          if (!cancelled) setProducts((productRows as ProductRecord[]) || []);
-          // Load orders separately (will set its own loading flags)
-          if (!cancelled) await loadVendorOrders(vendorData.id);
-        }
-      } catch (e: any) {
-        if (!cancelled) setError(e.message || 'Failed to load vendor');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    load();
-    return () => { cancelled = true; };
-  }, [profile?.id]);
-
-  // Realtime subscription for orders when vendor is known
-  useEffect(() => {
-    if (!vendor?.id) return;
-    const channel = supabase
-      .channel('vendor-orders-' + vendor.id)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `vendor_id=eq.${vendor.id}` }, (payload: any) => {
-        setVendorOrders(prev => {
-          const next = [...prev];
-          const idx = next.findIndex(o => o.id === payload.new.id);
-          if (idx >= 0) next[idx] = payload.new; else next.unshift(payload.new);
-          return next;
-        });
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [vendor?.id]);
-
-  const loadVendorOrders = async (vendorId: string) => {
+  async function loadVendorOrders(vendorId: string) {
     setOrdersLoading(true); setOrdersError(null);
     try {
       const { data: rows, error } = await supabase
@@ -128,7 +76,67 @@ export default function VendorDashboard() {
     } finally {
       setOrdersLoading(false);
     }
-  };
+  }
+
+  async function loadVendorData(background = false) {
+    // background=true keeps the UI visible while refetching
+    if (!profile?.id) { if (!background) setLoading(false); return; }
+    if (background) setRefreshing(true); else setLoading(true);
+    setError(null);
+    try {
+      const { data: vendorData, error: vendorError } = await supabase
+        .from('vendors')
+        .select('id,store_name,address,created_at,owner_user_id,contact_phone,accepting_orders,base_delivery_fee,logo_url,hero_image_url,description')
+        .eq('owner_user_id', profile.id)
+        .maybeSingle();
+      if (vendorError) throw vendorError;
+      setVendor(vendorData as VendorRecord);
+      if (vendorData?.id) {
+        const { data: productRows } = await supabase
+          .from('products')
+          .select('id,name,price,stock,description,main_image_url')
+          .eq('vendor_id', vendorData.id)
+          .order('created_at', { ascending: false });
+        setProducts((productRows as ProductRecord[]) || []);
+        await loadVendorOrders(vendorData.id);
+      } else {
+        setProducts([]);
+        setVendorOrders([]);
+        setVendorOrderItems([]);
+      }
+    } catch (e: any) {
+      setError(e.message || 'Failed to load vendor');
+    } finally {
+      if (background) setRefreshing(false); else setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      if (cancelled) return;
+      await loadVendorData(false);
+    };
+    run();
+    return () => { cancelled = true; };
+  }, [profile?.id]);
+
+  // Realtime subscription for orders when vendor is known
+  useEffect(() => {
+    if (!vendor?.id) return;
+    const channel = supabase
+      .channel('vendor-orders-' + vendor.id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `vendor_id=eq.${vendor.id}` }, (payload: any) => {
+        setVendorOrders(prev => {
+          const next = [...prev];
+          const idx = next.findIndex(o => o.id === payload.new.id);
+          if (idx >= 0) next[idx] = payload.new; else next.unshift(payload.new);
+          return next;
+        });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [vendor?.id]);
 
   // Recompute metrics whenever orders list changes
   useEffect(() => {
@@ -277,6 +285,9 @@ export default function VendorDashboard() {
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" variant="outline" asChild><Link to="/home">User View</Link></Button>
+                <Button size="sm" variant="outline" disabled={refreshing || loading} onClick={() => loadVendorData(true)}>
+                  <RefreshCw className={`h-4 w-4 mr-1 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
+                </Button>
                 <Dialog open={open} onOpenChange={setOpen}>
                   <DialogTrigger asChild>
                     <Button size="sm">
