@@ -448,7 +448,7 @@ export default function AdminDashboard() {
                         <div key={row.userId + idx} className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <span className="text-muted-foreground w-5 text-right">{idx+1}.</span>
-                            <span className="font-medium truncate max-w-[180px]">{row.name}</span>
+                            <span className="font-medium truncate max-w-[180px]">{row.full_name}</span>
                           </div>
                           <div className="text-xs text-muted-foreground">{row.count} orders • ₱{row.total.toLocaleString()}</div>
                         </div>
