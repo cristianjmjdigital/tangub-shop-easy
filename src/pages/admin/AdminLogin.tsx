@@ -4,50 +4,21 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/lib/supabaseClient";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  const submit = async (e: React.FormEvent) => {
+  const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
     if (!form.email || !form.password) return setError("Missing credentials");
-    setLoading(true);
-    try {
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email: form.email,
-        password: form.password,
-      });
-      if (signInError || !signInData.session) {
-        setError(signInError?.message || "Invalid credentials");
-        setLoading(false);
-        return;
-      }
-
-      const userId = signInData.session.user.id;
-      const { data: profile, error: profileError } = await supabase
-        .from("users")
-        .select("role")
-        .eq("auth_user_id", userId)
-        .single();
-
-      if (profileError || !profile || profile.role !== "admin") {
-        await supabase.auth.signOut();
-        setError("You must sign in with an admin account.");
-        setLoading(false);
-        return;
-      }
-
+    // Mock admin login (hard-coded) - later replace with Supabase auth/role claim
+    if (form.email === "admin@tangub.shopeasy" && form.password === "admin123") {
       localStorage.setItem("role", "admin");
       navigate("/admin");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
-    } finally {
-      setLoading(false);
+    } else {
+      setError("Invalid admin credentials");
     }
   };
 
@@ -68,7 +39,7 @@ export default function AdminLogin() {
               <Input id="admin-pass" type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} />
             </div>
             {error && <div className="text-xs text-destructive">{error}</div>}
-            <Button type="submit" className="w-full" disabled={loading}>{loading ? "Signing in..." : "Login"}</Button>
+            <Button type="submit" className="w-full">Login</Button>
           </form>
         </CardContent>
       </Card>
