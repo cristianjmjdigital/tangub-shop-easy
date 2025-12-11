@@ -59,7 +59,7 @@ import {
 interface UserRow { id: string; full_name: string; email: string; role: string; barangay: string | null }
 interface VendorRow { id: string; store_name: string; address: string | null }
 interface ProductRow { id: string; name: string; price: number; vendor_id: string }
-interface OrderRow { id: string | number; total: number; status: string | null; created_at?: string; user_id?: string | number | null; user?: { full_name?: string | null; email?: string | null } }
+interface OrderRow { id: string | number; total: number; status: string | null; created_at?: string; user_id?: string | number | null }
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -98,7 +98,7 @@ export default function AdminDashboard() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('orders')
-        .select('id,total,status,created_at,user_id,user:users(full_name,email)')
+        .select('id,total,status,created_at,user_id')
         .order('created_at',{ascending:false})
         .limit(500);
       if (error) throw error; return data as OrderRow[];
