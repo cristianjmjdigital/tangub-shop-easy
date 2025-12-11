@@ -247,14 +247,13 @@ export default function AdminDashboard() {
       });
     }
     return Array.from(map.entries())
-      .map(([userId, agg]) => ({
-        userId,
-        name: agg.name
+      .map(([userId, agg]) => {
+        const displayName = agg.name
           || userNameById.get(userId)
           || agg.email
-          || (userId === 'unknown' ? 'Unknown' : `User ${userId}`),
-        ...agg,
-      }))
+          || (userId === 'unknown' ? 'Unknown' : `User ${userId}`);
+        return { userId, ...agg, name: displayName };
+      })
       .sort((a,b)=> b.count - a.count)
       .slice(0,8);
   }, [ordersData, userNameById]);
