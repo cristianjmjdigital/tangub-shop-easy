@@ -157,12 +157,13 @@ export default function VendorDashboard() {
 
   const [updatingOrderIds, setUpdatingOrderIds] = useState<string[]>([]);
   // Map internal keys -> DB enum labels (as defined in Postgres).
+  // DB accepts lowercase values per check constraint; labels are handled in UI
   const DB_STATUS: Record<string,string> = {
-    pending: 'Pending',
-    preparing: 'Preparing',
-    for_delivery: 'For Delivery',
-    delivered: 'Delivered',
-    cancelled: 'Cancelled'
+    pending: 'pending',
+    preparing: 'preparing',
+    for_delivery: 'for_delivery',
+    delivered: 'delivered',
+    cancelled: 'cancelled'
   };
   const normalizeStatus = (s: string) => (s || '').toLowerCase().replace(/\s+/g,'_');
   const changeOrderStatus = async (orderId: string, internalNext: keyof typeof DB_STATUS) => {
