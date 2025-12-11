@@ -203,7 +203,7 @@ const Profile = () => {
     const s = status.toLowerCase();
     switch (s) {
       case 'delivered': return 'bg-green-600';
-      case 'for delivery': return 'bg-orange-500';
+      case 'for_delivery': return 'bg-orange-500';
       case 'preparing': return 'bg-amber-500';
       case 'cancelled': return 'bg-red-600';
       case 'new':
