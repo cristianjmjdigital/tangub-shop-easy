@@ -59,7 +59,7 @@ import {
 interface UserRow { id: string; full_name: string; email: string; role: string; barangay: string | null }
 interface VendorRow { id: string; store_name: string; address: string | null }
 interface ProductRow { id: string; name: string; price: number; vendor_id: string }
-interface OrderRow { id: string | number; total: number; status: string | null; created_at?: string; user_id?: string | number | null }
+interface OrderRow { id: string | number; total: number; status: string | null; created_at?: string; user_id?: string | number | null; user?: { full_name?: string | null; email?: string | null } }
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -98,7 +98,7 @@ export default function AdminDashboard() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('orders')
-        .select('id,total,status,created_at,user_id')
+        .select('id,total,status,created_at,user_id,user:users(full_name,email)')
         .order('created_at',{ascending:false})
         .limit(500);
       if (error) throw error; return data as OrderRow[];
@@ -235,14 +235,23 @@ export default function AdminDashboard() {
   }, [ordersData]);
 
   const ordersByUser = useMemo(() => {
-    const map = new Map<string, { count: number; total: number }>();
+    const map = new Map<string, { count: number; total: number; name?: string | null; email?: string | null }>();
     for (const o of ordersData) {
       const key = o.user_id ? String(o.user_id) : 'unknown';
-      const prev = map.get(key) || { count: 0, total: 0 };
-      map.set(key, { count: prev.count + 1, total: prev.total + Number(o.total || 0) });
+      const prev = map.get(key) || { count: 0, total: 0, name: o.user?.full_name, email: o.user?.email };
+      map.set(key, {
+        count: prev.count + 1,
+        total: prev.total + Number(o.total || 0),
+        name: prev.name || o.user?.full_name,
+        email: prev.email || o.user?.email,
+      });
     }
     return Array.from(map.entries())
-      .map(([userId, agg]) => ({ userId, name: userNameById.get(userId) || 'Unknown', ...agg }))
+      .map(([userId, agg]) => ({
+        userId,
+        name: agg.name || userNameById.get(userId) || agg.email || 'Unknown',
+        ...agg,
+      }))
       .sort((a,b)=> b.count - a.count)
       .slice(0,8);
   }, [ordersData, userNameById]);
@@ -275,7 +284,7 @@ export default function AdminDashboard() {
   const filteredUsers = normalizedFilter ? usersData.filter(u => filterMatch(u.full_name) || filterMatch(u.email) || filterMatch(u.role) || filterMatch(u.barangay)) : usersData;
   const filteredVendors = normalizedFilter ? vendorsData.filter(v => filterMatch(v.store_name) || filterMatch(v.address)) : vendorsData;
   const filteredProducts = normalizedFilter ? productsData.filter(p => filterMatch(p.name) || filterMatch(p.vendor_id)) : productsData;
-  const filteredOrders = normalizedFilter ? ordersData.filter(o => filterMatch(o.id) || filterMatch(o.status)) : ordersData;
+  const filteredOrders = normalizedFilter ? ordersData.filter(o => filterMatch(String(o.id)) || filterMatch(o.status)) : ordersData;
 
   // (Effect removed—react-query handles fetching.)
 
@@ -448,7 +457,7 @@ export default function AdminDashboard() {
                         <div key={row.userId + idx} className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <span className="text-muted-foreground w-5 text-right">{idx+1}.</span>
-                            <span className="font-medium truncate max-w-[180px]">{row.full_name}</span>
+                            <span className="font-medium truncate max-w-[180px]">{row.name}</span>
                           </div>
                           <div className="text-xs text-muted-foreground">{row.count} orders • ₱{row.total.toLocaleString()}</div>
                         </div>
