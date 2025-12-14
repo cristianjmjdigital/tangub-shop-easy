@@ -429,7 +429,7 @@ export default function VendorDashboard() {
                         {statusBadge}
                       </div>
                       <div className="flex items-center justify-between text-sm">
-                        <span className="font-semibold">₱{p.price}</span>
+                        <span className="font-semibold">₱{Number(p.price).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</span>
                         <span className={`text-xs px-2 py-1 rounded-full border ${p.stock === 0 ? 'text-destructive border-destructive/40' : p.stock < 10 ? 'text-amber-600 border-amber-400/50' : 'text-muted-foreground border-border'}`}>{p.stock} in stock</span>
                       </div>
                       <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -480,7 +480,7 @@ export default function VendorDashboard() {
                     {its.map(it => (
                     <div key={it.id} className="flex justify-between">
                       <span className="truncate mr-2">{it.product?.name || it.product_id} × {it.quantity}</span>
-                      <span>₱{(it.unit_price * it.quantity).toLocaleString()}</span>
+                      <span>₱{(it.unit_price * it.quantity).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</span>
                     </div>
                     ))}
                   </div>

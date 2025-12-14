@@ -56,7 +56,7 @@ export default function ProfileEdit(){
     } finally {
       setSaving(false);
     }
-  };
+          phone: profile.phone || '',
 
   if (!profile) {
     return <div className='p-6 text-center text-sm text-muted-foreground'>No profile loaded.</div>;
@@ -70,7 +70,7 @@ export default function ProfileEdit(){
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className='space-y-4'>
-            <div className='space-y-2'>
+            phone: form.phone.trim() ? form.phone : null,
               <Label htmlFor='full_name'>Full Name</Label>
               <Input id='full_name' value={form.full_name} onChange={e=>setForm(f=>({...f, full_name:e.target.value}))} />
             </div>
@@ -84,6 +84,18 @@ export default function ProfileEdit(){
                 <SelectTrigger>
                   <SelectValue placeholder='Select barangay' />
                 </SelectTrigger>
+                              <Input
+                                id='phone'
+                                inputMode='numeric'
+                                pattern='09\d{9}'
+                                maxLength={11}
+                                value={form.phone}
+                                onChange={e=>{
+                                  const digits = e.target.value.replace(/\D/g,'').slice(0,11);
+                                  setForm(f=>({...f, phone: digits}));
+                                }}
+                                placeholder='09xxxxxxxxx'
+                              />
                 <SelectContent>
                   {BARANGAYS.map(b=> <SelectItem key={b} value={b}>{b}</SelectItem>)}
                 </SelectContent>

@@ -113,12 +113,41 @@ export default function BusinessDetail() {
               price={p.price}
               rating={4.9}
               business={vendor.store_name}
+              vendorId={vendor.id}
+              storePath={`/business/${vendor.id}`}
               location={vendor.address || 'Tangub'}
               imageUrl={p.main_image_url || undefined}
-              description={p.description || ''}
+              description={p.description || 'Detailed description provided below.'}
               stock={p.stock || 0}
               created_at={p.created_at}
             />
+          ))}
+        </div>
+
+        <div className="space-y-4 mb-10">
+          <h3 className="text-xl font-semibold">Product Details</h3>
+          {products.map((p) => (
+            <Card key={`${p.id}-details`}>
+              <CardContent className="p-5 space-y-2">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                  <div>
+                    <div className="text-sm text-muted-foreground">{vendor.store_name}</div>
+                    <div className="text-lg font-semibold">{p.name}</div>
+                    <div className="text-sm text-muted-foreground">₱{p.price.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})} • Stock: {p.stock ?? 0}</div>
+                  </div>
+                  <div className="text-xs text-muted-foreground">Added {p.created_at ? new Date(p.created_at).toLocaleDateString() : 'recently'}</div>
+                </div>
+                <p className="text-sm text-muted-foreground leading-relaxed">{p.description || 'No description provided yet. Contact the vendor for more details about this item.'}</p>
+                <div className="pt-3 border-t">
+                  <div className="font-semibold text-sm mb-1">Order Deals</div>
+                  <ul className="list-disc pl-5 text-sm text-muted-foreground space-y-1">
+                    <li>Direct store checkout for accurate pricing and availability.</li>
+                    <li>Bundle items from {vendor.store_name} to save on delivery runs.</li>
+                    <li>Ask the vendor about repeat-customer or bulk-order discounts.</li>
+                  </ul>
+                </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
 

@@ -55,7 +55,7 @@ export default function OrderConfirmation() {
                       <Badge variant="outline">#{o.id}</Badge>
                       <span>Order</span>
                     </div>
-                    <span className="font-semibold">₱{o.total.toLocaleString()}</span>
+                    <span className="font-semibold">₱{o.total.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</span>
                   </div>
                 ))}
               </div>
@@ -73,14 +73,14 @@ export default function OrderConfirmation() {
                         {group.map((it, idx) => (
                           <div key={idx} className="flex justify-between">
                             <span className="truncate mr-2">{it.product?.name || 'Item'} × {it.quantity}</span>
-                            <span>₱{(it.unit_price * it.quantity).toLocaleString()}</span>
+                            <span>₱{(it.unit_price * it.quantity).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</span>
                           </div>
                         ))}
                       </div>
                       <Separator className="my-2" />
                       <div className="flex justify-between text-xs font-semibold">
                         <span>Subtotal</span>
-                        <span>₱{group.reduce((s,it)=>s + it.unit_price*it.quantity,0).toLocaleString()}</span>
+                        <span>₱{group.reduce((s,it)=>s + it.unit_price*it.quantity,0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</span>
                       </div>
                     </div>
                   );

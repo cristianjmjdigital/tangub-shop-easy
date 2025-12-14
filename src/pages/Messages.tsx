@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -65,6 +66,7 @@ const Messages = () => {
   const { toast } = useToast();
   const [showNewConv, setShowNewConv] = useState(false);
   const [newVendorId, setNewVendorId] = useState("");
+  const [vendorOptions, setVendorOptions] = useState<VendorRow[]>([]);
   const [isMobile, setIsMobile] = useState(false);
   const [showList, setShowList] = useState(true); // mobile: list vs chat
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -148,6 +150,21 @@ const Messages = () => {
       .subscribe();
     return () => { isMounted = false; supabase.removeChannel(channel); };
   }, [profile?.id]);
+
+  // Prefetch vendor directory for new conversations (dropdown instead of raw ID)
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const { data, error } = await supabase
+        .from('vendors')
+        .select('id,store_name,address,owner_user_id')
+        .order('store_name', { ascending: true })
+        .limit(200);
+      if (!active) return;
+      if (!error && data) setVendorOptions(data as VendorRow[]);
+    })();
+    return () => { active = false; };
+  }, []);
 
   // Low-latency broadcast (ephemeral) so the other party sees message instantly (<250ms) before DB row arrives
   useEffect(() => {
@@ -324,6 +341,7 @@ const Messages = () => {
         setOptimistic(prev => { const cp = { ...prev }; delete cp[tempId]; return cp; });
         // remove ephemeral placeholder if any
         setEphemeral(prev => { const cp = { ...prev }; delete cp[tempId]; return cp; });
+        toast({ title: 'Sent to Inbox', description: 'Your message was delivered to this conversation.' });
       }
     } catch (e) {
       console.error('Send message failed', e);
@@ -411,18 +429,32 @@ const Messages = () => {
                     <Button size="sm" variant="outline" type="button" className="h-8" onClick={()=> setShowNewConv(s=>!s)}>New</Button>
                   </div>
                   {showNewConv && (
-                    <div className="flex gap-2">
-                      <Input placeholder="Vendor ID" value={newVendorId} onChange={e=>setNewVendorId(e.target.value)} className="h-9 text-xs" />
+                    <div className="flex gap-2 items-center">
+                      <Select value={newVendorId} onValueChange={(val)=>setNewVendorId(val)}>
+                        <SelectTrigger className="h-9 text-xs w-full">
+                          <SelectValue placeholder="Select a vendor" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-64">
+                          {vendorOptions.map(v => (
+                            <SelectItem key={v.id} value={v.id}>{v.store_name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <Button size="sm" type="button" className="h-9" disabled={!newVendorId.trim()} onClick={async ()=>{
                         const id = newVendorId.trim();
                         if (!id) return;
                         if (!vendors[id]) {
-                          const { data: vRow } = await supabase.from('vendors').select('id,store_name,address,owner_user_id').eq('id', id).maybeSingle();
-                          if (vRow) setVendors(prev => ({ ...prev, [vRow.id]: vRow as VendorRow }));
+                          const found = vendorOptions.find(v => v.id === id);
+                          if (found) setVendors(prev => ({ ...prev, [found.id]: found }));
+                          else {
+                            const { data: vRow } = await supabase.from('vendors').select('id,store_name,address,owner_user_id').eq('id', id).maybeSingle();
+                            if (vRow) setVendors(prev => ({ ...prev, [vRow.id]: vRow as VendorRow }));
+                          }
                         }
                         setSelectedChat(id);
                         setShowNewConv(false);
                         setNewVendorId('');
+                        if (isMobile) setShowList(false);
                       }}>Open</Button>
                     </div>
                   )}
@@ -550,7 +582,10 @@ const Messages = () => {
                           const time = new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                           return (
                             <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                              <div className={`max-w-[78%] lg:max-w-[70%] p-3 rounded-2xl relative ${mine ? 'bg-primary text-primary-foreground' : 'bg-muted'} shadow-sm`}> 
+                              <div className={`max-w-[78%] lg:max-w-[70%] p-3 rounded-2xl relative ${mine ? 'bg-primary text-primary-foreground' : 'bg-muted'} shadow-sm`}>
+                                <div className={`text-[10px] mb-1 ${mine ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
+                                  {mine ? 'You sent' : 'New message'}
+                                </div>
                                 <p className="text-xs lg:text-sm whitespace-pre-wrap break-words leading-relaxed">{m.content}</p>
                                 <div className={`flex items-center justify-end mt-1 gap-2 text-[10px] ${mine ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
                                   <span>{time}</span>

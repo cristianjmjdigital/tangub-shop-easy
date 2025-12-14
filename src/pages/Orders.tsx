@@ -147,15 +147,15 @@ export default function Orders() {
                   <div key={it.id} className='flex items-center justify-between text-sm border rounded-md p-3'>
                     <div>
                       <div className='font-medium'>{it.product?.name || it.product_id}</div>
-                      <div className='text-xs text-muted-foreground'>Qty {it.quantity} × ₱{(it.unit_price).toLocaleString()}</div>
+                      <div className='text-xs text-muted-foreground'>Qty {it.quantity} × ₱{(it.unit_price).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</div>
                     </div>
-                    <div className='font-semibold'>₱{it.subtotal.toLocaleString()}</div>
+                    <div className='font-semibold'>₱{it.subtotal.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</div>
                   </div>
                 ))}
                 <Separator />
                 <div className='flex items-center justify-between text-sm'>
                   <span>Total</span>
-                  <span className='font-bold text-primary'>₱{g.order.total.toLocaleString()}</span>
+                  <span className='font-bold text-primary'>₱{g.order.total.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</span>
                 </div>
               </CardContent>
             </Card>

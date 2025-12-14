@@ -50,6 +50,7 @@ export default function Index() {
             price: p.price,
             rating: 4.9,
             business: p.vendors?.store_name || 'Vendor',
+            vendorId: p.vendor_id,
             location: p.vendors?.address || 'Tangub',
             imageUrl: p.main_image_url || undefined,
             description: p.description,
@@ -209,6 +210,9 @@ export default function Index() {
                 <div key={p.id} className="min-w-[260px]">
                   <ProductCard
                     {...p}
+                    description={p.description || 'View store for full product details.'}
+                    vendorId={p.vendorId}
+                    storePath={p.vendorId ? `/business/${p.vendorId}` : undefined}
                     onAdd={async () => {
                       setAddingId(p.id);
                       await addItem(p.id, 1, p.name);

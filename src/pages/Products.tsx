@@ -9,8 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Star, MapPin, ShoppingCart, Filter, Heart } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
-import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/hooks/use-cart";
+import { Link } from "react-router-dom";
 
 interface RawProductRow {
   id: string;
@@ -21,8 +21,10 @@ interface RawProductRow {
   // Optional columns that might exist
   category?: string | null;
   image_url?: string | null;
+  main_image_url?: string | null;
   location?: string | null; // if product stores its own location
   created_at?: string;
+  description?: string | null;
 }
 
 interface VendorRow { id: string; store_name: string; address?: string | null; barangay?: string | null }
@@ -35,15 +37,17 @@ interface UIProduct {
   reviews: number; // placeholder
   image: string;
   business: string;
+  vendorId?: string;
+  storePath?: string;
   location: string;
   category: string;
   discount?: number;
   featured?: boolean;
+  description?: string;
 }
 
 const Products = () => {
   const { toast } = useToast();
-  const { profile } = useAuth();
   const { addItem } = useCart();
   // store as generic number[] to satisfy Slider's (number[]) signature, but enforce length 2 logically
   const [priceRange, setPriceRange] = useState<number[]>([0, 10000]);
@@ -61,7 +65,7 @@ const Products = () => {
       setLoading(true); setError(null);
       const { data: pData, error: pErr } = await supabase
         .from('products')
-        .select('id,name,price,stock,vendor_id,main_image_url,created_at')
+        .select('id,name,price,stock,vendor_id,main_image_url,image_url,description,created_at')
         .limit(200);
       if (pErr) { setError(pErr.message); setLoading(false); return; }
       setRawProducts(pData as RawProductRow[]);
@@ -86,23 +90,26 @@ const Products = () => {
   // Derive dynamic category & location sets from loaded data
   const uiProducts: UIProduct[] = useMemo(() => {
     return rawProducts.map(p => {
-  const vendor = p.vendor_id ? vendors[p.vendor_id] : undefined;
+      const vendor = p.vendor_id ? vendors[p.vendor_id] : undefined;
+      const vendorId = p.vendor_id ? String(p.vendor_id) : undefined;
       // Fallback heuristics
-  // Category column not present in current schema; use placeholder
-  const category = 'General';
-  const location = p.location || vendor?.barangay || vendor?.address || 'Unknown';
-      // Placeholder rating data (until ratings implemented)
+      const category = 'General';
+      const location = p.location || vendor?.barangay || vendor?.address || 'Unknown';
+      const description = (p as any).description || 'Detailed product information is provided by the vendor.';
       return {
         id: p.id,
         name: p.name,
         price: typeof p.price === 'number' ? p.price : 0,
         rating: 0,
         reviews: 0,
-  image: (p as any).main_image_url || '/placeholder.svg',
-  business: vendor?.store_name || 'Unknown Vendor',
+        image: (p as any).main_image_url || (p as any).image_url || '/placeholder.svg',
+        business: vendor?.store_name || 'Unknown Vendor',
+        vendorId,
+        storePath: vendorId ? `/business/${vendorId}` : undefined,
         location,
         category,
         featured: false,
+        description,
       };
     });
   }, [rawProducts, vendors]);
@@ -267,31 +274,63 @@ const Products = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {!loading && !error && filteredProducts.map((product) => (
                 <Card key={product.id} className="overflow-hidden hover:shadow-elegant transition-all duration-300 group">
-                  <div className="relative">
-                    <div className="aspect-square bg-white relative overflow-hidden rounded-xl shadow-sm">
-                      <img
-                        src={product.image || "/placeholder.svg"}
-                        alt={product.name}
-                        className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-105"
-                        loading="lazy"
-                        onError={(e) => {
-                          if (e.currentTarget.src.endsWith("/placeholder.svg")) return;
-                          e.currentTarget.src = "/placeholder.svg";
-                        }}
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-80"></div>
-                    </div>
-                    {product.featured && (
-                      <Badge className="absolute top-2 left-2 bg-gradient-primary text-primary-foreground">Featured</Badge>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                  {product.storePath ? (
+                    <Link
+                      to={product.storePath}
+                      className="relative block"
                     >
-                      <Heart className="h-4 w-4" />
-                    </Button>
-                  </div>
+                      <div className="aspect-square bg-white relative overflow-hidden rounded-xl shadow-sm">
+                        <img
+                          src={product.image || "/placeholder.svg"}
+                          alt={product.name}
+                          className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-105"
+                          loading="lazy"
+                          onError={(e) => {
+                            if (e.currentTarget.src.endsWith("/placeholder.svg")) return;
+                            e.currentTarget.src = "/placeholder.svg";
+                          }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-80"></div>
+                      </div>
+                      {product.featured && (
+                        <Badge className="absolute top-2 left-2 bg-gradient-primary text-primary-foreground">Featured</Badge>
+                      )}
+                      <Badge className="absolute bottom-2 left-2 bg-primary/90 text-primary-foreground">Visit Store</Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Heart className="h-4 w-4" />
+                      </Button>
+                    </Link>
+                  ) : (
+                    <div className="relative">
+                      <div className="aspect-square bg-white relative overflow-hidden rounded-xl shadow-sm">
+                        <img
+                          src={product.image || "/placeholder.svg"}
+                          alt={product.name}
+                          className="object-cover w-full h-full"
+                          loading="lazy"
+                          onError={(e) => {
+                            if (e.currentTarget.src.endsWith("/placeholder.svg")) return;
+                            e.currentTarget.src = "/placeholder.svg";
+                          }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-80"></div>
+                      </div>
+                      {product.featured && (
+                        <Badge className="absolute top-2 left-2 bg-gradient-primary text-primary-foreground">Featured</Badge>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Heart className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
 
                   <CardContent className="p-4 flex flex-col gap-2">
                     <div className="flex items-center text-sm text-muted-foreground mb-2">
@@ -299,11 +338,21 @@ const Products = () => {
                       {product.location}
                     </div>
                     <h3 className="font-semibold text-base md:text-lg mb-1 line-clamp-2">
-                      {product.name}
+                      {product.storePath ? (
+                        <Link to={product.storePath} className="hover:text-primary transition-colors">
+                          {product.name}
+                        </Link>
+                      ) : (
+                        product.name
+                      )}
                     </h3>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      by {product.business}
-                    </p>
+                    <div className="text-sm text-primary mb-2 font-medium">
+                      {product.storePath ? (
+                        <Link to={product.storePath} className="hover:underline">{product.business}</Link>
+                      ) : (
+                        product.business
+                      )}
+                    </div>
                     
                     <div className="flex items-center mb-1">
                       <div className="flex items-center">
@@ -315,12 +364,26 @@ const Products = () => {
 
                     <div className="flex items-center mb-2">
                       <span className="text-xl font-bold text-primary">
-                        ₱{product.price.toLocaleString()}
+                        ₱{product.price.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}
                       </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground line-clamp-3">{product.description || 'Detailed description provided by the vendor.'}</p>
+                    <div className="mt-3 border-t pt-3 text-xs space-y-1 text-muted-foreground">
+                      <div className="font-semibold text-foreground text-sm">Order Deals</div>
+                      <p>Direct store order: redirect to the vendor for accurate pricing.</p>
+                      <p>Combine items from {product.business} for a single delivery fee where available.</p>
+                      <p>Message the store for bulk or repeat-order discounts.</p>
                     </div>
                   </CardContent>
 
                   <CardFooter className="p-4 pt-0 flex flex-col gap-2">
+                    {product.storePath ? (
+                      <Button asChild variant="outline" className="w-full">
+                        <Link to={product.storePath}>Go to {product.business}</Link>
+                      </Button>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">Store link unavailable</div>
+                    )}
                     <Button 
                       className="w-full text-base py-2"
                       onClick={() => addToCart(product)}

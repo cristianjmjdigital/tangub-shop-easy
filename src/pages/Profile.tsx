@@ -65,6 +65,7 @@ const Profile = () => {
   const [messageVendorName, setMessageVendorName] = useState<string>('');
   const [messageText, setMessageText] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
+  const tagline = profile?.tagline || 'Here to support local shops in Tangub City.';
 
   // Determine user column (your schema might use profile_id instead of user_id)
   const userColumn = 'user_id'; // change to 'profile_id' if your orders table uses that
@@ -263,6 +264,7 @@ const Profile = () => {
                 
                 <div className="flex-1 text-center md:text-left">
                   <h1 className="text-3xl font-bold mb-2">{userInfo.name}</h1>
+                  <p className="text-muted-foreground text-sm mb-2">{tagline}</p>
                   <div className="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-4 text-muted-foreground">
                     <div className="flex items-center justify-center md:justify-start">
                       <Mail className="h-4 w-4 mr-2" />
@@ -284,6 +286,12 @@ const Profile = () => {
                     <Edit className="h-4 w-4 mr-2" />
                     Edit Profile
                   </Button>
+                  <Button asChild>
+                    <Link to="/messages">
+                      <MessageSquare className="h-4 w-4 mr-2" />
+                      Message
+                    </Link>
+                  </Button>
                   <Button variant="outline">
                     <Settings className="h-4 w-4 mr-2" />
                     Settings
@@ -294,11 +302,10 @@ const Profile = () => {
           </Card>
 
           <Tabs defaultValue="orders" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="orders">Orders</TabsTrigger>
               <TabsTrigger value="favorites">Favorites</TabsTrigger>
               <TabsTrigger value="profile">Profile</TabsTrigger>
-              <TabsTrigger value="business">My Business</TabsTrigger>
             </TabsList>
 
             {/* Orders Tab */}
@@ -520,30 +527,6 @@ const Profile = () => {
                       </Button>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Business Tab */}
-            <TabsContent value="business">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <Store className="h-5 w-5 mr-2" />
-                    Business Account
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="text-center py-12">
-                  <Store className="h-16 w-16 mx-auto mb-6 text-muted-foreground" />
-                  <h3 className="text-xl font-semibold mb-4">Start Your Business</h3>
-                  <p className="text-muted-foreground mb-8 max-w-md mx-auto">
-                    Join our community of local entrepreneurs and start selling your products to customers in Tangub City.
-                  </p>
-                  <Button size="lg" asChild>
-                    <Link to="/register-business">
-                      Register Your Business
-                    </Link>
-                  </Button>
                 </CardContent>
               </Card>
             </TabsContent>

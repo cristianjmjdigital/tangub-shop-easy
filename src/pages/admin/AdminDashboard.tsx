@@ -193,6 +193,39 @@ export default function AdminDashboard() {
   const productsData = productsQuery.data || [];
   const ordersData = ordersQuery.data || [];
 
+  const searchSuggestions = useMemo(() => {
+    const seen = new Set<string>();
+    const out: { label: string; value: string; type: string }[] = [];
+    usersData.forEach(u => {
+      const label = u.full_name || u.email || String(u.id);
+      if (!label) return;
+      if (seen.has(label)) return;
+      seen.add(label);
+      out.push({ label, value: label, type: 'User' });
+    });
+    vendorsData.forEach(v => {
+      const label = v.store_name || String(v.id);
+      if (!label || seen.has(label)) return;
+      seen.add(label);
+      out.push({ label, value: label, type: 'Vendor' });
+    });
+    productsData.forEach(p => {
+      const label = p.name || String(p.id);
+      if (!label || seen.has(label)) return;
+      seen.add(label);
+      out.push({ label, value: label, type: 'Product' });
+    });
+    return out.slice(0, 300);
+  }, [usersData, vendorsData, productsData]);
+
+  const vendorNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const v of vendorsData) {
+      m.set(String(v.id), v.store_name || 'Vendor');
+    }
+    return m;
+  }, [vendorsData]);
+
   // Lookup helpers
   const userNameById = useMemo(() => {
     const m = new Map<string, string>();
@@ -206,7 +239,7 @@ export default function AdminDashboard() {
   }, [usersData]);
 
   // Aggregations
-  const totalSales = useMemo(() => ordersData.reduce((sum,o)=> sum + (o.total||0),0), [ordersData]);
+  const totalSales = useMemo(() => ordersData.reduce((sum,o)=> sum + Number(o.total||0),0), [ordersData]);
   const activeToday = useMemo(() => {
     const start = new Date(); start.setHours(0,0,0,0);
     return ordersData.filter(o => o.created_at && new Date(o.created_at) >= start).length;
@@ -342,7 +375,7 @@ export default function AdminDashboard() {
           <SidebarTrigger />
           <div className="font-semibold">Admin Console</div>
           <div className="ml-auto w-full max-w-xs">
-            <SearchBar value={filter} onChange={setFilter} placeholder="Search everything" />
+                <SearchBar value={filter} onChange={setFilter} placeholder="Search everything" suggestions={searchSuggestions} />
           </div>
         </div>
         <div className="px-4 py-6">
@@ -359,7 +392,7 @@ export default function AdminDashboard() {
                 <MetricCard icon={Store} label="Vendors" value={vendorsData.length} />
                 <MetricCard icon={Package} label="Products" value={productsData.length} />
                 <MetricCard icon={ShoppingCart} label="Orders" value={ordersData.length} />
-                <MetricCard icon={Wallet} label="Total Sales" value={`₱${totalSales.toLocaleString()}`} />
+                <MetricCard icon={Wallet} label="Total Sales" value={`₱${totalSales.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}`} />
                 <MetricCard icon={BarChart2} label="Active Today" value={activeToday} />
               </>
             )}
@@ -475,7 +508,7 @@ export default function AdminDashboard() {
           <TabsContent value="users">
             <SectionCard title="Users" description="All registered accounts.">
               <div className="flex items-center justify-between gap-3">
-                <SearchBar />
+                <SearchBar value={filter} onChange={setFilter} suggestions={searchSuggestions} />
                 <CreateUserButton onCreate={(payload)=>createUser.mutate(payload)} />
               </div>
               <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -499,7 +532,7 @@ export default function AdminDashboard() {
           <TabsContent value="vendors">
             <SectionCard title="Vendors" description="Registered merchant accounts.">
               <div className="flex items-center justify-between gap-3">
-                <SearchBar />
+                <SearchBar value={filter} onChange={setFilter} suggestions={searchSuggestions} />
                 <CreateVendorButton onCreate={(payload)=>createVendor.mutate(payload)} />
               </div>
               <div className="space-y-3">
@@ -521,10 +554,10 @@ export default function AdminDashboard() {
             </SectionCard>
           </TabsContent>
           <TabsContent value="products">
-            <SectionCard title="Products" description="Sample product inventory.">
+            <SectionCard title="Products" description="Read-only catalog. Vendors own their listings and manage updates.">
               <div className="flex items-center justify-between gap-3">
-                <SearchBar />
-                <CreateProductButton vendors={vendorsData} onCreate={(payload)=>createProduct.mutate(payload)} />
+                <SearchBar value={filter} onChange={setFilter} suggestions={searchSuggestions} />
+                <Badge variant="outline">Vendor-managed</Badge>
               </div>
               <div className="space-y-3">
                 {filteredProducts.map(p => (
@@ -533,12 +566,9 @@ export default function AdminDashboard() {
                       <span className="font-medium">{p.name}</span>
                       <Badge className="bg-green-600">Active</Badge>
                     </div>
-                    <div className="text-xs text-muted-foreground">Vendor ID: {p.vendor_id}</div>
-                    <div className="text-xs">₱{p.price}</div>
-                    <div className="flex gap-2 mt-1">
-                      <EditProductButton product={p} vendors={vendorsData} onSave={(changes)=>updateProduct.mutate({ id: p.id, ...changes })} />
-                      <DeleteButton label="Delete" onConfirm={()=>deleteProduct.mutate(p.id)} />
-                    </div>
+                    <div className="text-xs text-muted-foreground">Vendor: {vendorNameById.get(p.vendor_id) || p.vendor_id || 'Unknown'}</div>
+                    <div className="text-xs">₱{Number(p.price).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+                    <div className="text-[11px] text-muted-foreground mt-1">Catalog changes are handled in each vendor dashboard.</div>
                   </Card>
                 ))}
               </div>
@@ -546,7 +576,7 @@ export default function AdminDashboard() {
           </TabsContent>
           <TabsContent value="orders">
             <SectionCard title="Orders" description="Recent order activity.">
-              <SearchBar />
+              <SearchBar value={filter} onChange={setFilter} suggestions={searchSuggestions} />
               <div className="space-y-3">
                 {filteredOrders.map(o => (
                   <Card key={o.id} className="p-4 flex flex-col gap-2 border-l-4" style={{borderLeftColor: o.status === 'Preparing'? '#d97706': o.status === 'For Delivery'? '#2563eb': o.status === 'Delivered'? '#15803d': '#dc2626'}}>
@@ -554,7 +584,7 @@ export default function AdminDashboard() {
                       <span className="font-medium">Order #{o.id}</span>
                       <Badge>{o.status || 'n/a'}</Badge>
                     </div>
-                    <div className="text-xs text-muted-foreground">Placed {o.created_at ? formatDistanceToNow(new Date(o.created_at), { addSuffix: true }) : ''} • Total: ₱{o.total || 0}</div>
+                    <div className="text-xs text-muted-foreground">Placed {o.created_at ? formatDistanceToNow(new Date(o.created_at), { addSuffix: true }) : ''} • Total: ₱{Number(o.total||0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</div>
                     <div className="pt-1"><StatusTimeline status={o.status || 'pending'} /></div>
                     <div className="flex gap-2 mt-1">
                       <Button size="sm" variant="outline" className="h-7 px-2">Details</Button>
@@ -637,11 +667,39 @@ function SectionCard({ title, description, children }: { title: string; descript
   );
 }
 
-function SearchBar({ value, onChange, placeholder }: { value?: string; onChange?: (v: string) => void; placeholder?: string }) {
+function SearchBar({ value, onChange, placeholder, suggestions }: { value?: string; onChange?: (v: string) => void; placeholder?: string; suggestions?: { label: string; value: string; type: string }[] }) {
+  const [open, setOpen] = useState(false);
+  const normalized = (value || '').toLowerCase();
+  const filtered = useMemo(() => {
+    if (!suggestions || !normalized) return suggestions || [];
+    return suggestions.filter(s => s.label.toLowerCase().includes(normalized)).slice(0, 8);
+  }, [suggestions, normalized]);
+
   return (
     <div className="relative">
       <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-      <Input placeholder={placeholder || "Search..."} value={value} onChange={(e)=> onChange?.(e.target.value)} className="pl-9" />
+      <Input
+        placeholder={placeholder || "Search..."}
+        value={value}
+        onChange={(e)=> { onChange?.(e.target.value); setOpen(true); }}
+        onFocus={()=> setOpen(true)}
+        onBlur={()=> setTimeout(()=>setOpen(false), 120)}
+        className="pl-9"
+      />
+      {open && filtered && filtered.length > 0 && (
+        <div className="absolute z-20 mt-1 w-full rounded-md border bg-popover shadow-sm">
+          {filtered.map((s, idx) => (
+            <button
+              key={s.label + idx}
+              className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-accent"
+              onMouseDown={(e)=>{ e.preventDefault(); onChange?.(s.value); setOpen(false); }}
+            >
+              <span className="truncate">{s.label}</span>
+              <span className="text-[10px] text-muted-foreground ml-2">{s.type}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

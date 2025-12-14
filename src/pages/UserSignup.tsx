@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,6 @@ import { useToast } from "@/components/ui/use-toast";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/context/AuthContext";
-import Tesseract from "tesseract.js";
 
 const BARANGAYS = [
   "Aquino",
@@ -73,11 +72,12 @@ export default function UserSignup() {
   const { refreshProfile } = useAuth();
   const { toast } = useToast();
   const [form, setForm] = useState({
-    name: "",
+    first_name: "",
+    last_name: "",
+    middle_name: "",
     email: "",
     password: "",
     confirm: "",
-    id_number: "",
     phone: "",
     city: "Tangub City",
     barangay: "Aquino",
@@ -85,105 +85,18 @@ export default function UserSignup() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [idImageFile, setIdImageFile] = useState<File | null>(null);
-  const [idImagePreview, setIdImagePreview] = useState<string | null>(null);
-  const [ocrStatus, setOcrStatus] = useState<string | null>(null);
-  const [dupIdError, setDupIdError] = useState<string | null>(null);
-  const [checkingDup, setCheckingDup] = useState(false);
-  const dupCheckTimer = useRef<number | null>(null);
+  const normalizePhoneInput = (raw: string) => raw.replace(/\D/g, '').slice(0, 11);
   // Debug panel removed after stabilization
   const validate = () => {
-    if (!form.name.trim()) return "Name required";
+    if (!form.first_name.trim()) return "First name required";
+    if (!form.last_name.trim()) return "Last name required";
     if (!form.email.trim()) return "Email required";
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email)) return "Invalid email";
     if (form.password.length < 6) return "Password must be at least 6 characters";
-    if (!form.id_number.trim()) return "Government/Valid ID number is required";
-    if (dupIdError) return dupIdError;
     if (form.password !== form.confirm) return "Passwords do not match";
+    if (form.phone && !/^09\d{9}$/.test(form.phone)) return "Phone must be 11 digits starting with 09";
     return null;
   };
-
-  const extractIdNumber = (text: string) => {
-    const cleaned = text.replace(/[\s\t\n]+/g, " ");
-    const candidates: string[] = [];
-    // Common PH ID patterns (best-effort):
-    const patterns = [
-      /\b\d{4}-\d{4}-\d{4}\b/g,           // 0000-0000-0000 (PhilSys)
-      /\b\d{2}-\d{7}-\d{1}\b/g,           // 00-0000000-0 (SSS)
-      /\b[A-Z]\d{2}-\d{2}-\d{6}\b/gi,     // X00-00-000000 (Driver's)
-      /\b\d{10,16}\b/g,                     // 10-16 continuous digits
-      /\b[0-9A-Z]{8,18}\b/gi                 // fallback alnum 8-18
-    ];
-    for (const p of patterns) {
-      const m = cleaned.match(p);
-      if (m) candidates.push(...m);
-    }
-    if (candidates.length === 0) return "";
-    // Choose the longest candidate (likely the true ID)
-    candidates.sort((a, b) => b.length - a.length);
-    return candidates[0];
-  };
-
-  const onPickIdImage = async (file: File) => {
-    setIdImageFile(file);
-    const url = URL.createObjectURL(file);
-    setIdImagePreview(url);
-    setOcrStatus("Detecting ID number...");
-    try {
-      const { data } = await Tesseract.recognize(file, 'eng', {
-        logger: (m) => {
-          if (m.status === 'recognizing text' && m.progress) {
-            setOcrStatus(`Recognizing... ${(m.progress * 100).toFixed(0)}%`);
-          }
-        }
-      });
-      const text = data?.text || "";
-      const id = extractIdNumber(text);
-      if (id) {
-        setForm((f) => ({ ...f, id_number: id }));
-        setOcrStatus("ID number detected. Please verify below.");
-      } else {
-        setOcrStatus("Couldn't detect ID number. You can type it below.");
-      }
-    } catch (e) {
-      console.error(e);
-      setOcrStatus("OCR failed. Please type ID number below.");
-    }
-  };
-
-  // Debounced duplicate check when ID number changes
-  useEffect(() => {
-    if (dupCheckTimer.current) {
-      window.clearTimeout(dupCheckTimer.current);
-    }
-    if (!form.id_number.trim()) {
-      setDupIdError(null);
-      return;
-    }
-    dupCheckTimer.current = window.setTimeout(async () => {
-      setCheckingDup(true);
-      try {
-        const { data, error } = await supabase
-          .from('users')
-          .select('id')
-          .eq('id_number', form.id_number.trim())
-          .limit(1);
-        if (error) {
-          console.warn('Duplicate check error', error.message);
-          setDupIdError(null);
-        } else if (data && data.length > 0) {
-          setDupIdError('This ID number is already registered.');
-        } else {
-          setDupIdError(null);
-        }
-      } finally {
-        setCheckingDup(false);
-      }
-    }, 450);
-    return () => {
-      if (dupCheckTimer.current) window.clearTimeout(dupCheckTimer.current);
-    };
-  }, [form.id_number]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -196,15 +109,20 @@ export default function UserSignup() {
       if (!supabase) {
         throw new Error('Supabase client not initialized');
       }
-      const emailTrim = form.email.trim().toLowerCase();
+        const emailTrim = form.email.trim().toLowerCase();
+        const firstName = form.first_name.trim();
+        const lastName = form.last_name.trim();
+        const middleName = form.middle_name.trim();
+        const fullName = [firstName, middleName, lastName].filter(Boolean).join(' ').trim();
       let signUpData, signUpError;
   // (removed debug panel logic)
   let ambiguousDbError = false;
+      const emailRedirectTo = `${window.location.origin}/login/user`;
       for (let attempt = 0; attempt < 2; attempt++) {
         const { data, error } = await supabase.auth.signUp({
           email: emailTrim,
           password: form.password,
-          options: { data: { full_name: form.name.trim() } }
+          options: { data: { full_name: fullName, first_name: firstName, last_name: lastName, middle_name: middleName }, emailRedirectTo }
         });
         signUpData = data; signUpError = error;
         if (!error) break;
@@ -277,25 +195,15 @@ export default function UserSignup() {
       const authUser = signUpData.user;
       if (!authUser?.id) throw new Error("No user id returned from sign up");
 
-      // Simplified: skip waiting for session (open RLS / email confirm disabled for school project)
-
-      // Prepare optional ID image upload first (uses user id)
-      let idImageUrl: string | null = null;
-      if (idImageFile) {
-        const ext = (idImageFile.name.split('.').pop() || 'jpg').toLowerCase();
-        const path = `id-images/${authUser.id}.${ext}`;
-        const { error: uploadErr } = await supabase
-          .storage
-          .from('id-images')
-          .upload(path, idImageFile, { upsert: true, contentType: idImageFile.type || 'image/jpeg' });
-        if (uploadErr) {
-          console.warn('ID image upload failed:', uploadErr.message);
-          toast({ title: 'Note', description: 'ID image could not be uploaded right now. You can upload later in Profile.', duration: 4500 });
-        } else {
-          const { data: publicUrlData } = supabase.storage.from('id-images').getPublicUrl(path);
-          idImageUrl = publicUrlData?.publicUrl || null;
-        }
+      // If email confirmation is required (session absent), stop here and prompt user to verify
+      if (!signUpData.session) {
+        toast({ title: 'Confirm your email', description: 'We sent a confirmation link. Please verify to activate your account.' });
+        setSubmitting(false);
+        setTimeout(() => navigate('/login/user'), 1200);
+        return;
       }
+
+      // Simplified: skip waiting for session (open RLS / email confirm disabled for school project)
 
       // Direct upsert of profile (idempotent) — avoids trigger timing/RLS race.
       const desiredRole = form.role === 'vendor' ? 'vendor' : 'user';
@@ -305,14 +213,15 @@ export default function UserSignup() {
         const profilePayload: any = {
           auth_user_id: authUser.id,
           email: authUser.email,
-          full_name: form.name.trim(),
+          full_name: fullName,
+          first_name: firstName,
+          last_name: lastName,
+          middle_name: middleName,
           role: desiredRole
         };
         // Only include barangay/phone if user entered (avoid errors if columns missing)
         if (form.barangay) profilePayload.barangay = form.barangay;
         if (form.phone) profilePayload.phone = form.phone;
-        if (form.id_number) profilePayload.id_number = form.id_number.trim();
-        if (idImageUrl) profilePayload.id_image_url = idImageUrl;
 
         const { error: upsertErr } = await supabase
           .from('users')
@@ -354,10 +263,6 @@ export default function UserSignup() {
       console.error(err);
       // Normalize some Postgres / network noise for end-user clarity
       const raw = err.message || 'Signup failed';
-      if (/id_number/i.test(raw) && /(unique|duplicate)/i.test(raw)) {
-        setError('This ID number is already registered.');
-        return;
-      }
       if (/Database error saving new user/i.test(raw)) {
         if (/invalid input syntax for type/i.test(raw)) {
           setError('Invalid input. Please review your entries.');
@@ -382,26 +287,19 @@ export default function UserSignup() {
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={onSubmit}>
-            <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
-              <Input id="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="first_name">First Name</Label>
+                <Input id="first_name" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="last_name">Last Name</Label>
+                <Input id="last_name" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
+              </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="idimg">Government/Valid ID Image</Label>
-              <Input id="idimg" type="file" accept="image/*" onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) onPickIdImage(f);
-              }} />
-              {idImagePreview && (
-                <img src={idImagePreview} alt="ID preview" className="mt-2 h-28 w-auto rounded border" />
-              )}
-              {ocrStatus && <p className="text-xs text-muted-foreground">{ocrStatus}</p>}
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="idnum">Detected ID Number</Label>
-              <Input id="idnum" value={form.id_number} onChange={(e) => setForm({ ...form, id_number: e.target.value })} placeholder="e.g., 0000-0000-0000" />
-              {checkingDup && <p className="text-xs text-muted-foreground">Checking duplicates…</p>}
-              {dupIdError && <p className="text-xs text-red-600">{dupIdError}</p>}
+              <Label htmlFor="middle_name">Middle Name (optional)</Label>
+              <Input id="middle_name" value={form.middle_name} onChange={(e) => setForm({ ...form, middle_name: e.target.value })} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -419,7 +317,18 @@ export default function UserSignup() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="phone">Phone (optional)</Label>
-              <Input id="phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="09xx-xxx-xxxx" />
+              <Input
+                id="phone"
+                inputMode="numeric"
+                pattern="09\d{9}"
+                maxLength={11}
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: normalizePhoneInput(e.target.value) })}
+                placeholder="09xxxxxxxxx"
+              />
+              {form.phone && !/^09\d{9}$/.test(form.phone) && (
+                <p className="text-xs text-red-600">Use a Philippine mobile number (11 digits starting with 09).</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Account Type</Label>

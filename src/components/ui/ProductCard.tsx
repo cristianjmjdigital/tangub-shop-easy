@@ -1,7 +1,8 @@
 import { Card, CardHeader, CardDescription, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Star } from "lucide-react";
+import { MapPin, Star, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 
 interface ProductCardProps {
   name: string;
@@ -13,6 +14,9 @@ interface ProductCardProps {
   discount?: number;
   imageUrl?: string;
   image?: string; // alias used by some pages
+  description?: string;
+  vendorId?: string;
+  storePath?: string;
   onAdd?: () => void;
   adding?: boolean;
 }
@@ -27,52 +31,98 @@ const ProductCard = ({
   discount,
   imageUrl,
   image,
+  description,
+  vendorId,
+  storePath,
   onAdd,
   adding
 }: ProductCardProps) => {
   const src = imageUrl || image || "/placeholder.svg";
+  const storeHref = storePath || (vendorId ? `/business/${vendorId}` : undefined);
   return (
     <Card className="overflow-hidden hover:shadow-elegant transition-all duration-300 group">
-      <div className="relative">
-        <div className="aspect-square bg-white relative overflow-hidden rounded-xl">
-          <img
-            src={src}
-            alt={name}
-            className="object-cover w-full h-full"
-            onError={(e) => {
-              if (e.currentTarget.src.endsWith("/placeholder.svg")) return;
-              e.currentTarget.src = "/placeholder.svg";
-            }}
-            loading="lazy"
-          />
-        </div>
-        {discount && (
-          <Badge variant="destructive" className="absolute top-2 right-2">
-            -{discount}%
+      {storeHref ? (
+        <Link to={storeHref} className="relative block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70">
+          <div className="aspect-square bg-white relative overflow-hidden rounded-xl">
+            <img
+              src={src}
+              alt={name}
+              className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-105"
+              onError={(e) => {
+                if (e.currentTarget.src.endsWith("/placeholder.svg")) return;
+                e.currentTarget.src = "/placeholder.svg";
+              }}
+              loading="lazy"
+            />
+          </div>
+          {discount && (
+            <Badge variant="destructive" className="absolute top-2 right-2">
+              -{discount}%
+            </Badge>
+          )}
+          <Badge className="absolute top-2 left-2 bg-primary/90 text-primary-foreground backdrop-blur-sm max-w-[70%] truncate">
+            Visit store
           </Badge>
-        )}
-        <Badge className="absolute top-2 left-2 bg-primary/90 text-primary-foreground backdrop-blur-sm max-w-[70%] truncate">
-          {business}
-        </Badge>
-      </div>
+        </Link>
+      ) : (
+        <div className="relative">
+          <div className="aspect-square bg-white relative overflow-hidden rounded-xl">
+            <img
+              src={src}
+              alt={name}
+              className="object-cover w-full h-full"
+              onError={(e) => {
+                if (e.currentTarget.src.endsWith("/placeholder.svg")) return;
+                e.currentTarget.src = "/placeholder.svg";
+              }}
+              loading="lazy"
+            />
+          </div>
+          {discount && (
+            <Badge variant="destructive" className="absolute top-2 right-2">
+              -{discount}%
+            </Badge>
+          )}
+        </div>
+      )}
       <CardHeader className="pb-4">
         <div className="flex items-center text-xs text-muted-foreground mb-2 gap-1">
           <MapPin className="h-3 w-3" />
           <span className="truncate">{location}</span>
         </div>
-        <CardTitle className="text-lg">{name}</CardTitle>
-        <CardDescription>by {business}</CardDescription>
+        <CardTitle className="text-lg leading-tight">
+          {storeHref ? (
+            <Link to={storeHref} className="hover:text-primary transition-colors">
+              {name}
+            </Link>
+          ) : (
+            name
+          )}
+        </CardTitle>
+        <CardDescription className="flex items-center gap-1 text-xs mt-1">
+          <span className="text-muted-foreground">Sold by</span>
+          {storeHref ? (
+            <Link to={storeHref} className="inline-flex items-center gap-1 text-primary hover:underline">
+              {business}<ArrowUpRight className="h-3 w-3" />
+            </Link>
+          ) : (
+            <span className="text-muted-foreground">{business}</span>
+          )}
+        </CardDescription>
         <div className="flex items-center mb-3">
           <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
           <span className="ml-1 text-sm font-medium">{rating}</span>
         </div>
+        <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
+          {description || 'This product is available from this vendor. Tap to view the full store.'}
+        </p>
         <div className="flex items-center">
           <span className="text-xl font-bold text-primary">
-            ₱{price.toLocaleString()}
+            ₱{price.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}
           </span>
           {originalPrice && (
             <span className="text-sm text-muted-foreground line-through ml-2">
-              ₱{originalPrice.toLocaleString()}
+              ₱{originalPrice.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}
             </span>
           )}
         </div>
