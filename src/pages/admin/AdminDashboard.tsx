@@ -72,28 +72,29 @@ export default function AdminDashboard() {
     if (localStorage.getItem("role") !== "admin") { navigate("/admin/login"); }
   }, [navigate]);
 
+  const adminClient = supabaseAdmin || supabase;
+
   const usersQuery = useQuery({
     queryKey: ['admin','users'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('users').select('id,full_name,email,role,barangay').limit(500);
+      const { data, error } = await adminClient.from('users').select('id,full_name,email,role,barangay').limit(500);
       if (error) throw error; return data as UserRow[];
     }
   });
   const vendorsQuery = useQuery({
     queryKey: ['admin','vendors'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('vendors').select('id,store_name,address').limit(500);
+      const { data, error } = await adminClient.from('vendors').select('id,store_name,address').limit(500);
       if (error) throw error; return data as VendorRow[];
     }
   });
   const productsQuery = useQuery({
     queryKey: ['admin','products'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('products').select('id,name,price,vendor_id').limit(500);
+      const { data, error } = await adminClient.from('products').select('id,name,price,vendor_id').limit(500);
       if (error) throw error; return data as ProductRow[];
     }
   });
-  const adminClient = supabaseAdmin || supabase;
 
   const ordersQuery = useQuery({
     queryKey: ['admin','orders'],
