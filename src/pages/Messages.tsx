@@ -283,9 +283,10 @@ const Messages = () => {
     if (!searchQuery) return conversations;
     const q = searchQuery.toLowerCase();
     return conversations.filter(c => {
+      const participantLabel = c.participantUserId ? String(c.participantUserId).slice(0,8) : '';
       const displayName = c.vendor
         ? (c.vendor.owner_user_id === profile?.id && c.participantUserId
-            ? (participants[c.participantUserId]?.full_name || `Customer ${c.participantUserId.slice(0,8)}`)
+            ? (participants[c.participantUserId]?.full_name || `Customer ${participantLabel}`)
             : c.vendor.store_name)
         : (c.otherUserId || '');
       return displayName.toLowerCase().includes(q);
@@ -360,7 +361,6 @@ const Messages = () => {
           vendor_id: optimisticMsg.vendor_id,
           sender_user_id: profile.id,
           receiver_user_id: receiver,
-          recipient_user_id: receiver, // legacy column in current table schema
           content: trimmed
         })
         .select()
@@ -513,7 +513,7 @@ const Messages = () => {
                     let name = vendor ? vendor.store_name : 'Direct chat';
                     if (vendor && vendor.owner_user_id === profile?.id && conversation.participantUserId) {
                       const participant = participants[conversation.participantUserId];
-                      name = participant?.full_name || `Customer ${conversation.participantUserId.slice(0,8)}`;
+                      name = participant?.full_name || `Customer ${String(conversation.participantUserId).slice(0,8)}`;
                     }
                     const initials = vendor ? vendor.store_name.slice(0,2).toUpperCase() : 'DM';
                     const lastContent = conversation.lastMessage?.content || 'No messages';
@@ -574,7 +574,7 @@ const Messages = () => {
                           </AvatarFallback>
                         </Avatar>
                         <div>
-                          <h3 className="font-semibold text-sm lg:text-base">{currentConversation.vendor ? (currentConversation.vendor.owner_user_id === profile?.id && currentConversation.participantUserId ? (participants[currentConversation.participantUserId]?.full_name || `Customer ${currentConversation.participantUserId.slice(0,8)}`) : currentConversation.vendor.store_name) : 'Conversation'}</h3>
+                          <h3 className="font-semibold text-sm lg:text-base">{currentConversation.vendor ? (currentConversation.vendor.owner_user_id === profile?.id && currentConversation.participantUserId ? (participants[currentConversation.participantUserId]?.full_name || `Customer ${String(currentConversation.participantUserId).slice(0,8)}`) : currentConversation.vendor.store_name) : 'Conversation'}</h3>
                           <div className="flex items-center text-[10px] lg:text-xs text-muted-foreground">
                             <Clock className="h-3 w-3 mr-1" /> Updated {formatRelative(currentConversation.lastMessage?.created_at)}
                           </div>
@@ -610,6 +610,7 @@ const Messages = () => {
                         .map(m => {
                           const mine = m.sender_user_id === profile?.id || m.sender_user_id === session?.user?.id; // prefer profile id
                           const time = new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                          const isTemp = String(m.id).startsWith('temp-');
                           return (
                             <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                               <div className={`max-w-[78%] lg:max-w-[70%] p-3 rounded-2xl relative ${mine ? 'bg-primary text-primary-foreground' : 'bg-muted'} shadow-sm`}>
@@ -619,7 +620,7 @@ const Messages = () => {
                                 <p className="text-xs lg:text-sm whitespace-pre-wrap break-words leading-relaxed">{m.content}</p>
                                 <div className={`flex items-center justify-end mt-1 gap-2 text-[10px] ${mine ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
                                   <span>{time}</span>
-                                  {mine && <CheckCheck className={`h-3 w-3 ${m.id.startsWith('temp-') ? 'opacity-20 animate-pulse' : m.read_at ? 'opacity-100' : 'opacity-40'}`} />}
+                                  {mine && <CheckCheck className={`h-3 w-3 ${isTemp ? 'opacity-20 animate-pulse' : m.read_at ? 'opacity-100' : 'opacity-40'}`} />}
                                 </div>
                               </div>
                             </div>
