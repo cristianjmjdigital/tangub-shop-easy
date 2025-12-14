@@ -67,7 +67,7 @@ const Products = () => {
       setLoading(true); setError(null);
       const { data: pData, error: pErr } = await supabase
         .from('products')
-        .select('id,name,price,stock,vendor_id,main_image_url,image_url,description,created_at')
+        .select('id,name,price,stock,vendor_id,main_image_url,image_url,description,created_at,category')
         .limit(200);
       if (pErr) { setError(pErr.message); setLoading(false); return; }
       setRawProducts(pData as RawProductRow[]);
