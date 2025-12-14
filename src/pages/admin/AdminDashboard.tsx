@@ -692,7 +692,7 @@ function SearchBar({ value, onChange, placeholder, suggestions }: { value?: stri
             <button
               key={s.label + idx}
               className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-accent"
-              onMouseDown={(e)=>{ e.preventDefault(); onChange?.(s.value); setOpen(false); }}
+              onMouseDown={(e)=>{ e.preventDefault(); onChange?.(String(s.value || '')); setOpen(false); }}
             >
               <span className="truncate">{s.label}</span>
               <span className="text-[10px] text-muted-foreground ml-2">{s.type}</span>

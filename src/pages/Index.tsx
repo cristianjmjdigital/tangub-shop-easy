@@ -159,13 +159,15 @@ export default function Index() {
           {promos.map((p,i)=>(
             <div key={i} className="snap-start min-w-[85%] sm:min-w-[480px]">
               <div className="relative rounded-2xl overflow-hidden shadow-sm bg-secondary">
-                <img src={p.image} alt={p.title} className="h-40 w-full object-cover" onError={(e)=>{e.currentTarget.src='/promo-1.svg';}} />
-                <div className="absolute inset-0 bg-gradient-to-r from-black/40 to-transparent" />
-                <div className="absolute left-4 top-4 text-white max-w-[60%]">
-                  <h3 className="font-bold text-lg leading-snug">{p.title}</h3>
-                  <p className="text-sm opacity-90">{p.subtitle}</p>
-                  <Button size="sm" className="mt-3 rounded-full bg-accent text-accent-foreground hover:bg-accent/90">{p.cta}</Button>
+              <img src={p.image} alt={p.title} className="h-40 w-full object-cover" onError={(e)=>{e.currentTarget.src='/promo-1.svg';}} />
+              <div className="absolute inset-0 bg-gradient-to-r from-black/40 to-transparent" />
+              <div className="absolute inset-0 p-4 flex flex-col">
+                <div className="text-white max-w-[60%]">
+                <h3 className="font-bold text-lg leading-snug">{p.title}</h3>
+                <p className="text-sm opacity-90">{p.subtitle}</p>
                 </div>
+                <Button size="sm" className="mt-auto rounded-full bg-accent text-accent-foreground hover:bg-accent/90">{p.cta}</Button>
+              </div>
               </div>
             </div>
           ))}
