@@ -4,21 +4,43 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
     if (!form.email || !form.password) return setError("Missing credentials");
-    // Mock admin login (hard-coded) - later replace with Supabase auth/role claim
-    if (form.email === "admin@tangub.shopeasy" && form.password === "admin123") {
+    setLoading(true);
+    try {
+      const { data, error: signErr } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
+      if (signErr) throw signErr;
+      const user = data.user;
+      if (!user) throw new Error("Login failed");
+
+      const { data: profile, error: profErr } = await supabase
+        .from('users')
+        .select('role')
+        .eq('auth_user_id', user.id)
+        .maybeSingle();
+      if (profErr) throw profErr;
+      if (profile?.role !== 'admin') {
+        await supabase.auth.signOut();
+        throw new Error("Account is not an admin");
+      }
+
       localStorage.setItem("role", "admin");
       navigate("/admin");
-    } else {
-      setError("Invalid admin credentials");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Login error";
+      setError(message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -39,7 +61,9 @@ export default function AdminLogin() {
               <Input id="admin-pass" type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} />
             </div>
             {error && <div className="text-xs text-destructive">{error}</div>}
-            <Button type="submit" className="w-full">Login</Button>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Signing in..." : "Login"}
+            </Button>
           </form>
         </CardContent>
       </Card>
