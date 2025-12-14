@@ -23,13 +23,9 @@ export default function AdminLogin() {
       const user = data.user;
       if (!user) throw new Error("Login failed");
 
-      const { data: profile, error: profErr } = await supabase
-        .from('users')
-        .select('role')
-        .eq('auth_user_id', user.id)
-        .maybeSingle();
-      if (profErr) throw profErr;
-      if (profile?.role !== 'admin') {
+      const { data: roleData, error: roleErr } = await supabase.rpc('get_profile_role', { auth_uid: user.id });
+      if (roleErr) throw roleErr;
+      if (roleData !== 'admin') {
         await supabase.auth.signOut();
         throw new Error("Account is not an admin");
       }

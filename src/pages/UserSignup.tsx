@@ -85,6 +85,8 @@ export default function UserSignup() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [govIdFile, setGovIdFile] = useState<File | null>(null);
+  const [govIdPreview, setGovIdPreview] = useState<string | null>(null);
   const normalizePhoneInput = (raw: string) => raw.replace(/\D/g, '').slice(0, 11);
   // Debug panel removed after stabilization
   const validate = () => {
@@ -214,10 +216,8 @@ export default function UserSignup() {
           auth_user_id: authUser.id,
           email: authUser.email,
           full_name: fullName,
-          first_name: firstName,
-          last_name: lastName,
-          middle_name: middleName,
-          role: desiredRole
+          role: desiredRole,
+          city: form.city || 'Tangub City'
         };
         // Only include barangay/phone if user entered (avoid errors if columns missing)
         if (form.barangay) profilePayload.barangay = form.barangay;
@@ -279,6 +279,15 @@ export default function UserSignup() {
     }
   };
 
+  const handleGovIdChange = (fileList: FileList | null) => {
+    const file = fileList?.[0] || null;
+    setGovIdFile(file);
+    if (govIdPreview) {
+      URL.revokeObjectURL(govIdPreview);
+    }
+    setGovIdPreview(file ? URL.createObjectURL(file) : null);
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-10 bg-background">
       <Card className="w-full max-w-md">
@@ -304,6 +313,16 @@ export default function UserSignup() {
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input id="email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="gov-id">Government ID (optional)</Label>
+              <Input id="gov-id" type="file" accept="image/*" onChange={(e) => handleGovIdChange(e.target.files)} />
+              <p className="text-xs text-muted-foreground">File is only previewed here and not uploaded.</p>
+              {govIdPreview && (
+                <div className="border rounded-md p-2 bg-muted/30">
+                  <img src={govIdPreview} alt="Government ID preview" className="w-full rounded" />
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
