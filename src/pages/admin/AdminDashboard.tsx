@@ -497,9 +497,14 @@ export default function AdminDashboard() {
                     <div className="text-xs text-muted-foreground mb-2">Latest order IDs and totals</div>
                     <div className="space-y-2">
                       {ordersData.slice(0,10).map((o)=> (
-                        <div key={String(o.id)} className="flex items-center justify-between text-sm">
-                          <span className="font-mono text-muted-foreground">{String(o.id).slice(0,8)}…</span>
-                          <span>₱{(o.total||0).toLocaleString()}</span>
+                        <div key={String(o.id)} className="flex items-center justify-between gap-3 text-sm">
+                          <div>
+                            <div className="font-medium">Order #{o.id}</div>
+                            <div className="text-xs text-muted-foreground">₱{(o.total||0).toLocaleString()}</div>
+                          </div>
+                          <Button size="sm" variant="outline" onClick={()=>setTab('orders')} className="whitespace-nowrap">
+                            View Order #{o.id}
+                          </Button>
                         </div>
                       ))}
                       {ordersData.length === 0 && <div className="text-xs text-muted-foreground">No recent orders yet.</div>}
