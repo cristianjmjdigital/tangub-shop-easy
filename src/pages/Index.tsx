@@ -183,10 +183,14 @@ export default function Index() {
           </div>
           <div className="flex gap-4 overflow-x-auto no-scrollbar pb-1">
             {categories.map(cat => (
-              <button key={cat.name} className="shrink-0 w-24 bg-secondary rounded-xl p-3 text-center hover:bg-secondary/80">
+              <Link
+                key={cat.name}
+                to={`/products?category=${encodeURIComponent(cat.name)}`}
+                className="shrink-0 w-24 bg-secondary rounded-xl p-3 text-center hover:bg-secondary/80"
+              >
                 <div className="h-10 w-10 rounded-full bg-primary/10 text-primary mx-auto flex items-center justify-center mb-2"><cat.icon className="h-5 w-5" /></div>
                 <span className="text-xs font-medium">{cat.name}</span>
-              </button>
+              </Link>
             ))}
           </div>
           {scanSuggestions.length > 0 && (

@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, ShoppingCart, Settings, Store, DollarSign, Edit, Trash2, RefreshCw, CheckCircle2, Hourglass, XCircle, MessageSquare, Send, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabaseClient";
@@ -15,7 +16,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/components/ui/use-toast";
 
 interface VendorRecord { id: string; store_name: string; address: string | null; created_at?: string; owner_user_id?: string; contact_phone?: string | null; accepting_orders?: boolean; base_delivery_fee?: number | null; logo_url?: string | null; hero_image_url?: string | null; description?: string | null }
-interface ProductRecord { id: string; name: string; price: number; stock: number; description?: string | null; main_image_url?: string | null }
+interface ProductRecord { id: string; name: string; price: number; stock: number; description?: string | null; main_image_url?: string | null; category?: string | null }
 
 export default function VendorDashboard() {
   const { profile, signOut } = useAuth();
@@ -25,9 +26,11 @@ export default function VendorDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [open, setOpen] = useState(false);
-  const [newProduct, setNewProduct] = useState({ name: '', price: '', stock: '', description: '', main_image_url: '' });
+  const [newProduct, setNewProduct] = useState({ name: '', price: '', stock: '', description: '', main_image_url: '', category: '' });
+  const [newProductFile, setNewProductFile] = useState<File | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductRecord | null>(null);
+  const [editingFile, setEditingFile] = useState<File | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [vendorOrders, setVendorOrders] = useState<any[]>([]);
   const [vendorOrderItems, setVendorOrderItems] = useState<any[]>([]);
@@ -50,6 +53,22 @@ export default function VendorDashboard() {
   const [msgOrderId, setMsgOrderId] = useState<string | null>(null);
   const [msgText, setMsgText] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
+
+    const PRODUCT_BUCKET = import.meta.env.VITE_PRODUCT_BUCKET || 'product-images';
+    const CATEGORY_OPTIONS = ['Fashion','Food & Drinks','Home & Living','Gifts & Crafts','Electronics','Health & Beauty'];
+
+    const uploadProductImage = async (file: File, vendorId: string) => {
+      const ext = file.name.split('.').pop() || 'jpg';
+      const id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+      const path = `${vendorId}/${id}.${ext}`;
+      const { error: uploadErr } = await supabase.storage.from(PRODUCT_BUCKET).upload(path, file, { upsert: true, contentType: file.type });
+      if (uploadErr) {
+        toast({ title: 'Image upload failed', description: uploadErr.message, variant: 'destructive' });
+        return null;
+      }
+      const { data: publicData } = supabase.storage.from(PRODUCT_BUCKET).getPublicUrl(path);
+      return publicData?.publicUrl || null;
+    };
 
   async function loadVendorOrders(vendorId: string) {
     setOrdersLoading(true); setOrdersError(null);
@@ -94,7 +113,7 @@ export default function VendorDashboard() {
       if (vendorData?.id) {
         const { data: productRows } = await supabase
           .from('products')
-          .select('id,name,price,stock,description,main_image_url')
+          .select('id,name,price,stock,description,main_image_url,category')
           .eq('vendor_id', vendorData.id)
           .order('created_at', { ascending: false });
         setProducts((productRows as ProductRecord[]) || []);
@@ -322,6 +341,24 @@ export default function VendorDashboard() {
                         <Input id="prod-image" value={newProduct.main_image_url} onChange={e => setNewProduct(p => ({ ...p, main_image_url: e.target.value }))} placeholder="https://.../image.jpg" />
                       </div>
                       <div className="space-y-1">
+                        <Label htmlFor="prod-image-file">Upload Image (optional)</Label>
+                        <Input id="prod-image-file" type="file" accept="image/*" onChange={(e) => setNewProductFile(e.target.files?.[0] || null)} />
+                        {newProductFile && <p className="text-[11px] text-muted-foreground">Selected: {newProductFile.name}</p>}
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="prod-category">Category</Label>
+                        <Select value={newProduct.category} onValueChange={(val) => setNewProduct(p => ({ ...p, category: val }))}>
+                          <SelectTrigger id="prod-category">
+                            <SelectValue placeholder="Select a category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CATEGORY_OPTIONS.map(opt => (
+                              <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
                         <Label htmlFor="prod-desc">Description</Label>
                         <Textarea id="prod-desc" value={newProduct.description} onChange={e => setNewProduct(p => ({ ...p, description: e.target.value }))} placeholder="Short product description" />
                       </div>
@@ -334,6 +371,11 @@ export default function VendorDashboard() {
                         setCreating(true);
                         const priceNum = Number(newProduct.price);
                         const stockNum = Number(newProduct.stock);
+                        let imageUrl = newProduct.main_image_url.trim() ? newProduct.main_image_url.trim() : null;
+                        if (newProductFile) {
+                          const uploaded = await uploadProductImage(newProductFile, String(vendor.id));
+                          if (uploaded) imageUrl = uploaded;
+                        }
                         const { data: inserted, error: insertErr } = await supabase
                           .from('products')
                           .insert({
@@ -342,14 +384,16 @@ export default function VendorDashboard() {
                             price: isNaN(priceNum) ? 0 : priceNum,
                             stock: isNaN(stockNum) ? 0 : stockNum,
                             description: newProduct.description.trim() ? newProduct.description.trim() : null,
-                            main_image_url: newProduct.main_image_url.trim() ? newProduct.main_image_url.trim() : null,
+                            main_image_url: imageUrl,
+                            category: newProduct.category.trim() || null,
                           })
-                          .select('id,name,price,stock,description,main_image_url')
+                          .select('id,name,price,stock,description,main_image_url,category')
                           .single();
                         if (!insertErr && inserted) {
                           setProducts(prev => [inserted as any, ...prev]);
                           setOpen(false);
-                          setNewProduct({ name: '', price: '', stock: '', description: '', main_image_url: '' });
+                          setNewProduct({ name: '', price: '', stock: '', description: '', main_image_url: '', category: '' });
+                          setNewProductFile(null);
                         }
                         setCreating(false);
                       }} type="button">Save</Button>
@@ -687,6 +731,24 @@ export default function VendorDashboard() {
               <Input id="edit-image" value={editingProduct.main_image_url || ''} onChange={e => setEditingProduct(prev => prev ? { ...prev, main_image_url: e.target.value } : prev)} placeholder="https://.../image.jpg" />
             </div>
             <div className="space-y-1">
+              <Label htmlFor="edit-image-file">Upload Image (optional)</Label>
+              <Input id="edit-image-file" type="file" accept="image/*" onChange={(e) => setEditingFile(e.target.files?.[0] || null)} />
+              {editingFile && <p className="text-[11px] text-muted-foreground">Selected: {editingFile.name}</p>}
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="edit-category">Category</Label>
+              <Select value={editingProduct.category || ''} onValueChange={(val) => setEditingProduct(prev => prev ? { ...prev, category: val } : prev)}>
+                <SelectTrigger id="edit-category">
+                  <SelectValue placeholder="Select a category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORY_OPTIONS.map(opt => (
+                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
               <Label htmlFor="edit-desc">Description</Label>
               <Textarea id="edit-desc" value={editingProduct.description || ''} onChange={e => setEditingProduct(prev => prev ? { ...prev, description: e.target.value } : prev)} placeholder="Short product description" />
             </div>
@@ -698,6 +760,11 @@ export default function VendorDashboard() {
           <Button type="button" disabled={savingEdit || !editingProduct?.name.trim()} onClick={async () => {
             if (!editingProduct) return;
             setSavingEdit(true);
+            let imageUrl = editingProduct.main_image_url?.trim() || null;
+            if (editingFile && vendor?.id) {
+              const uploaded = await uploadProductImage(editingFile, String(vendor.id));
+              if (uploaded) imageUrl = uploaded;
+            }
             const { error: updErr, data } = await supabase
               .from('products')
               .update({ 
@@ -705,15 +772,17 @@ export default function VendorDashboard() {
                 price: editingProduct.price, 
                 stock: editingProduct.stock, 
                 description: editingProduct.description?.trim() || null, 
-                main_image_url: editingProduct.main_image_url?.trim() || null 
+                main_image_url: imageUrl,
+                category: editingProduct.category?.trim() || null 
               })
               .eq('id', editingProduct.id)
-              .select('id,name,price,stock,description,main_image_url')
+              .select('id,name,price,stock,description,main_image_url,category')
               .single();
             if (!updErr && data) {
               setProducts(prev => prev.map(p => p.id === data.id ? (data as any) : p));
               setEditOpen(false);
             }
+              setEditingFile(null);
             setSavingEdit(false);
           }}>Save Changes</Button>
         </DialogFooter>

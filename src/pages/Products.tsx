@@ -95,7 +95,7 @@ const Products = () => {
       const vendor = p.vendor_id ? vendors[p.vendor_id] : undefined;
       const vendorId = p.vendor_id ? String(p.vendor_id) : undefined;
       // Fallback heuristics
-      const category = 'General';
+      const category = (p as any).category || 'General';
       const location = p.location || vendor?.barangay || vendor?.address || 'Unknown';
       const description = (p as any).description || 'Detailed product information is provided by the vendor.';
       return {
@@ -130,7 +130,9 @@ const Products = () => {
 
   useEffect(() => {
     const q = searchParams.get('q') || '';
+    const cat = searchParams.get('category') || 'all';
     setSearchTerm(q);
+    setSelectedCategory(cat);
   }, [searchParams]);
 
   const handleSearchChange = (value: string) => {
@@ -179,6 +181,16 @@ const Products = () => {
     return list;
   }, [uiProducts, selectedCategory, selectedLocation, priceRange, sortKey, searchTerm]);
 
+  const handleCategoryChange = (val: string) => {
+    setSelectedCategory(val);
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (val && val !== 'all') next.set('category', val); else next.delete('category');
+      if (searchTerm.trim()) next.set('q', searchTerm.trim());
+      return next;
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gradient-subtle">
       <div className="container mx-auto px-4 py-6">
@@ -195,7 +207,7 @@ const Products = () => {
                 {/* Category Filter */}
                 <div>
                   <Label className="text-sm font-medium">Category</Label>
-                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                  <Select value={selectedCategory} onValueChange={handleCategoryChange}>
                     <SelectTrigger className="mt-2">
                       <SelectValue placeholder="All Categories" />
                     </SelectTrigger>
@@ -261,6 +273,12 @@ const Products = () => {
                     setSelectedCategory("all");
                     setSelectedLocation("all");
                     setPriceRange([0, 10000]);
+                    setSearchParams(prev => {
+                      const next = new URLSearchParams(prev);
+                      next.delete('category');
+                      next.delete('q');
+                      return next;
+                    });
                   }}
                 >
                   Clear Filters
