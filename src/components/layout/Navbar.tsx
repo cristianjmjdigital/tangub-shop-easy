@@ -30,7 +30,8 @@ const Navbar = () => {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { profile, loading, signOut } = useAuth();
+  const { session, profile, loading, signOut } = useAuth();
+  const loggedIn = !!session;
 
   // subscribe to unread messages
   useEffect(()=>{
@@ -74,7 +75,7 @@ const Navbar = () => {
     { path: "/profile", label: "Profile", icon: User, requiresAuth: true },
   ];
 
-  const visibleNavItems = navItems.filter(item => !item.requiresAuth || !!profile);
+  const visibleNavItems = navItems.filter(item => !item.requiresAuth || loggedIn);
 
   // Autocomplete search against products and vendors
   useEffect(() => {
@@ -181,7 +182,7 @@ const Navbar = () => {
                 <Skeleton className="h-8 w-20 rounded" />
               </div>
             )}
-            {!loading && !profile && (
+            {!loading && !loggedIn && (
               <div className="flex gap-2">
                 <Link to="/login/user">
                   <Button variant="secondary" size="sm">User Login</Button>
@@ -191,9 +192,9 @@ const Navbar = () => {
                 </Link>
               </div>
             )}
-            {!loading && profile && (
+            {!loading && loggedIn && (
               <div className="flex gap-2 items-center">
-                {profile.role === 'vendor' && (
+                {profile?.role === 'vendor' && (
                   <>
                     <Link to="/vendor">
                       <Button variant="secondary" size="sm">Vendor Panel</Button>
@@ -208,7 +209,7 @@ const Navbar = () => {
 
           {/* Cart and Mobile Menu */}
           <div className="flex items-center space-x-2">
-            {profile && (
+            {loggedIn && (
               <Link to="/cart">
                 <Button variant="secondary" size="sm" className="relative">
                   <ShoppingCart className="h-4 w-4" />
@@ -250,7 +251,7 @@ const Navbar = () => {
                     </Link>
                   ))}
                   <div className="flex items-center justify-between pt-2">
-                    {!loading && !profile && (
+                    {!loading && !loggedIn && (
                       <div className="w-full flex flex-col gap-2">
                         <Link to="/login/user" className="w-full">
                           <Button variant="secondary" className="w-full">User Login</Button>
@@ -260,9 +261,9 @@ const Navbar = () => {
                         </Link>
                       </div>
                     )}
-                    {!loading && profile && (
+                    {!loading && loggedIn && (
                       <div className="w-full flex flex-col gap-2">
-                        {profile.role === 'vendor' && (
+                        {profile?.role === 'vendor' && (
                           <div className="w-full flex flex-col gap-1">
                             <Link to="/vendor" className="w-full">
                               <Button variant="secondary" className="w-full">Vendor Panel</Button>

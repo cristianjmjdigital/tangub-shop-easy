@@ -14,7 +14,8 @@ interface Profile {
 interface AuthContextValue {
   session: any;
   profile: Profile | null;
-  loading: boolean;
+  loading: boolean; // session hydration
+  profileLoading: boolean; // profile fetch/upsert
   refreshProfile: () => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -25,33 +26,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(false);
 
   useEffect(() => {
     const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      if (session?.user) {
-        await loadProfile(session.user.id);
-      } else {
-        setLoading(false);
+      const { data: { session: initialSession } } = await supabase.auth.getSession();
+      setSession(initialSession);
+      setLoading(false);
+      if (initialSession?.user) {
+        loadProfile(initialSession.user.id, initialSession);
       }
     };
     init();
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
+      setLoading(false);
       if (newSession?.user) {
-        loadProfile(newSession.user.id);
+        loadProfile(newSession.user.id, newSession);
       } else {
         setProfile(null);
+        setProfileLoading(false);
       }
     });
 
     return () => { listener.subscription.unsubscribe(); };
   }, []);
 
-  const loadProfile = async (authUserId: string) => {
-    setLoading(true);
+  const loadProfile = async (authUserId: string, currentSession = session) => {
+    setProfileLoading(true);
     try {
       const { data, error } = await supabase
         .from('users')
@@ -65,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Try creating a minimal profile row if it truly doesn't exist yet
         const { data: inserted, error: insertErr } = await supabase
           .from('users')
-          .insert({ auth_user_id: authUserId, full_name: 'New User', email: session?.user?.email, role: 'user' })
+          .insert({ auth_user_id: authUserId, full_name: 'New User', email: currentSession?.user?.email, role: 'user' })
           .select('*')
           .single();
         if (!insertErr && inserted) setProfile(inserted as Profile);
@@ -73,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       // swallow; profile remains null
     } finally {
-      setLoading(false);
+      setProfileLoading(false);
     }
   };
 
@@ -87,7 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ session, profile, loading, refreshProfile, signOut }}>
+    <AuthContext.Provider value={{ session, profile, loading, profileLoading, refreshProfile, signOut }}>
       {children}
     </AuthContext.Provider>
   );

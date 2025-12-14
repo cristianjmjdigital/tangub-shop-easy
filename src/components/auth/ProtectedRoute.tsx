@@ -10,10 +10,11 @@ interface Props {
 }
 
 export function ProtectedRoute({ children, requireRole, redirectTo = '/login/user', loadingFallback = null }: Props) {
-  const { session, profile, loading } = useAuth();
+  const { session, profile, loading, profileLoading } = useAuth();
 
   if (loading) return <>{loadingFallback}</>;
   if (!session) return <Navigate to={redirectTo} replace />;
+  if (requireRole && profileLoading) return <>{loadingFallback}</>;
 
   if (requireRole) {
     const roles = Array.isArray(requireRole) ? requireRole : [requireRole];
