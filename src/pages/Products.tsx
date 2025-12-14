@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -6,11 +6,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Star, MapPin, ShoppingCart, Filter, Heart } from "lucide-react";
+import { Star, MapPin, ShoppingCart, Filter, Heart, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import { useCart } from "@/hooks/use-cart";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 interface RawProductRow {
   id: string;
@@ -49,10 +49,12 @@ interface UIProduct {
 const Products = () => {
   const { toast } = useToast();
   const { addItem } = useCart();
+  const [searchParams, setSearchParams] = useSearchParams();
   // store as generic number[] to satisfy Slider's (number[]) signature, but enforce length 2 logically
   const [priceRange, setPriceRange] = useState<number[]>([0, 10000]);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedLocation, setSelectedLocation] = useState("all");
+  const [searchTerm, setSearchTerm] = useState("");
   const [rawProducts, setRawProducts] = useState<RawProductRow[]>([]);
   const [vendors, setVendors] = useState<Record<string, VendorRow>>({});
   const [loading, setLoading] = useState(true);
@@ -126,6 +128,24 @@ const Products = () => {
     return Array.from(set).sort();
   }, [uiProducts]);
 
+  useEffect(() => {
+    const q = searchParams.get('q') || '';
+    setSearchTerm(q);
+  }, [searchParams]);
+
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (value.trim()) {
+        next.set('q', value);
+      } else {
+        next.delete('q');
+      }
+      return next;
+    });
+  };
+
   const addToCart = async (product: UIProduct) => {
     try {
       await addItem(product.id, 1);
@@ -141,6 +161,14 @@ const Products = () => {
       const matchesPrice = product.price >= priceRange[0] && product.price <= priceRange[1];
       return matchesCategory && matchesLocation && matchesPrice;
     });
+    const q = searchTerm.trim().toLowerCase();
+    if (q) {
+      list = list.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        p.business.toLowerCase().includes(q) ||
+        p.location.toLowerCase().includes(q)
+      );
+    }
     switch (sortKey) {
       case 'price-low': list = [...list].sort((a,b)=>a.price-b.price); break;
       case 'price-high': list = [...list].sort((a,b)=>b.price-a.price); break;
@@ -149,7 +177,7 @@ const Products = () => {
       default: break; // featured logic not yet implemented
     }
     return list;
-  }, [uiProducts, selectedCategory, selectedLocation, priceRange, sortKey]);
+  }, [uiProducts, selectedCategory, selectedLocation, priceRange, sortKey, searchTerm]);
 
   return (
     <div className="min-h-screen bg-gradient-subtle">
@@ -243,25 +271,36 @@ const Products = () => {
 
           {/* Products Grid */}
           <div className="lg:w-3/4">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold">
-                Products in Tangub City
-                <span className="text-muted-foreground text-base ml-2">
-                  {loading ? 'Loading...' : `(${filteredProducts.length} items)`}
-                </span>
-              </h2>
-              <Select value={sortKey} onValueChange={setSortKey}>
-                <SelectTrigger className="w-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="featured">Featured</SelectItem>
-                  <SelectItem value="price-low">Price: Low to High</SelectItem>
-                  <SelectItem value="price-high">Price: High to Low</SelectItem>
-                  <SelectItem value="rating">Highest Rated</SelectItem>
-                  <SelectItem value="newest">Newest</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="flex flex-col gap-4 mb-6">
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="text-2xl font-bold">
+                  Products in Tangub City
+                  <span className="text-muted-foreground text-base ml-2">
+                    {loading ? 'Loading...' : `(${filteredProducts.length} items)`}
+                  </span>
+                </h2>
+                <Select value={sortKey} onValueChange={setSortKey}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="featured">Featured</SelectItem>
+                    <SelectItem value="price-low">Price: Low to High</SelectItem>
+                    <SelectItem value="price-high">Price: High to Low</SelectItem>
+                    <SelectItem value="rating">Highest Rated</SelectItem>
+                    <SelectItem value="newest">Newest</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  value={searchTerm}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  placeholder="Search products or shops..."
+                  className="pl-10"
+                />
+              </div>
             </div>
             {error && (
               <div className="p-4 mb-4 border border-destructive/40 text-sm text-destructive rounded-md bg-destructive/5">

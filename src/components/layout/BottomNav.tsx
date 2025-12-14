@@ -1,23 +1,28 @@
 import { Link, useLocation } from "react-router-dom";
 import { Home, ShoppingBag, ShoppingCart, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/context/AuthContext";
+import { useCart } from "@/hooks/use-cart";
 
 const tabs = [
-  { to: "/home", label: "Home", icon: Home },
-  { to: "/products", label: "Products", icon: ShoppingBag },
-  { to: "/cart", label: "Cart", icon: ShoppingCart },
-  { to: "/profile", label: "Profile", icon: User },
+  { to: "/home", label: "Home", icon: Home, requiresAuth: false },
+  { to: "/products", label: "Products", icon: ShoppingBag, requiresAuth: false },
+  { to: "/cart", label: "Cart", icon: ShoppingCart, requiresAuth: true },
+  { to: "/profile", label: "Profile", icon: User, requiresAuth: true },
 ];
 
 export default function BottomNav() {
   const location = useLocation();
+  const { profile } = useAuth();
+  const { items } = useCart({ autoCreate: false });
+  const cartCount = items.reduce((sum, i) => sum + i.quantity, 0);
 
-  const cartCount = 2; // TODO wire to state
+  const visibleTabs = tabs.filter(t => !t.requiresAuth || !!profile);
 
   return (
     <nav className="fixed bottom-0 inset-x-0 z-40 md:hidden border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <ul className="grid grid-cols-4">
-        {tabs.map((t) => {
+      <ul className={`grid ${visibleTabs.length === 3 ? 'grid-cols-3' : 'grid-cols-4'}`}>
+        {visibleTabs.map((t) => {
           const active = location.pathname === t.to;
           const Icon = t.icon;
           return (
