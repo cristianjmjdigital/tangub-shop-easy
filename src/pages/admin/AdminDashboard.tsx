@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Users, Store, Package, ShoppingCart, BarChart2, LogOut, Wallet, Plus, Pencil, Trash2 } from "lucide-react";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase, supabaseAdmin } from "@/lib/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
@@ -93,12 +93,14 @@ export default function AdminDashboard() {
       if (error) throw error; return data as ProductRow[];
     }
   });
+  const adminClient = supabaseAdmin || supabase;
+
   const ordersQuery = useQuery({
     queryKey: ['admin','orders'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await adminClient
         .from('orders')
-        .select('id,total,status,created_at,user_id')
+        .select('id,total,total_amount,status,created_at,user_id')
         .order('created_at',{ascending:false})
         .limit(500);
       if (error) throw error; return data as OrderRow[];
@@ -303,8 +305,8 @@ export default function AdminDashboard() {
   }, [usersData]);
 
   // Filter logic (simple text contains across main fields)
-  const normalizedFilter = filter.trim().toLowerCase();
-  const filterMatch = (val: string | null | undefined) => (val||'').toLowerCase().includes(normalizedFilter);
+  const normalizedFilter = String(filter || '').trim().toLowerCase();
+  const filterMatch = (val: unknown) => String(val ?? '').toLowerCase().includes(normalizedFilter);
   const filteredUsers = normalizedFilter ? usersData.filter(u => filterMatch(u.full_name) || filterMatch(u.email) || filterMatch(u.role) || filterMatch(u.barangay)) : usersData;
   const filteredVendors = normalizedFilter ? vendorsData.filter(v => filterMatch(v.store_name) || filterMatch(v.address)) : vendorsData;
   const filteredProducts = normalizedFilter ? productsData.filter(p => filterMatch(p.name) || filterMatch(p.vendor_id)) : productsData;
@@ -669,10 +671,13 @@ function SectionCard({ title, description, children }: { title: string; descript
 
 function SearchBar({ value, onChange, placeholder, suggestions }: { value?: string; onChange?: (v: string) => void; placeholder?: string; suggestions?: { label: string; value: string; type: string }[] }) {
   const [open, setOpen] = useState(false);
-  const normalized = (value || '').toLowerCase();
+  const normalized = String(value ?? '').toLowerCase();
   const filtered = useMemo(() => {
-    if (!suggestions || !normalized) return suggestions || [];
-    return suggestions.filter(s => s.label.toLowerCase().includes(normalized)).slice(0, 8);
+    if (!suggestions) return [];
+    if (!normalized) return suggestions.slice(0, 8);
+    return suggestions
+      .filter(s => String(s.label ?? '').toLowerCase().includes(normalized))
+      .slice(0, 8);
   }, [suggestions, normalized]);
 
   return (
@@ -681,7 +686,7 @@ function SearchBar({ value, onChange, placeholder, suggestions }: { value?: stri
       <Input
         placeholder={placeholder || "Search..."}
         value={value}
-        onChange={(e)=> { onChange?.(e.target.value); setOpen(true); }}
+        onChange={(e)=> { onChange?.(String(e.target.value)); setOpen(true); }}
         onFocus={()=> setOpen(true)}
         onBlur={()=> setTimeout(()=>setOpen(false), 120)}
         className="pl-9"

@@ -65,7 +65,7 @@ const Businesses = () => {
         rating: 0,
         reviews: 0,
         location: v.address || 'Tangub City',
-        image: v.logo_url || '/placeholder-business.jpg',
+        image: v.logo_url || '',
         description: v.description || 'Local business in Tangub City',
         products: productCounts[v.id] || 0,
         followers: 0,
@@ -88,86 +88,106 @@ const Businesses = () => {
   const featuredBusinesses = filteredBusinesses.filter(b => b.featured);
   const allBusinesses = filteredBusinesses;
 
-  const BusinessCard = ({ business }: { business: any }) => (
-    <Card className="overflow-hidden hover:shadow-elegant transition-all duration-300 group">
-      <div className="relative h-40 bg-muted">
-        <img src={business.image} alt={business.name} className="absolute inset-0 h-full w-full object-cover" onError={(e) => { e.currentTarget.style.display='none'; }} />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/10 to-black/40" />
-        <div className="absolute top-4 left-4">
-          {business.isVerified && (
-            <Badge className="bg-primary text-primary-foreground">
-              ✓ Verified
-            </Badge>
-          )}
-        </div>
-        <div className="absolute top-4 right-4">
-          <Badge variant="outline" className="bg-background">
-            {business.subscriptionPlan}
-          </Badge>
-        </div>
-      </div>
+  const BusinessCard = ({ business }: { business: any }) => {
+    const [showFallback, setShowFallback] = useState(!business.image);
+    const initials = (business.name || 'Shop').split(' ').slice(0, 2).map((p: string) => p[0]).join('').toUpperCase();
 
-      <CardHeader className="pb-4">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <CardTitle className="text-xl mb-2">{business.name}</CardTitle>
-            <p className="text-muted-foreground text-sm mb-3">{business.description}</p>
-            
-            <div className="flex items-center mb-2">
-              <div className="flex items-center">
-                <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                <span className="ml-1 font-medium">{business.rating}</span>
-                <span className="text-muted-foreground ml-1">({business.reviews})</span>
+    return (
+      <Card className="overflow-hidden hover:shadow-elegant transition-all duration-300 group">
+        <div className="relative h-40 bg-muted">
+          {!showFallback && (
+            <img
+              src={business.image}
+              alt={business.name}
+              className="absolute inset-0 h-full w-full object-cover"
+              onError={() => setShowFallback(true)}
+            />
+          )}
+          {showFallback && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
+              <div className="h-14 w-14 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-xl font-semibold tracking-tight">
+                {initials}
+              </div>
+              <span className="mt-3 text-xs uppercase tracking-[0.15em] text-white/70">Awaiting Brand</span>
+            </div>
+          )}
+          {!showFallback && <div className="absolute inset-0 bg-gradient-to-b from-black/15 to-black/45" />}
+          <div className="absolute top-4 left-4">
+            {business.isVerified && (
+              <Badge className="bg-primary text-primary-foreground">
+                ✓ Verified
+              </Badge>
+            )}
+          </div>
+          <div className="absolute top-4 right-4">
+            <Badge variant="outline" className="bg-background">
+              {business.subscriptionPlan}
+            </Badge>
+          </div>
+        </div>
+
+        <CardHeader className="pb-4">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <CardTitle className="text-xl mb-2">{business.name}</CardTitle>
+              <p className="text-muted-foreground text-sm mb-3">{business.description}</p>
+              
+              <div className="flex items-center mb-2">
+                <div className="flex items-center">
+                  <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                  <span className="ml-1 font-medium">{business.rating}</span>
+                  <span className="text-muted-foreground ml-1">({business.reviews})</span>
+                </div>
+              </div>
+
+              <div className="flex items-center text-sm text-muted-foreground mb-2">
+                <MapPin className="h-4 w-4 mr-2" />
+                {business.location}, Tangub City
+              </div>
+
+              <div className="flex items-center text-sm text-muted-foreground">
+                <Clock className="h-4 w-4 mr-2" />
+                {business.openTime}
               </div>
             </div>
+          </div>
+        </CardHeader>
 
-            <div className="flex items-center text-sm text-muted-foreground mb-2">
-              <MapPin className="h-4 w-4 mr-2" />
-              {business.location}, Tangub City
+        <CardContent className="pt-0">
+          <div className="grid grid-cols-3 gap-4 mb-4">
+            <div className="text-center">
+              <Package className="h-5 w-5 mx-auto mb-1 text-primary" />
+              <p className="text-sm font-medium">{business.products}</p>
+              <p className="text-xs text-muted-foreground">Products</p>
             </div>
-
-            <div className="flex items-center text-sm text-muted-foreground">
-              <Clock className="h-4 w-4 mr-2" />
-              {business.openTime}
+            <div className="text-center">
+              <Users className="h-5 w-5 mx-auto mb-1 text-primary" />
+              <p className="text-sm font-medium">{business.followers.toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground">Followers</p>
+            </div>
+            <div className="text-center">
+              <TrendingUp className="h-5 w-5 mx-auto mb-1 text-primary" />
+              <p className="text-sm font-medium">{business.category}</p>
+              <p className="text-xs text-muted-foreground">Category</p>
             </div>
           </div>
-        </div>
-      </CardHeader>
 
-      <CardContent className="pt-0">
-        <div className="grid grid-cols-3 gap-4 mb-4">
-          <div className="text-center">
-            <Package className="h-5 w-5 mx-auto mb-1 text-primary" />
-            <p className="text-sm font-medium">{business.products}</p>
-            <p className="text-xs text-muted-foreground">Products</p>
+          <div className="flex gap-2">
+            <Button className="flex-1" asChild>
+              <Link to={`/business/${business.id}`}>
+                <Store className="h-4 w-4 mr-2" />
+                Visit Store
+              </Link>
+            </Button>
+            <Button variant="outline" className="flex-1">
+              <Phone className="h-4 w-4 mr-2" />
+              Contact
+            </Button>
           </div>
-          <div className="text-center">
-            <Users className="h-5 w-5 mx-auto mb-1 text-primary" />
-            <p className="text-sm font-medium">{business.followers.toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground">Followers</p>
-          </div>
-          <div className="text-center">
-            <TrendingUp className="h-5 w-5 mx-auto mb-1 text-primary" />
-            <p className="text-sm font-medium">{business.category}</p>
-            <p className="text-xs text-muted-foreground">Category</p>
-          </div>
-        </div>
-
-        <div className="flex gap-2">
-          <Button className="flex-1" asChild>
-            <Link to={`/business/${business.id}`}>
-              <Store className="h-4 w-4 mr-2" />
-              Visit Store
-            </Link>
-          </Button>
-          <Button variant="outline" className="flex-1">
-            <Phone className="h-4 w-4 mr-2" />
-            Contact
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
+        </CardContent>
+      </Card>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gradient-subtle">

@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import Navbar from "./components/layout/Navbar";
 import BottomNav from "./components/layout/BottomNav";
 import SplashScreen from "./components/layout/SplashScreen";
@@ -27,6 +27,7 @@ import OrderConfirmation from "./pages/OrderConfirmation";
 import NotFound from "./pages/NotFound";
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import { useAuth } from "./context/AuthContext";
 
 const queryClient = new QueryClient();
 
@@ -57,11 +58,11 @@ function AppShell() {
       {!isAdmin && <Navbar />}
       <main>
         <Routes>
-                  <Route path="/" element={<Access />} />
+                  <Route path="/" element={<LoggedOutRoute><Access /></LoggedOutRoute>} />
                   <Route path="/home" element={<Index />} />
-                  <Route path="/login/user" element={<UserLogin />} />
-                  <Route path="/signup/user" element={<UserSignup />} />
-                  <Route path="/login/vendor" element={<VendorLogin />} />
+                  <Route path="/login/user" element={<LoggedOutRoute><UserLogin /></LoggedOutRoute>} />
+                  <Route path="/signup/user" element={<LoggedOutRoute><UserSignup /></LoggedOutRoute>} />
+                  <Route path="/login/vendor" element={<LoggedOutRoute><VendorLogin /></LoggedOutRoute>} />
                   <Route path="/vendor" element={<ProtectedRoute requireRole="vendor"><VendorDashboard /></ProtectedRoute>} />
                   <Route path="/vendor/setup" element={<ProtectedRoute><VendorSetup /></ProtectedRoute>} />
                   {/* Admin */}
@@ -69,6 +70,7 @@ function AppShell() {
                   <Route path="/admin" element={<AdminDashboard />} />
                   <Route path="/products" element={<Products />} />
                   <Route path="/businesses" element={<Businesses />} />
+                  <Route path="/vendors" element={<Businesses />} />
                   <Route path="/business/:id" element={<BusinessDetail />} />
                   <Route path="/messages" element={<Messages />} />
                   <Route path="/cart" element={<Cart />} />
@@ -83,6 +85,13 @@ function AppShell() {
       {!isAdmin && <BottomNav />}
     </div>
   );
+}
+
+function LoggedOutRoute({ children }: { children: JSX.Element }) {
+  const { session, loading } = useAuth();
+  if (loading) return null;
+  if (session) return <Navigate to="/home" replace />;
+  return children;
 }
 
 export default App;

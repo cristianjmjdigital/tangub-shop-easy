@@ -184,7 +184,7 @@ const Messages = () => {
     return () => { supabase.removeChannel(chan); };
   }, [profile?.id]);
 
-  const conversations: ConversationSummary[] = useMemo(() => {
+  const baseConversations: ConversationSummary[] = useMemo(() => {
     const userId = profile?.id;
     if (!userId) return [];
     const groups = new Map<string, ConversationSummary>();
@@ -230,6 +230,30 @@ const Messages = () => {
       return bt - at;
     });
   }, [rawMessages, vendors, profile?.id]);
+
+  // Synthetic conversation when user opens a vendor with no history yet
+  const syntheticConversation: ConversationSummary | null = useMemo(() => {
+    if (!selectedChat) return null;
+    const vendor = vendors[selectedChat] || vendorOptions.find(v => String(v.id) === selectedChat);
+    if (!vendor) return null;
+    return {
+      id: String(vendor.id),
+      type: 'vendor',
+      vendor,
+      otherUserId: undefined,
+      participantUserId: undefined,
+      lastMessage: undefined,
+      unreadCount: 0,
+      messages: []
+    };
+  }, [selectedChat, vendors, vendorOptions]);
+
+  const conversations: ConversationSummary[] = useMemo(() => {
+    if (syntheticConversation && !baseConversations.find(c => c.id === syntheticConversation.id)) {
+      return [...baseConversations, syntheticConversation];
+    }
+    return baseConversations;
+  }, [baseConversations, syntheticConversation]);
 
   // Fetch participant (customer) names for vendor-side conversations
   useEffect(() => {
@@ -332,7 +356,13 @@ const Messages = () => {
       setNewMessage("");
       const { data, error: insErr } = await supabase
         .from('messages')
-        .insert({ vendor_id: optimisticMsg.vendor_id, sender_user_id: profile.id, receiver_user_id: receiver, content: trimmed })
+        .insert({
+          vendor_id: optimisticMsg.vendor_id,
+          sender_user_id: profile.id,
+          receiver_user_id: receiver,
+          recipient_user_id: receiver, // legacy column in current table schema
+          content: trimmed
+        })
         .select()
         .single();
       if (insErr) throw insErr;
@@ -430,25 +460,25 @@ const Messages = () => {
                   </div>
                   {showNewConv && (
                     <div className="flex gap-2 items-center">
-                      <Select value={newVendorId} onValueChange={(val)=>setNewVendorId(val)}>
+                      <Select value={newVendorId} onValueChange={(val)=>setNewVendorId(val ?? '')}>
                         <SelectTrigger className="h-9 text-xs w-full">
                           <SelectValue placeholder="Select a vendor" />
                         </SelectTrigger>
                         <SelectContent className="max-h-64">
                           {vendorOptions.map(v => (
-                            <SelectItem key={v.id} value={v.id}>{v.store_name}</SelectItem>
+                            <SelectItem key={v.id} value={String(v.id)}>{v.store_name}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                      <Button size="sm" type="button" className="h-9" disabled={!newVendorId.trim()} onClick={async ()=>{
-                        const id = newVendorId.trim();
+                      <Button size="sm" type="button" className="h-9" disabled={!String(newVendorId || '').trim()} onClick={async ()=>{
+                        const id = String(newVendorId || '').trim();
                         if (!id) return;
                         if (!vendors[id]) {
-                          const found = vendorOptions.find(v => v.id === id);
-                          if (found) setVendors(prev => ({ ...prev, [found.id]: found }));
+                          const found = vendorOptions.find(v => String(v.id) === id);
+                          if (found) setVendors(prev => ({ ...prev, [String(found.id)]: found }));
                           else {
                             const { data: vRow } = await supabase.from('vendors').select('id,store_name,address,owner_user_id').eq('id', id).maybeSingle();
-                            if (vRow) setVendors(prev => ({ ...prev, [vRow.id]: vRow as VendorRow }));
+                            if (vRow) setVendors(prev => ({ ...prev, [String(vRow.id)]: vRow as VendorRow }));
                           }
                         }
                         setSelectedChat(id);
