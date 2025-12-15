@@ -49,6 +49,74 @@ interface UIProduct {
 const Products = () => {
   const { toast } = useToast();
   const { addItem } = useCart();
+  const DEFAULT_CATEGORIES = [
+    "Electronics",
+    "Fashion",
+    "Food & Drinks",
+    "Home & Living",
+    "Gifts & Crafts",
+    "Health & Beauty",
+    "Sports",
+    "Books",
+    "Automotive",
+  ];
+  const DEFAULT_BARANGAYS = [
+    "Aquino",
+    "Barangay I - City Hall",
+    "Barangay II - Marilou Annex",
+    "Barangay III- Market Kalubian",
+    "Barangay IV - St. Michael",
+    "Barangay V - Malubog",
+    "Barangay VI - Lower Polao",
+    "Barangay VII - Upper Polao",
+    "Balatacan",
+    "Baluc",
+    "Banglay",
+    "Bintana",
+    "Bocator",
+    "Bongabong",
+    "Caniangan",
+    "Capalaran",
+    "Catagan",
+    "Hoyohoy",
+    "Isidro D. Tan (Dimalooc)",
+    "Garang",
+    "Guinabot",
+    "Guinalaban",
+    "Kausawagan",
+    "Kimat",
+    "Labuyo",
+    "Lorenzo Tan",
+    "Lumban",
+    "Maloro",
+    "Manga",
+    "Mantic",
+    "Maquilao",
+    "Matugnao",
+    "Migcanaway",
+    "Minsubong",
+    "Owayan",
+    "Paiton",
+    "Panalsalan",
+    "Pangabuan",
+    "Prenza",
+    "Salimpuno",
+    "San Antonio",
+    "San Apolinario",
+    "San Vicente",
+    "Santa Cruz",
+    "Santa Maria (Baga)",
+    "Santo Niño",
+    "Sicot",
+    "Silanga",
+    "Silangit",
+    "Simasay",
+    "Sumirap",
+    "Taguite",
+    "Tituron",
+    "Tugas",
+    "Villaba",
+  ];
   const [searchParams, setSearchParams] = useSearchParams();
   // store as generic number[] to satisfy Slider's (number[]) signature, but enforce length 2 logically
   const [priceRange, setPriceRange] = useState<number[]>([0, 10000]);
@@ -61,30 +129,34 @@ const Products = () => {
   const [error, setError] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState("featured");
 
-  // Fetch products + vendors (two queries to avoid depending on relationship naming)
+  // Fetch products + vendors (vendors all so barangay list is complete even without products)
   useEffect(() => {
     const load = async () => {
       setLoading(true); setError(null);
-      const { data: pData, error: pErr } = await supabase
-        .from('products')
-        .select('id,name,price,stock,vendor_id,main_image_url,image_url,description,created_at,category')
-        .limit(200);
-      if (pErr) { setError(pErr.message); setLoading(false); return; }
-      setRawProducts(pData as RawProductRow[]);
-      // Collect vendor_ids
-      const vendorIds = Array.from(new Set((pData || []).map(r => r.vendor_id).filter(Boolean))) as string[];
-      if (vendorIds.length) {
-        const { data: vRows, error: vErr } = await supabase
-          .from('vendors')
-          .select('id,store_name,address,barangay')
-          .in('id', vendorIds);
-        if (!vErr && vRows) {
+      try {
+        const [{ data: pData, error: pErr }, { data: vRows, error: vErr }] = await Promise.all([
+          supabase
+            .from('products')
+            .select('id,name,price,stock,vendor_id,main_image_url,image_url,description,created_at,category')
+            .limit(200),
+          supabase
+            .from('vendors')
+            .select('id,store_name,address,barangay')
+            .limit(500)
+        ]);
+        if (pErr) throw pErr;
+        if (vErr) throw vErr;
+        setRawProducts((pData || []) as RawProductRow[]);
+        if (vRows) {
           const map: Record<string, VendorRow> = {};
           vRows.forEach(v => { map[v.id] = v as VendorRow; });
           setVendors(map);
         }
+      } catch (err: any) {
+        setError(err.message || 'Failed to load products');
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     load();
   }, []);
@@ -117,16 +189,21 @@ const Products = () => {
   }, [rawProducts, vendors]);
 
   const categories = useMemo(() => {
-    const set = new Set<string>();
+    const set = new Set<string>(DEFAULT_CATEGORIES);
     uiProducts.forEach(p => set.add(p.category));
     return Array.from(set).sort();
   }, [uiProducts]);
 
   const locations = useMemo(() => {
-    const set = new Set<string>();
+    const set = new Set<string>(DEFAULT_BARANGAYS);
+    // Add barangays from all vendors even if they currently have no products loaded
+    Object.values(vendors).forEach(v => {
+      if (v.barangay) set.add(v.barangay);
+      if (v.address) set.add(v.address);
+    });
     uiProducts.forEach(p => set.add(p.location));
     return Array.from(set).sort();
-  }, [uiProducts]);
+  }, [uiProducts, vendors]);
 
   useEffect(() => {
     const q = searchParams.get('q') || '';

@@ -39,6 +39,7 @@ const ProductCard = ({
 }: ProductCardProps) => {
   const src = imageUrl || image || "/placeholder.svg";
   const storeHref = storePath || (vendorId ? `/business/${vendorId}` : undefined);
+  const reviewsHref = vendorId ? `/business/${vendorId}/reviews` : (storeHref ? `${storeHref}/reviews` : '/ratings');
   return (
     <Card className="overflow-hidden hover:shadow-elegant transition-all duration-300 group">
       {storeHref ? (
@@ -110,8 +111,10 @@ const ProductCard = ({
           )}
         </CardDescription>
         <div className="flex items-center mb-3">
-          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-          <span className="ml-1 text-sm font-medium">{rating}</span>
+          <Link to={reviewsHref} className="inline-flex items-center text-foreground hover:text-primary transition-colors">
+            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+            <span className="ml-1 text-sm font-medium underline-offset-4 hover:underline">{rating}</span>
+          </Link>
         </div>
         <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
           {description || 'This product is available from this vendor. Tap to view the full store.'}

@@ -33,7 +33,7 @@ import { useAuth } from "@/context/AuthContext";
 
 const Profile = () => {
   const { toast } = useToast();
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [userInfo, setUserInfo] = useState({
@@ -42,6 +42,7 @@ const Profile = () => {
     phone: profile?.phone || "", 
     address: profile?.barangay ? `${profile.barangay}, Tangub City` : "Tangub City"
   });
+  const [savingProfile, setSavingProfile] = useState(false);
 
   interface RecentOrderDisplay {
     id: string;
@@ -76,7 +77,7 @@ const Profile = () => {
     setOrdersLoading(true); setOrdersError(null);
     const { data, error } = await supabase
       .from('orders')
-      .select(`id,total,status,created_at,vendor:vendors(store_name),order_items:order_items(quantity,unit_price,product:products(name))`)
+      .select(`id,total,status,created_at,vendor:vendors(store_name),order_items:order_items(quantity,unit_price,product:products(name)),order_ratings:order_ratings!left(rating,order_id)`)
       .eq(userColumn, profile.id)
       .order('created_at', { ascending: false })
       .limit(5);
@@ -86,6 +87,7 @@ const Profile = () => {
         .map((it: any) => `${it.product?.name || 'Item'} (x${it.quantity})`)
         .join(', ');
       statusMapRef.current[o.id] = o.status;
+      const ratingRow = Array.isArray(o.order_ratings) ? o.order_ratings[0] : null;
       return {
         id: o.id,
         business: o.vendor?.store_name || 'Unknown Store',
@@ -93,7 +95,7 @@ const Profile = () => {
         total: Number(o.total) || 0,
         status: o.status,
         date: new Date(o.created_at).toLocaleString(),
-        rating: null
+        rating: ratingRow?.rating ?? null
       };
     });
     setRecentOrders(display);
@@ -192,12 +194,45 @@ const Profile = () => {
     }
   ];
 
-  const handleSaveProfile = () => {
-    setIsEditing(false);
-    toast({
-      title: "Profile Updated",
-      description: "Your profile has been successfully updated.",
+  useEffect(() => {
+    setUserInfo({
+      name: profile?.full_name || "",
+      email: profile?.email || "",
+      phone: profile?.phone || "",
+      address: profile?.barangay ? `${profile.barangay}, Tangub City` : "Tangub City"
     });
+  }, [profile?.full_name, profile?.email, profile?.phone, profile?.barangay]);
+
+  const handleSaveProfile = async () => {
+    if (!profile?.id) return;
+    setSavingProfile(true);
+    try {
+      const payload = {
+        full_name: userInfo.name.trim(),
+        email: userInfo.email.trim(),
+        phone: userInfo.phone.trim(),
+        barangay: userInfo.address.replace(/,\s*Tangub City$/i, '').trim() || null,
+      };
+      const { error } = await supabase
+        .from('users')
+        .update(payload)
+        .eq('id', profile.id);
+      if (error) throw error;
+      await refreshProfile();
+      setIsEditing(false);
+      toast({
+        title: "Profile updated",
+        description: "Your profile changes have been saved.",
+      });
+    } catch (e: any) {
+      toast({
+        title: "Update failed",
+        description: e.message || 'Could not save profile.',
+        variant: 'destructive'
+      });
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -282,19 +317,19 @@ const Profile = () => {
                 </div>
 
                 <div className="flex space-x-2">
-                  <Button variant="outline" onClick={() => setIsEditing(!isEditing)}>
-                    <Edit className="h-4 w-4 mr-2" />
-                    Edit Profile
+                  <Button variant="outline" onClick={() => setIsEditing(!isEditing)} aria-label="Edit Profile">
+                  <Edit className="h-4 w-4 mr-2" />
+                  <span className="hidden md:inline">Edit Profile</span>
                   </Button>
-                  <Button asChild>
-                    <Link to="/messages">
-                      <MessageSquare className="h-4 w-4 mr-2" />
-                      Message
-                    </Link>
+                  <Button asChild aria-label="Messages">
+                  <Link to="/messages">
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    <span className="hidden md:inline">Message</span>
+                  </Link>
                   </Button>
-                  <Button variant="outline">
-                    <Settings className="h-4 w-4 mr-2" />
-                    Settings
+                  <Button variant="outline" aria-label="Settings">
+                  <Settings className="h-4 w-4 mr-2" />
+                  <span className="hidden md:inline">Settings</span>
                   </Button>
                 </div>
               </div>
@@ -369,8 +404,10 @@ const Profile = () => {
                               </div>
                             ) : (
                               <div className="flex flex-col gap-2 mt-1">
-                                <Button variant="outline" size="sm">
-                                  Rate Order
+                                <Button variant="outline" size="sm" asChild>
+                                  <Link to={`/ratings?orderId=${order.id}`}>
+                                    Rate Order
+                                  </Link>
                                 </Button>
                                 <Button variant="secondary" size="sm" onClick={() => openMessageDialog(order.id)} className="flex items-center gap-1">
                                   <MessageSquare className="h-3.5 w-3.5" /> Message
@@ -477,8 +514,10 @@ const Profile = () => {
                         />
                       </div>
                       <div className="flex space-x-2">
-                        <Button onClick={handleSaveProfile}>Save Changes</Button>
-                        <Button variant="outline" onClick={() => setIsEditing(false)}>Cancel</Button>
+                        <Button onClick={handleSaveProfile} disabled={savingProfile}>
+                          {savingProfile ? 'Saving...' : 'Save Changes'}
+                        </Button>
+                        <Button variant="outline" onClick={() => setIsEditing(false)} disabled={savingProfile}>Cancel</Button>
                       </div>
                     </>
                   ) : (

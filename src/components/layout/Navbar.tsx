@@ -24,6 +24,7 @@ const Navbar = () => {
   const { items } = useCart({ autoCreate: false });
   const cartCount = items.reduce((sum, i) => sum + i.quantity, 0);
   const [messageCount, setMessageCount] = useState(0);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [suggestions, setSuggestions] = useState<{ id: string; label: string; href: string; type: 'product' | 'vendor' }[]>([]);
   const [searching, setSearching] = useState(false);
@@ -223,7 +224,7 @@ const Navbar = () => {
             )}
 
             {/* Mobile Menu */}
-            <Sheet>
+            <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
               <SheetTrigger asChild className="md:hidden">
                 <Button variant="secondary" size="sm">
                   <Menu className="h-4 w-4" />
@@ -235,6 +236,7 @@ const Navbar = () => {
                     <Link
                       key={item.path}
                       to={item.path}
+                      onClick={() => setDrawerOpen(false)}
                       className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
                         isActive(item.path)
                           ? "bg-primary text-primary-foreground"
@@ -253,10 +255,10 @@ const Navbar = () => {
                   <div className="flex items-center justify-between pt-2">
                     {!loading && !loggedIn && (
                       <div className="w-full flex flex-col gap-2">
-                        <Link to="/login/user" className="w-full">
+                        <Link to="/login/user" className="w-full" onClick={() => setDrawerOpen(false)}>
                           <Button variant="secondary" className="w-full">User Login</Button>
                         </Link>
-                        <Link to="/login/vendor" className="w-full">
+                        <Link to="/login/vendor" className="w-full" onClick={() => setDrawerOpen(false)}>
                           <Button variant="outline" className="w-full">Vendor Login</Button>
                         </Link>
                       </div>
@@ -265,13 +267,19 @@ const Navbar = () => {
                       <div className="w-full flex flex-col gap-2">
                         {profile?.role === 'vendor' && (
                           <div className="w-full flex flex-col gap-1">
-                            <Link to="/vendor" className="w-full">
+                            <Link to="/vendor" className="w-full" onClick={() => setDrawerOpen(false)}>
                               <Button variant="secondary" className="w-full">Vendor Panel</Button>
                             </Link>
                             <Badge variant="outline" className="self-start">Vendor</Badge>
                           </div>
                         )}
-                        <Button variant="destructive" className="w-full" onClick={signOut}>Logout</Button>
+                        <Button
+                          variant="destructive"
+                          className="w-full"
+                          onClick={() => { setDrawerOpen(false); signOut(); }}
+                        >
+                          Logout
+                        </Button>
                       </div>
                     )}
                   </div>

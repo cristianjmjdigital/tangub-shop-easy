@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/context/AuthContext';
+import { Link } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -123,7 +124,12 @@ export default function Orders() {
       <div className='container mx-auto px-4 py-6'>
         <div className='flex items-center justify-between mb-6'>
           <h1 className='text-2xl font-bold flex items-center gap-2'><ShoppingBag className='h-6 w-6' /> My Orders</h1>
-          <Button variant='outline' size='sm' onClick={load} disabled={loading}><RefreshCw className='h-4 w-4 mr-1 animate-spin' style={{ animationPlayState: loading ? 'running':'paused' }} /> Refresh</Button>
+          <div className='flex items-center gap-2'>
+            <Button variant='outline' size='sm' asChild>
+              <Link to='/ratings'>Ratings & Reviews</Link>
+            </Button>
+            <Button variant='outline' size='sm' onClick={load} disabled={loading}><RefreshCw className='h-4 w-4 mr-1 animate-spin' style={{ animationPlayState: loading ? 'running':'paused' }} /> Refresh</Button>
+          </div>
         </div>
         {error && <div className='p-3 border border-destructive/40 rounded text-destructive bg-destructive/5 text-sm mb-4'>{error}</div>}
         {loading && <div className='text-sm text-muted-foreground py-8'>Loading orders...</div>}

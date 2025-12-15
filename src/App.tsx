@@ -27,6 +27,8 @@ import OrderConfirmation from "./pages/OrderConfirmation";
 import NotFound from "./pages/NotFound";
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import Ratings from "./pages/Ratings";
+import VendorReviews from "./pages/VendorReviews";
 import { useAuth } from "./context/AuthContext";
 
 const queryClient = new QueryClient();
@@ -72,10 +74,12 @@ function AppShell() {
                   <Route path="/businesses" element={<Businesses />} />
                   <Route path="/vendors" element={<Businesses />} />
                   <Route path="/business/:id" element={<BusinessDetail />} />
+                  <Route path="/business/:id/reviews" element={<VendorReviews />} />
                   <Route path="/messages" element={<Messages />} />
                   <Route path="/cart" element={<Cart />} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/profile/edit" element={<ProfileEdit />} />
+                  <Route path="/ratings" element={<ProtectedRoute><Ratings /></ProtectedRoute>} />
                   <Route path="/orders" element={<Orders />} />
                   <Route path="/order/confirmation" element={<OrderConfirmation />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
