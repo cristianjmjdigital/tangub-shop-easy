@@ -12,6 +12,7 @@ CREATE TABLE public.users (
   email text,
   full_name text,
   role text CHECK (role IN ('user','vendor','admin')) DEFAULT 'user',
+  vendor_status text CHECK (vendor_status IN ('pending','approved','rejected')) DEFAULT 'approved',
   phone text,
   city text DEFAULT 'Tangub City',
   barangay text,

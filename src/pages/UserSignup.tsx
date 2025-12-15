@@ -209,6 +209,7 @@ export default function UserSignup() {
 
       // Direct upsert of profile (idempotent) — avoids trigger timing/RLS race.
       const desiredRole = form.role === 'vendor' ? 'vendor' : 'user';
+      const vendorStatus = desiredRole === 'vendor' ? 'pending' : 'approved';
       let upsertSuccess = false;
       let lastUpsertErr: any = null;
       for (let attempt = 0; attempt < 3; attempt++) {
@@ -217,6 +218,7 @@ export default function UserSignup() {
           email: authUser.email,
           full_name: fullName,
           role: desiredRole,
+          vendor_status: vendorStatus,
           city: form.city || 'Tangub City'
         };
         // Only include barangay/phone if user entered (avoid errors if columns missing)
@@ -249,12 +251,22 @@ export default function UserSignup() {
       // Verify persistence (best-effort)
       const { data: verifyRow } = await supabase
         .from('users')
-        .select('id, role, barangay, phone')
+        .select('id, role, vendor_status, barangay, phone')
         .eq('auth_user_id', authUser.id)
         .maybeSingle();
       if (!verifyRow) console.warn('[signup] verify row missing after upsert');
 
       await refreshProfile();
+
+      // Vendors require admin approval before they can access the dashboard
+      if (desiredRole === 'vendor' && vendorStatus === 'pending') {
+        toast({ title: 'Awaiting admin approval', description: 'Thanks for signing up. An admin must approve your vendor account before you can log in.' });
+        await supabase.auth.signOut();
+        setSubmitting(false);
+        setTimeout(() => navigate('/login/vendor'), 1200);
+        return;
+      }
+
       const targetPath = desiredRole === 'vendor' ? '/vendor' : '/home';
       const targetLabel = desiredRole === 'vendor' ? 'vendor dashboard' : 'home';
       toast({ title: 'Account created', description: `Redirecting to ${targetLabel}...`, duration: 2500 });

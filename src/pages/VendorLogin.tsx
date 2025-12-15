@@ -5,10 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/components/ui/use-toast";
 
 export default function VendorLogin() {
   const navigate = useNavigate();
   const { refreshProfile } = useAuth();
+  const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -25,13 +27,24 @@ export default function VendorLogin() {
       // After refresh, check role from profile table
       const { data: profileRow } = await supabase
         .from('users')
-        .select('id, role, auth_user_id')
+        .select('id, role, auth_user_id, vendor_status')
         .eq('auth_user_id', data.user?.id)
         .maybeSingle();
       const role = profileRow?.role;
       if (role !== 'vendor') {
         setError('This account is not a vendor. Use the user login or set up a vendor profile.');
         // Sign out to avoid lingering session as wrong role
+        await supabase.auth.signOut();
+        setLoading(false);
+        return;
+      }
+      const vendorStatus = profileRow?.vendor_status || 'pending';
+      if (vendorStatus !== 'approved') {
+        const msg = vendorStatus === 'rejected'
+          ? 'Your vendor account was rejected. Contact support for details.'
+          : 'Your vendor account is pending admin approval.';
+        setError(msg);
+        toast({ title: vendorStatus === 'rejected' ? 'Vendor access blocked' : 'Vendor pending approval', description: msg, variant: vendorStatus === 'rejected' ? 'destructive' : 'default' });
         await supabase.auth.signOut();
         setLoading(false);
         return;

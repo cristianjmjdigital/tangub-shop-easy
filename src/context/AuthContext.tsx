@@ -7,6 +7,7 @@ interface Profile {
   full_name: string;
   email: string;
   role: string;
+  vendor_status?: string | null;
   barangay: string | null;
   phone: string | null;
 }

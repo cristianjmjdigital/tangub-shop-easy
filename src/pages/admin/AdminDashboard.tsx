@@ -56,7 +56,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-interface UserRow { id: string; full_name: string; email: string; role: string; barangay: string | null }
+interface UserRow { id: string; full_name: string; email: string; role: string; vendor_status?: string | null; barangay: string | null }
 interface VendorRow { id: string; store_name: string; address: string | null }
 interface ProductRow { id: string; name: string; price: number; vendor_id: string }
 interface OrderRow { id: string | number; total: number; status: string | null; created_at?: string; user_id?: string | number | null }
@@ -73,11 +73,12 @@ export default function AdminDashboard() {
   }, [navigate]);
 
   const adminClient = supabaseAdmin || supabase;
+  const adminClientNote = !supabaseAdmin ? 'Service role key missing; admin actions rely on anon key and may be blocked by RLS.' : null;
 
   const usersQuery = useQuery({
     queryKey: ['admin','users'],
     queryFn: async () => {
-      const { data, error } = await adminClient.from('users').select('id,full_name,email,role,barangay').limit(500);
+      const { data, error } = await adminClient.from('users').select('id,full_name,email,role,vendor_status,barangay').limit(500);
       if (error) throw error; return data as UserRow[];
     }
   });
@@ -111,21 +112,24 @@ export default function AdminDashboard() {
   // Mutations: USERS
   const createUser = useMutation({
     mutationFn: async (payload: Partial<UserRow> & { email: string }) => {
-      const { data, error } = await supabase.from('users').insert(payload).select('*').single();
+      const client = adminClient ?? supabase;
+      const { data, error } = await client.from('users').insert(payload).select('*').single();
       if (error) throw error; return data as UserRow;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin','users'] }),
   });
   const updateUser = useMutation({
     mutationFn: async ({ id, ...changes }: Partial<UserRow> & { id: string }) => {
-      const { data, error } = await supabase.from('users').update(changes).eq('id', id).select('*').single();
+      const client = adminClient ?? supabase;
+      const { data, error } = await client.from('users').update(changes).eq('id', id).select('*').single();
       if (error) throw error; return data as UserRow;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin','users'] }),
   });
   const deleteUser = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('users').delete().eq('id', id);
+      const client = adminClient ?? supabase;
+      const { error } = await client.from('users').delete().eq('id', id);
       if (error) throw error; return id;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin','users'] }),
@@ -134,21 +138,24 @@ export default function AdminDashboard() {
   // Mutations: VENDORS
   const createVendor = useMutation({
     mutationFn: async (payload: Partial<VendorRow>) => {
-      const { data, error } = await supabase.from('vendors').insert(payload).select('*').single();
+      const client = adminClient ?? supabase;
+      const { data, error } = await client.from('vendors').insert(payload).select('*').single();
       if (error) throw error; return data as VendorRow;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin','vendors'] }),
   });
   const updateVendor = useMutation({
     mutationFn: async ({ id, ...changes }: Partial<VendorRow> & { id: string }) => {
-      const { data, error } = await supabase.from('vendors').update(changes).eq('id', id).select('*').single();
+      const client = adminClient ?? supabase;
+      const { data, error } = await client.from('vendors').update(changes).eq('id', id).select('*').single();
       if (error) throw error; return data as VendorRow;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin','vendors'] }),
   });
   const deleteVendor = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('vendors').delete().eq('id', id);
+      const client = adminClient ?? supabase;
+      const { error } = await client.from('vendors').delete().eq('id', id);
       if (error) throw error; return id;
     },
     onSuccess: () => {
@@ -160,21 +167,24 @@ export default function AdminDashboard() {
   // Mutations: PRODUCTS
   const createProduct = useMutation({
     mutationFn: async (payload: Partial<ProductRow> & { name: string; price: number; vendor_id: string }) => {
-      const { data, error } = await supabase.from('products').insert(payload).select('*').single();
+      const client = adminClient ?? supabase;
+      const { data, error } = await client.from('products').insert(payload).select('*').single();
       if (error) throw error; return data as ProductRow;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin','products'] }),
   });
   const updateProduct = useMutation({
     mutationFn: async ({ id, ...changes }: Partial<ProductRow> & { id: string }) => {
-      const { data, error } = await supabase.from('products').update(changes).eq('id', id).select('*').single();
+      const client = adminClient ?? supabase;
+      const { data, error } = await client.from('products').update(changes).eq('id', id).select('*').single();
       if (error) throw error; return data as ProductRow;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin','products'] }),
   });
   const deleteProduct = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('products').delete().eq('id', id);
+      const client = adminClient ?? supabase;
+      const { error } = await client.from('products').delete().eq('id', id);
       if (error) throw error; return id;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin','products'] }),
@@ -308,7 +318,7 @@ export default function AdminDashboard() {
   // Filter logic (simple text contains across main fields)
   const normalizedFilter = String(filter || '').trim().toLowerCase();
   const filterMatch = (val: unknown) => String(val ?? '').toLowerCase().includes(normalizedFilter);
-  const filteredUsers = normalizedFilter ? usersData.filter(u => filterMatch(u.full_name) || filterMatch(u.email) || filterMatch(u.role) || filterMatch(u.barangay)) : usersData;
+  const filteredUsers = normalizedFilter ? usersData.filter(u => filterMatch(u.full_name) || filterMatch(u.email) || filterMatch(u.role) || filterMatch(u.vendor_status) || filterMatch(u.barangay)) : usersData;
   const filteredVendors = normalizedFilter ? vendorsData.filter(v => filterMatch(v.store_name) || filterMatch(v.address)) : vendorsData;
   const filteredProducts = normalizedFilter ? productsData.filter(p => filterMatch(p.name) || filterMatch(p.vendor_id)) : productsData;
   const filteredOrders = normalizedFilter ? ordersData.filter(o => filterMatch(o.id) || filterMatch(o.status)) : ordersData;
@@ -382,6 +392,11 @@ export default function AdminDashboard() {
           </div>
         </div>
         <div className="px-4 py-6">
+          {adminClientNote && (
+            <div className="p-3 mb-4 border border-amber-300 bg-amber-50 text-amber-800 text-xs rounded">
+              {adminClientNote}
+            </div>
+          )}
           {errorMessage && <div className="p-3 mb-4 border border-destructive/40 bg-destructive/5 text-destructive text-xs rounded">{errorMessage}</div>}
           {/* Metrics */}
           <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
@@ -517,17 +532,29 @@ export default function AdminDashboard() {
             <SectionCard title="Users" description="All registered accounts.">
               <div className="flex items-center justify-between gap-3">
                 <SearchBar value={filter} onChange={setFilter} suggestions={searchSuggestions} />
-                <CreateUserButton onCreate={(payload)=>createUser.mutate(payload)} />
               </div>
               <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                 {filteredUsers.map(u => (
                   <Card key={u.id} className="p-4 flex flex-col gap-2">
                     <div className="flex items-center justify-between">
                       <span className="font-medium">{u.full_name || '(no name)'} </span>
-                      <Badge variant={u.role === 'admin' ? 'default' : u.role === 'vendor' ? 'secondary' : 'outline'}>{u.role}</Badge>
+                      <div className="flex gap-1">
+                        <Badge variant={u.role === 'admin' ? 'default' : u.role === 'vendor' ? 'secondary' : 'outline'}>{u.role}</Badge>
+                        {u.role === 'vendor' && (
+                          <Badge variant={u.vendor_status === 'approved' ? 'default' : u.vendor_status === 'rejected' ? 'destructive' : 'outline'}>
+                            {u.vendor_status || 'pending'}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                     <div className="text-xs text-muted-foreground">{u.email}</div>
                     <div className="text-xs">Barangay: <span className="font-medium">{u.barangay || '—'}</span></div>
+                    {u.role === 'vendor' && u.vendor_status !== 'approved' && (
+                      <div className="flex gap-2 mt-1">
+                        <Button size="sm" variant="secondary" className="h-7 px-2" onClick={()=>updateUser.mutate({ id: u.id, vendor_status: 'approved' })}>Approve</Button>
+                        <Button size="sm" variant="outline" className="h-7 px-2" onClick={()=>updateUser.mutate({ id: u.id, vendor_status: 'rejected' })}>Reject</Button>
+                      </div>
+                    )}
                     <div className="flex gap-2 mt-1">
                       <EditUserButton user={u} onSave={(changes)=>updateUser.mutate({ id: u.id, ...changes })} />
                       <DeleteButton label="Delete" onConfirm={()=>deleteUser.mutate(u.id)} />
@@ -541,7 +568,6 @@ export default function AdminDashboard() {
             <SectionCard title="Vendors" description="Registered merchant accounts.">
               <div className="flex items-center justify-between gap-3">
                 <SearchBar value={filter} onChange={setFilter} suggestions={searchSuggestions} />
-                <CreateVendorButton onCreate={(payload)=>createVendor.mutate(payload)} />
               </div>
               <div className="space-y-3">
                 {filteredVendors.map(v => (
@@ -740,7 +766,7 @@ function DeleteButton({ label, onConfirm }: { label?: string; onConfirm: ()=>voi
 
 function CreateUserButton({ onCreate }: { onCreate: (payload: Partial<UserRow> & { email: string })=>void }) {
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<Partial<UserRow> & { email: string }>({ full_name: '', email: '', role: 'user', barangay: '' });
+  const [form, setForm] = useState<Partial<UserRow> & { email: string }>({ full_name: '', email: '', role: 'user', vendor_status: 'approved', barangay: '' });
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -752,6 +778,7 @@ function CreateUserButton({ onCreate }: { onCreate: (payload: Partial<UserRow> &
           <LabeledInput label="Full name" value={form.full_name||''} onChange={v=>setForm({...form, full_name:v})} />
           <LabeledInput label="Email" type="email" value={form.email} onChange={v=>setForm({...form, email:v})} />
           <LabeledInput label="Role" value={form.role||'user'} onChange={v=>setForm({...form, role:v})} placeholder="user | vendor | admin" />
+          <LabeledInput label="Vendor status" value={form.vendor_status||''} onChange={v=>setForm({...form, vendor_status:v})} placeholder="approved | pending | rejected" />
           <LabeledInput label="Barangay" value={form.barangay||''} onChange={v=>setForm({...form, barangay:v})} />
         </div>
         <DialogFooter>
@@ -765,7 +792,7 @@ function CreateUserButton({ onCreate }: { onCreate: (payload: Partial<UserRow> &
 
 function EditUserButton({ user, onSave }: { user: UserRow; onSave: (changes: Partial<UserRow> & { email?: string })=>void }) {
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<Partial<UserRow> & { email: string }>({ full_name: user.full_name, email: user.email, role: user.role, barangay: user.barangay||'' });
+  const [form, setForm] = useState<Partial<UserRow> & { email: string }>({ full_name: user.full_name, email: user.email, role: user.role, vendor_status: user.vendor_status || '', barangay: user.barangay||'' });
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -777,6 +804,7 @@ function EditUserButton({ user, onSave }: { user: UserRow; onSave: (changes: Par
           <LabeledInput label="Full name" value={form.full_name||''} onChange={v=>setForm({...form, full_name:v})} />
           <LabeledInput label="Email" type="email" value={form.email||''} onChange={v=>setForm({...form, email:v})} />
           <LabeledInput label="Role" value={form.role||'user'} onChange={v=>setForm({...form, role:v})} placeholder="user | vendor | admin" />
+          <LabeledInput label="Vendor status" value={form.vendor_status||''} onChange={v=>setForm({...form, vendor_status:v})} placeholder="approved | pending | rejected" />
           <LabeledInput label="Barangay" value={form.barangay||''} onChange={v=>setForm({...form, barangay:v})} />
         </div>
         <DialogFooter>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +21,7 @@ interface ProductRecord { id: string; name: string; price: number; stock: number
 
 export default function VendorDashboard() {
   const { profile, signOut } = useAuth();
+  const navigate = useNavigate();
   const [vendor, setVendor] = useState<VendorRecord | null>(null);
   const [products, setProducts] = useState<ProductRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,6 +55,25 @@ export default function VendorDashboard() {
   const [msgOrderId, setMsgOrderId] = useState<string | null>(null);
   const [msgText, setMsgText] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
+
+  // Block pending/rejected vendors from using dashboard
+  useEffect(() => {
+    if (!profile) return;
+    const isVendor = profile.role === 'vendor';
+    const status = profile.vendor_status || 'pending';
+    if (isVendor && status !== 'approved') {
+      const description = status === 'rejected'
+        ? 'Your vendor account was rejected. Contact support for details.'
+        : 'Your vendor account is pending approval. Please wait for an admin to approve.';
+      toast({
+        title: status === 'rejected' ? 'Vendor access blocked' : 'Vendor pending approval',
+        description,
+        variant: status === 'rejected' ? 'destructive' : 'default'
+      });
+      signOut();
+      navigate('/login/vendor');
+    }
+  }, [profile, toast, signOut, navigate]);
 
     const PRODUCT_BUCKET = import.meta.env.VITE_PRODUCT_BUCKET || 'product-images';
     const CATEGORY_OPTIONS = ['Fashion','Food & Drinks','Home & Living','Gifts & Crafts','Electronics','Health & Beauty'];
