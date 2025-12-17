@@ -63,17 +63,9 @@ const Navbar = () => {
     fetchUnreadCount();
 
     const channel = supabase.channel('navbar-messages-' + userId)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `receiver_user_id=eq.${userId}` }, payload => {
-        const newRow: any = payload.new;
-        if (!newRow) return;
-        setMessageCount(prev => {
-          if (payload.eventType === 'INSERT' && !newRow.read_at) return prev + 1;
-          if (payload.eventType === 'UPDATE') {
-            // When read_at is set, drop count; if unread stays null, keep as is
-            if (newRow.read_at) return Math.max(0, prev - 1);
-          }
-          return prev;
-        });
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `receiver_user_id=eq.${userId}` }, () => {
+        // Recompute to avoid drift and ensure we only show unread messages
+        fetchUnreadCount();
       })
       .subscribe();
 

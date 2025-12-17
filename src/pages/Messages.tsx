@@ -324,7 +324,16 @@ const Messages = () => {
     const now = new Date().toISOString();
     // Optimistic local mark-read so badges update instantly
     setRawMessages(prev => prev.map(m => ids.includes(m.id) ? { ...m, read_at: now } : m));
-    supabase.from('messages').update({ read_at: now }).in('id', ids).then();
+    supabase
+      .from('messages')
+      .update({ read_at: now })
+      .in('id', ids)
+      .eq('receiver_user_id', profile.id)
+      .then(({ error }) => {
+        if (error) {
+          console.warn('Failed to mark messages read', error.message);
+        }
+      });
   }, [currentConversation, profile?.id]);
 
   const sendMessage = useCallback(async () => {

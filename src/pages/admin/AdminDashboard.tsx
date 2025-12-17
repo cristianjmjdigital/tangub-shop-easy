@@ -51,7 +51,18 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const [filter, setFilter] = useState("");
   const qc = useQueryClient();
-  const [tab, setTab] = useState<"dashboard"|"users"|"vendors"|"products"|"orders"|"reports"|"archives">("dashboard");
+  const adminTabKey = 'admin-dashboard-tab';
+  const allowedTabs: Array<"dashboard"|"users"|"vendors"|"products"|"orders"|"reports"|"archives"> = ["dashboard","users","vendors","products","orders","reports","archives"];
+  const [tab, setTab] = useState<"dashboard"|"users"|"vendors"|"products"|"orders"|"reports"|"archives">(() => {
+    const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(adminTabKey) : null;
+    return allowedTabs.includes(stored as any) ? stored as any : "dashboard";
+  });
+
+  useEffect(() => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(adminTabKey, tab);
+    }
+  }, [tab]);
 
   // Gate (still insecure placeholder) – keep localStorage role check
   useEffect(() => {

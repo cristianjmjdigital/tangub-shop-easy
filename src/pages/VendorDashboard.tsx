@@ -19,7 +19,7 @@ import { DashboardShell } from "@/components/layout/DashboardShell";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar, PieChart, Pie, Cell } from "recharts";
 
 interface VendorRecord { id: string; store_name: string; address: string | null; created_at?: string; owner_user_id?: string; contact_phone?: string | null; accepting_orders?: boolean; base_delivery_fee?: number | null; logo_url?: string | null; hero_image_url?: string | null; description?: string | null }
-interface ProductRecord { id: string; name: string; price: number; stock: number; description?: string | null; main_image_url?: string | null; category?: string | null; address?: string | null }
+interface ProductRecord { id: string; name: string; price: number; stock: number; description?: string | null; main_image_url?: string | null; category?: string | null; address?: string | null; size_options?: string[] | null }
 
 export default function VendorDashboard() {
   const { profile, signOut } = useAuth();
@@ -30,7 +30,7 @@ export default function VendorDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [open, setOpen] = useState(false);
-  const [newProduct, setNewProduct] = useState({ name: '', price: '', stock: '', description: '', main_image_url: '', category: '', address: '' });
+  const [newProduct, setNewProduct] = useState({ name: '', price: '', stock: '', description: '', main_image_url: '', category: '', address: '', size_options: [] as string[] });
   const [newProductFile, setNewProductFile] = useState<File | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductRecord | null>(null);
@@ -54,10 +54,22 @@ export default function VendorDashboard() {
     hero_image_url: ''
   });
   const { toast } = useToast();
+  const SIZE_OPTIONS = ['XS','S','M','L','XL','XXL'];
   const [msgOrderId, setMsgOrderId] = useState<string | null>(null);
   const [msgText, setMsgText] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
-  const [tab, setTab] = useState<"overview" | "products" | "orders" | "settings">("overview");
+  const vendorTabKey = 'vendor-dashboard-tab';
+  const allowedVendorTabs: Array<"overview" | "products" | "orders" | "settings"> = ["overview","products","orders","settings"];
+  const [tab, setTab] = useState<"overview" | "products" | "orders" | "settings">(() => {
+    const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(vendorTabKey) : null;
+    return allowedVendorTabs.includes(stored as any) ? stored as any : "overview";
+  });
+
+  useEffect(() => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(vendorTabKey, tab);
+    }
+  }, [tab]);
   const vendorAddress = vendor?.address?.trim() || '';
 
   const sales7d = useMemo(() => {
@@ -163,10 +175,10 @@ export default function VendorDashboard() {
       if (vendorData?.id) {
         const { data: productRows } = await supabase
           .from('products')
-          .select('id,name,price,stock,description,main_image_url,category,address')
+          .select('id,name,price,stock,description,main_image_url,category,address,size_options')
           .eq('vendor_id', vendorData.id)
           .order('created_at', { ascending: false });
-        setProducts((productRows as ProductRecord[]) || []);
+        setProducts(((productRows as ProductRecord[]) || []).map(p => ({ ...p, size_options: p.size_options || [] })));
         await loadVendorOrders(vendorData.id);
       } else {
         setProducts([]);
@@ -362,7 +374,7 @@ export default function VendorDashboard() {
         navItems={navItems}
         activeKey={tab}
         onSelect={(key) => {
-          if (key === 'messages') { navigate('/messages'); return; }
+          if (key === 'messages') { navigate('/vendor/messages'); return; }
           setTab(key as typeof tab);
         }}
         footerAction={<Button variant="outline" size="sm" className="w-full" onClick={async () => { await signOut(); navigate('/login/vendor'); }}><LogOut className="h-4 w-4 mr-1" /> Logout</Button>}
@@ -755,8 +767,13 @@ export default function VendorDashboard() {
               </div>
             </div>
             <div className="space-y-1">
-              <Label htmlFor="prod-image">Main Image URL</Label>
-              <Input id="prod-image" value={newProduct.main_image_url} onChange={e => setNewProduct(p => ({ ...p, main_image_url: e.target.value }))} placeholder="https://.../image.jpg" />
+              <Label htmlFor="prod-image">Main Image</Label>
+              <Input
+              id="prod-image"
+              type="file"
+              accept="image/*"
+              onChange={(e) => setNewProductFile(e.target.files?.[0] || null)}
+              />
             </div>
             <div className="space-y-1">
               <Label htmlFor="prod-image-file">Upload Image (optional)</Label>
@@ -765,7 +782,7 @@ export default function VendorDashboard() {
             </div>
             <div className="space-y-1">
               <Label htmlFor="prod-category">Category</Label>
-              <Select value={newProduct.category} onValueChange={(val) => setNewProduct(p => ({ ...p, category: val }))}>
+              <Select value={newProduct.category} onValueChange={(val) => setNewProduct(p => ({ ...p, category: val, size_options: val === 'Fashion' ? p.size_options : [] }))}>
                 <SelectTrigger id="prod-category">
                   <SelectValue placeholder="Select a category" />
                 </SelectTrigger>
@@ -776,6 +793,29 @@ export default function VendorDashboard() {
                 </SelectContent>
               </Select>
             </div>
+            {newProduct.category === 'Fashion' && (
+              <div className="space-y-2">
+                <Label>Sizes</Label>
+                <div className="flex flex-wrap gap-2">
+                  {SIZE_OPTIONS.map(size => {
+                    const selected = newProduct.size_options.includes(size);
+                    return (
+                      <Button
+                        key={size}
+                        type="button"
+                        variant={selected ? 'secondary' : 'outline'}
+                        size="sm"
+                        onClick={() => setNewProduct(p => ({ ...p, size_options: selected ? p.size_options.filter(s => s !== size) : [...p.size_options, size] }))}
+                        className="h-8 px-3"
+                      >
+                        {size}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] text-muted-foreground">Only for Fashion products. Leave empty to allow one-size.</p>
+              </div>
+            )}
             <div className="space-y-1">
               <Label htmlFor="prod-desc">Description</Label>
               <Textarea id="prod-desc" value={newProduct.description} onChange={e => setNewProduct(p => ({ ...p, description: e.target.value }))} placeholder="Short product description" />
@@ -821,14 +861,15 @@ export default function VendorDashboard() {
                   description: newProduct.description.trim() ? newProduct.description.trim() : null,
                   main_image_url: imageUrl,
                   category: newProduct.category.trim() || null,
-                  address: resolvedAddress
+                  address: resolvedAddress,
+                  size_options: newProduct.category === 'Fashion' ? newProduct.size_options : []
                 })
-                .select('id,name,price,stock,description,main_image_url,category,address')
+                .select('id,name,price,stock,description,main_image_url,category,address,size_options')
                 .single();
               if (!insertErr && inserted) {
-                setProducts(prev => [inserted as any, ...prev]);
+                setProducts(prev => [{ ...(inserted as any), size_options: (inserted as any).size_options || [] }, ...prev]);
                 setOpen(false);
-                setNewProduct({ name: '', price: '', stock: '', description: '', main_image_url: '', category: '', address: vendorAddress || '' });
+                setNewProduct({ name: '', price: '', stock: '', description: '', main_image_url: '', category: '', address: vendorAddress || '', size_options: [] });
                 setNewProductFile(null);
               }
               setCreating(false);
@@ -870,7 +911,7 @@ export default function VendorDashboard() {
             </div>
             <div className="space-y-1">
               <Label htmlFor="edit-category">Category</Label>
-              <Select value={editingProduct.category || ''} onValueChange={(val) => setEditingProduct(prev => prev ? { ...prev, category: val } : prev)}>
+              <Select value={editingProduct.category || ''} onValueChange={(val) => setEditingProduct(prev => prev ? { ...prev, category: val, size_options: val === 'Fashion' ? (prev.size_options || []) : [] } : prev)}>
                 <SelectTrigger id="edit-category">
                   <SelectValue placeholder="Select a category" />
                 </SelectTrigger>
@@ -885,6 +926,29 @@ export default function VendorDashboard() {
               <Label htmlFor="edit-desc">Description</Label>
               <Textarea id="edit-desc" value={editingProduct.description || ''} onChange={e => setEditingProduct(prev => prev ? { ...prev, description: e.target.value } : prev)} placeholder="Short product description" />
             </div>
+            {editingProduct.category === 'Fashion' && (
+              <div className="space-y-2">
+                <Label>Sizes</Label>
+                <div className="flex flex-wrap gap-2">
+                  {SIZE_OPTIONS.map(size => {
+                    const selected = (editingProduct.size_options || []).includes(size);
+                    return (
+                      <Button
+                        key={size}
+                        type="button"
+                        variant={selected ? 'secondary' : 'outline'}
+                        size="sm"
+                        onClick={() => setEditingProduct(prev => prev ? { ...prev, size_options: selected ? (prev.size_options || []).filter(s => s !== size) : [ ...(prev.size_options || []), size ] } : prev)}
+                        className="h-8 px-3"
+                      >
+                        {size}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] text-muted-foreground">Only for Fashion products. Leave empty to allow one-size.</p>
+              </div>
+            )}
             <div className="space-y-1">
               <Label htmlFor="edit-address">Product Address</Label>
               <Textarea
@@ -924,13 +988,14 @@ export default function VendorDashboard() {
                 description: editingProduct.description?.trim() || null, 
                 main_image_url: imageUrl,
                 category: editingProduct.category?.trim() || null,
-                address: resolvedAddress
+                address: resolvedAddress,
+                size_options: editingProduct.category === 'Fashion' ? (editingProduct.size_options || []) : []
               })
               .eq('id', editingProduct.id)
-              .select('id,name,price,stock,description,main_image_url,category,address')
+              .select('id,name,price,stock,description,main_image_url,category,address,size_options')
               .single();
             if (!updErr && data) {
-              setProducts(prev => prev.map(p => p.id === data.id ? (data as any) : p));
+              setProducts(prev => prev.map(p => p.id === data.id ? ({ ...(data as any), size_options: (data as any).size_options || [] }) : p));
               setEditOpen(false);
             }
               setEditingFile(null);

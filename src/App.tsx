@@ -14,6 +14,7 @@ import UserSignup from "./pages/UserSignup";
 import VendorLogin from "./pages/VendorLogin";
 import VendorDashboard from "./pages/VendorDashboard";
 import VendorSetup from "./pages/VendorSetup";
+import VendorMessages from "./pages/VendorMessages";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import Products from "./pages/Products";
 import Businesses from "./pages/Businesses";
@@ -67,6 +68,7 @@ function AppShell() {
                   <Route path="/signup/user" element={<LoggedOutRoute><UserSignup /></LoggedOutRoute>} />
                   <Route path="/login/vendor" element={<LoggedOutRoute><VendorLogin /></LoggedOutRoute>} />
                   <Route path="/vendor" element={<ProtectedRoute requireRole="vendor"><VendorDashboard /></ProtectedRoute>} />
+                  <Route path="/vendor/messages" element={<ProtectedRoute requireRole="vendor"><VendorMessages /></ProtectedRoute>} />
                   <Route path="/vendor/setup" element={<ProtectedRoute><VendorSetup /></ProtectedRoute>} />
                   {/* Admin */}
                   <Route path="/admin/login" element={<AdminLogin />} />
