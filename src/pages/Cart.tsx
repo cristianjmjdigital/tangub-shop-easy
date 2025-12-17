@@ -211,7 +211,7 @@ const Cart = () => {
                           <Truck className="h-4 w-4 mr-2 text-primary" />
                           <div>
                             <p className="font-medium">Cash on Delivery</p>
-                            <p className="text-sm text-muted-foreground">₱50 delivery fee within Tangub City </p>
+                            <p className="text-sm text-muted-foreground">₱50 delivery fee within City Proper </p>
                           </div>
                         </div>
                       </Label>
