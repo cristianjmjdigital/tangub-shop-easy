@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
+import Navbar from "@/components/layout/Navbar";
 
 interface VendorRow { id: string; store_name: string; description?: string | null; address?: string | null; barangay?: string | null; created_at?: string; logo_url?: string | null; contact_phone?: string | null }
 interface ProductRow { id: string; vendor_id: string }
@@ -202,6 +203,7 @@ const Businesses = () => {
 
   return (
     <div className="min-h-screen bg-gradient-subtle">
+      <Navbar />
       <div className="container mx-auto px-4 py-6">
         {/* Header */}
         <div className="text-center mb-8">
