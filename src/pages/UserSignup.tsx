@@ -159,7 +159,9 @@ export default function UserSignup() {
         // (debug logging removed)
         // Duplicate detection
         if (/duplicate key|already registered|already exists|user already registered|email.*exists|violates unique constraint/i.test(msg)) {
-          setError('Email already registered. Please log in instead.');
+          const duplicateMsg = 'Email already registered. Please try another email or log in.';
+          setError(duplicateMsg);
+          toast({ variant: 'destructive', title: 'Email already registered', description: 'Please try another email or log in.' });
           setSubmitting(false);
           return;
         }
