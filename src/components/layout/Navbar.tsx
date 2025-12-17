@@ -33,6 +33,13 @@ const Navbar = () => {
   const navigate = useNavigate();
   const { session, profile, loading, signOut } = useAuth();
   const loggedIn = !!session;
+  const isVendor = profile?.role === 'vendor';
+  const loginPath = isVendor ? '/login/vendor' : '/login/user';
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate(loginPath);
+  };
 
   // subscribe to unread messages
   useEffect(()=>{
@@ -203,14 +210,14 @@ const Navbar = () => {
                     <Badge variant="outline" className="border-white/50 text-white/90">Vendor</Badge>
                   </>
                 )}
-                <Button variant="destructive" size="sm" onClick={signOut}>Logout</Button>
+                <Button variant="destructive" size="sm" onClick={handleLogout}>Logout</Button>
               </div>
             )}
           </div>
 
           {/* Cart and Mobile Menu */}
           <div className="flex items-center space-x-2">
-            {loggedIn && (
+            {loggedIn && !isVendor && (
               <Link to="/cart">
                 <Button variant="secondary" size="sm" className="relative">
                   <ShoppingCart className="h-4 w-4" />
@@ -256,7 +263,7 @@ const Navbar = () => {
                     {!loading && !loggedIn && (
                       <div className="w-full flex flex-col gap-2">
                         <Link to="/login/user" className="w-full" onClick={() => setDrawerOpen(false)}>
-                          <Button variant="secondary" className="w-full">User Login</Button>
+                          <Button variant="secondary" className="w-full">Customer Login</Button>
                         </Link>
                         <Link to="/login/vendor" className="w-full" onClick={() => setDrawerOpen(false)}>
                           <Button variant="outline" className="w-full">Vendor Login</Button>
@@ -276,7 +283,7 @@ const Navbar = () => {
                         <Button
                           variant="destructive"
                           className="w-full"
-                          onClick={() => { setDrawerOpen(false); signOut(); }}
+                          onClick={() => { setDrawerOpen(false); handleLogout(); }}
                         >
                           Logout
                         </Button>

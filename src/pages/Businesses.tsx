@@ -218,8 +218,8 @@ const Businesses = () => {
         {/* Business Tabs */}
         <Tabs defaultValue="featured" className="w-full">
           <TabsList className="grid w-full grid-cols-2 max-w-md mx-auto mb-8">
-            <TabsTrigger value="featured">Featured</TabsTrigger>
             <TabsTrigger value="all">All Businesses</TabsTrigger>
+            <TabsTrigger value="featured">Featured</TabsTrigger>
           </TabsList>
 
           <TabsContent value="featured">
@@ -249,23 +249,6 @@ const Businesses = () => {
           </TabsContent>
         </Tabs>
 
-        {/* Call to Action */}
-        <div className="text-center mt-16">
-          <Card className="max-w-2xl mx-auto p-8 bg-gradient-subtle">
-            <CardContent className="text-center">
-              <Store className="h-12 w-12 mx-auto mb-4 text-primary" />
-              <h3 className="text-2xl font-bold mb-4">Start Your Business</h3>
-              <p className="text-muted-foreground mb-6">
-                Join our growing community of local entrepreneurs and reach customers in Tangub City.
-              </p>
-              <Button size="lg" asChild>
-                <Link to="/register-business">
-                  Register Your Business
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
       </div>
     </div>
   );

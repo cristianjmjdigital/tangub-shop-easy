@@ -22,7 +22,7 @@ export default function VendorSetup() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile?.id) { setError('Not authenticated'); return; }
-    if (!form.business_name.trim()) { setError('Business name required'); return; }
+    if (!form.business_name.trim()) { setError('Shop name required'); return; }
     setError(null);
     setLoading(true);
     try {
@@ -105,8 +105,8 @@ export default function VendorSetup() {
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="business_name">Business Name</Label>
-              <Input id="business_name" value={form.business_name} onChange={(e) => setForm(f => ({ ...f, business_name: e.target.value }))} />
+              <Label htmlFor="business_name">Add Shop Name</Label>
+              <Input id="business_name" required placeholder="Add Shop Name" value={form.business_name} onChange={(e) => setForm(f => ({ ...f, business_name: e.target.value }))} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="description">Description (optional)</Label>

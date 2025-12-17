@@ -40,7 +40,7 @@ const Ratings = () => {
   const [error, setError] = useState<string | null>(null);
   const initialOrderId = searchParams.get("orderId");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(initialOrderId);
-  const [ratingValue, setRatingValue] = useState(5);
+  const [ratingValue, setRatingValue] = useState(3);
   const [reviewText, setReviewText] = useState("");
 
   useEffect(() => {
@@ -55,11 +55,11 @@ const Ratings = () => {
 
   useEffect(() => {
     if (existingRating) {
-      setRatingValue(existingRating.rating);
+      setRatingValue(Math.min(3, Math.max(1, existingRating.rating)));
       setReviewText(existingRating.review || "");
     } else {
       setReviewText("");
-      setRatingValue(5);
+      setRatingValue(3);
     }
   }, [existingRating, selectedOrderId]);
 
@@ -131,7 +131,7 @@ const Ratings = () => {
       toast({ title: "Select an order", description: "Pick an order to rate." });
       return;
     }
-    const cleanRating = Math.min(5, Math.max(1, ratingValue));
+    const cleanRating = Math.min(3, Math.max(1, ratingValue));
     setSaving(true);
     try {
       const payload = {
@@ -266,7 +266,7 @@ const Ratings = () => {
                         <div className="text-lg font-semibold text-primary">₱{o.total.toLocaleString()}</div>
                         {rated ? (
                           <div className="inline-flex items-center gap-1 text-sm text-amber-600">
-                            <Star className="h-4 w-4 fill-amber-500 text-amber-500" /> {rated.rating}/5
+                            <Star className="h-4 w-4 fill-amber-500 text-amber-500" /> {Math.min(3, rated.rating)}/3
                           </div>
                         ) : (
                           <Badge variant="secondary">Not rated</Badge>
@@ -313,11 +313,11 @@ const Ratings = () => {
                     <div className="text-xs text-muted-foreground">Status: {selectedOrder.status}</div>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Rating (1-5)</label>
+                    <label className="text-sm font-medium">Rating (1-3)</label>
                     <Input
                       type="number"
                       min={1}
-                      max={5}
+                      max={3}
                       value={ratingValue}
                       onChange={(e) => setRatingValue(Number(e.target.value))}
                     />

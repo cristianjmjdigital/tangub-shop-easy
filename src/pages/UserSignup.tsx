@@ -87,6 +87,8 @@ export default function UserSignup() {
   const [error, setError] = useState<string | null>(null);
   const [govIdFile, setGovIdFile] = useState<File | null>(null);
   const [govIdPreview, setGovIdPreview] = useState<string | null>(null);
+  const [businessPermitFile, setBusinessPermitFile] = useState<File | null>(null);
+  const [businessPermitPreview, setBusinessPermitPreview] = useState<string | null>(null);
   const normalizePhoneInput = (raw: string) => raw.replace(/\D/g, '').slice(0, 11);
   // Debug panel removed after stabilization
   const validate = () => {
@@ -97,6 +99,7 @@ export default function UserSignup() {
     if (form.password.length < 6) return "Password must be at least 6 characters";
     if (form.password !== form.confirm) return "Passwords do not match";
     if (form.phone && !/^09\d{9}$/.test(form.phone)) return "Phone must be 11 digits starting with 09";
+    if (form.role === 'vendor' && !businessPermitFile) return "Business Permit image is required for vendors";
     return null;
   };
 
@@ -300,6 +303,20 @@ export default function UserSignup() {
     setGovIdPreview(file ? URL.createObjectURL(file) : null);
   };
 
+  const handlePermitChange = (fileList: FileList | null) => {
+    const file = fileList?.[0] || null;
+    if (file && !file.type.startsWith('image/')) {
+      setError('Business Permit must be an image file.');
+      return;
+    }
+    setError(null);
+    setBusinessPermitFile(file);
+    if (businessPermitPreview) {
+      URL.revokeObjectURL(businessPermitPreview);
+    }
+    setBusinessPermitPreview(file ? URL.createObjectURL(file) : null);
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-10 bg-background">
       <Card className="w-full max-w-md">
@@ -333,6 +350,16 @@ export default function UserSignup() {
               {govIdPreview && (
                 <div className="border rounded-md p-2 bg-muted/30">
                   <img src={govIdPreview} alt="Government ID preview" className="w-full rounded" />
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="business-permit">Business Permit (required for vendors)</Label>
+              <Input id="business-permit" type="file" accept="image/*" onChange={(e) => handlePermitChange(e.target.files)} />
+              <p className="text-xs text-muted-foreground">Image uploads only. Vendors must provide a valid permit to activate.</p>
+              {businessPermitPreview && (
+                <div className="border rounded-md p-2 bg-muted/30">
+                  <img src={businessPermitPreview} alt="Business permit preview" className="w-full rounded" />
                 </div>
               )}
             </div>

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, ShoppingCart, Settings, Store, DollarSign, Edit, Trash2, RefreshCw, CheckCircle2, Hourglass, XCircle, MessageSquare, Send, X } from "lucide-react";
+import { Plus, ShoppingCart, Settings, Store, DollarSign, Edit, Trash2, RefreshCw, CheckCircle2, Hourglass, XCircle, MessageSquare, Send, X, Package, LogOut } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,9 +15,10 @@ import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, Dialog
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/components/ui/use-toast";
+import { DashboardShell } from "@/components/layout/DashboardShell";
 
 interface VendorRecord { id: string; store_name: string; address: string | null; created_at?: string; owner_user_id?: string; contact_phone?: string | null; accepting_orders?: boolean; base_delivery_fee?: number | null; logo_url?: string | null; hero_image_url?: string | null; description?: string | null }
-interface ProductRecord { id: string; name: string; price: number; stock: number; description?: string | null; main_image_url?: string | null; category?: string | null }
+interface ProductRecord { id: string; name: string; price: number; stock: number; description?: string | null; main_image_url?: string | null; category?: string | null; address?: string | null }
 
 export default function VendorDashboard() {
   const { profile, signOut } = useAuth();
@@ -28,7 +29,7 @@ export default function VendorDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [open, setOpen] = useState(false);
-  const [newProduct, setNewProduct] = useState({ name: '', price: '', stock: '', description: '', main_image_url: '', category: '' });
+  const [newProduct, setNewProduct] = useState({ name: '', price: '', stock: '', description: '', main_image_url: '', category: '', address: '' });
   const [newProductFile, setNewProductFile] = useState<File | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductRecord | null>(null);
@@ -55,6 +56,8 @@ export default function VendorDashboard() {
   const [msgOrderId, setMsgOrderId] = useState<string | null>(null);
   const [msgText, setMsgText] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
+  const [tab, setTab] = useState<"overview" | "products" | "orders" | "settings">("overview");
+  const vendorAddress = vendor?.address?.trim() || '';
 
   // Block pending/rejected vendors from using dashboard
   useEffect(() => {
@@ -134,7 +137,7 @@ export default function VendorDashboard() {
       if (vendorData?.id) {
         const { data: productRows } = await supabase
           .from('products')
-          .select('id,name,price,stock,description,main_image_url,category')
+          .select('id,name,price,stock,description,main_image_url,category,address')
           .eq('vendor_id', vendorData.id)
           .order('created_at', { ascending: false });
         setProducts((productRows as ProductRecord[]) || []);
@@ -294,6 +297,20 @@ export default function VendorDashboard() {
     }
   }, [vendor]);
 
+  // Default product address to vendor address when present
+  useEffect(() => {
+    if (vendorAddress) {
+      setNewProduct(p => ({ ...p, address: vendorAddress }));
+    }
+  }, [vendorAddress]);
+
+  const navItems = [
+    { key: "overview", label: "Overview", icon: Store },
+    { key: "products", label: "Products", icon: Package },
+    { key: "orders", label: "Orders", icon: ShoppingCart },
+    { key: "settings", label: "Settings", icon: Settings },
+  ];
+
   if (loading) {
     return <div className="p-6 text-sm text-muted-foreground">Loading vendor data...</div>;
   }
@@ -312,344 +329,270 @@ export default function VendorDashboard() {
 
   return (
     <>
-    <div className="min-h-screen bg-background px-4 py-6">
-      <div className="max-w-5xl mx-auto space-y-6">
-        {/* Top Header */}
-        <Card className="overflow-hidden">
-          <CardContent className="p-5">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-primary-foreground shadow">
-                  <Store className="h-7 w-7" />
-                </div>
-                <div>
-                  <h1 className="text-xl font-semibold leading-tight">{vendor.store_name}</h1>
-                  <p className="text-xs text-muted-foreground">Since {new Date(vendor.created_at || Date.now()).getFullYear()} • <span className="text-green-600 font-medium">Online</span></p>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" asChild><Link to="/home">User View</Link></Button>
-                <Button size="sm" variant="outline" disabled={refreshing || loading} onClick={() => loadVendorData(true)}>
-                  <RefreshCw className={`h-4 w-4 mr-1 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
-                </Button>
-                <Dialog open={open} onOpenChange={setOpen}>
-                  <DialogTrigger asChild>
-                    <Button size="sm">
-                      <Plus className="h-4 w-4 mr-1" /> New Product
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>Add Product</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 py-2">
-                      <div className="space-y-1">
-                        <Label htmlFor="prod-name">Name</Label>
-                        <Input id="prod-name" value={newProduct.name} onChange={e => setNewProduct(p => ({ ...p, name: e.target.value }))} />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1">
-                          <Label htmlFor="prod-price">Price (₱)</Label>
-                          <Input id="prod-price" type="number" value={newProduct.price} onChange={e => setNewProduct(p => ({ ...p, price: e.target.value }))} />
-                        </div>
-                        <div className="space-y-1">
-                          <Label htmlFor="prod-stock">Stock</Label>
-                          <Input id="prod-stock" type="number" value={newProduct.stock} onChange={e => setNewProduct(p => ({ ...p, stock: e.target.value }))} />
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="prod-image">Main Image URL</Label>
-                        <Input id="prod-image" value={newProduct.main_image_url} onChange={e => setNewProduct(p => ({ ...p, main_image_url: e.target.value }))} placeholder="https://.../image.jpg" />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="prod-image-file">Upload Image (optional)</Label>
-                        <Input id="prod-image-file" type="file" accept="image/*" onChange={(e) => setNewProductFile(e.target.files?.[0] || null)} />
-                        {newProductFile && <p className="text-[11px] text-muted-foreground">Selected: {newProductFile.name}</p>}
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="prod-category">Category</Label>
-                        <Select value={newProduct.category} onValueChange={(val) => setNewProduct(p => ({ ...p, category: val }))}>
-                          <SelectTrigger id="prod-category">
-                            <SelectValue placeholder="Select a category" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {CATEGORY_OPTIONS.map(opt => (
-                              <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="prod-desc">Description</Label>
-                        <Textarea id="prod-desc" value={newProduct.description} onChange={e => setNewProduct(p => ({ ...p, description: e.target.value }))} placeholder="Short product description" />
-                      </div>
-                      {creating && <p className="text-xs text-muted-foreground">Saving...</p>}
-                    </div>
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setOpen(false)} type="button">Cancel</Button>
-                      <Button disabled={creating || !newProduct.name.trim()} onClick={async () => {
-                        if (!vendor?.id) return;
-                        setCreating(true);
-                        const priceNum = Number(newProduct.price);
-                        const stockNum = Number(newProduct.stock);
-                        let imageUrl = newProduct.main_image_url.trim() ? newProduct.main_image_url.trim() : null;
-                        if (newProductFile) {
-                          const uploaded = await uploadProductImage(newProductFile, String(vendor.id));
-                          if (uploaded) imageUrl = uploaded;
-                        }
-                        const { data: inserted, error: insertErr } = await supabase
-                          .from('products')
-                          .insert({
-                            vendor_id: vendor.id,
-                            name: newProduct.name.trim(),
-                            price: isNaN(priceNum) ? 0 : priceNum,
-                            stock: isNaN(stockNum) ? 0 : stockNum,
-                            description: newProduct.description.trim() ? newProduct.description.trim() : null,
-                            main_image_url: imageUrl,
-                            category: newProduct.category.trim() || null,
-                          })
-                          .select('id,name,price,stock,description,main_image_url,category')
-                          .single();
-                        if (!insertErr && inserted) {
-                          setProducts(prev => [inserted as any, ...prev]);
-                          setOpen(false);
-                          setNewProduct({ name: '', price: '', stock: '', description: '', main_image_url: '', category: '' });
-                          setNewProductFile(null);
-                        }
-                        setCreating(false);
-                      }} type="button">Save</Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-                <Button size="sm" variant="outline" onClick={() => signOut()}>Logout</Button>
-              </div>
-            </div>
-            {/* Metrics */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
-              <div className="rounded-lg border p-3 bg-muted/30">
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Today's Sales</span>
-                  <DollarSign className="h-3 w-3" />
-                </div>
-                <div className="mt-1 text-lg font-semibold">₱{metrics.salesToday.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</div>
-              </div>
-              <div className="rounded-lg border p-3 bg-muted/30">
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Today's Orders</span>
-                  <ShoppingCart className="h-3 w-3" />
-                </div>
-                <div className="mt-1 text-lg font-semibold">{metrics.ordersToday}</div>
-              </div>
-              <div className="rounded-lg border p-3 bg-muted/30">
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Total Sales</span>
-                  <DollarSign className="h-3 w-3" />
-                </div>
-                <div className="mt-1 text-lg font-semibold">₱{metrics.totalSales.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</div>
-              </div>
-              <div className="rounded-lg border p-3 bg-muted/30">
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Total Orders</span>
-                  <ShoppingCart className="h-3 w-3" />
-                </div>
-                <div className="mt-1 text-lg font-semibold">{metrics.totalOrders}</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Tabs defaultValue="products" className="space-y-5">
+      <DashboardShell
+        roleLabel="Vendor"
+        title="Vendor Console"
+        navItems={navItems}
+        activeKey={tab}
+        onSelect={(key) => setTab(key as typeof tab)}
+        footerAction={<Button variant="outline" size="sm" className="w-full" onClick={async () => { await signOut(); navigate('/login/vendor'); }}><LogOut className="h-4 w-4 mr-1" /> Logout</Button>}
+      >
+        <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="space-y-6">
           <TabsList className="w-full justify-start overflow-x-auto">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="products">Products</TabsTrigger>
             <TabsTrigger value="orders">Orders</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
-          <TabsContent value="products">
-            <div className="flex justify-between items-center mb-3">
-              <h2 className="text-sm font-medium text-muted-foreground">Total Products: {products.length}</h2>
-              <Button size="sm" variant="outline"><Plus className="h-4 w-4 mr-1" /> Add Product</Button>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-              {products.map(p => {
-                const statusBadge = p.stock === 0 ? (
-                  <Badge variant="destructive">Out of Stock</Badge>
-                ) : p.stock < 10 ? (
-                  <Badge className="bg-amber-500 hover:bg-amber-500">Low Stock</Badge>
-                ) : (
-                  <Badge className="bg-green-600 hover:bg-green-600">In Stock</Badge>
-                );
-                return (
-                  <Card key={p.id} className="relative group">
-                    <CardContent className="pt-4 space-y-3">
-                      {p.main_image_url && (
-                        <div className="aspect-video w-full overflow-hidden rounded-md border bg-muted">
-                          <img src={p.main_image_url} alt={p.name} className="w-full h-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display='none'; }} />
-                        </div>
-                      )}
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-xs text-muted-foreground">#{p.id}</div>
-                          <h3 className="font-medium leading-snug">{p.name}</h3>
-                          {p.description && <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{p.description}</p>}
-                        </div>
-                        {statusBadge}
+          <TabsContent value="overview">
+            <div className="max-w-5xl mx-auto space-y-6">
+              <Card className="overflow-hidden">
+                <CardContent className="p-5">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-primary-foreground shadow">
+                        <Store className="h-7 w-7" />
                       </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="font-semibold">₱{Number(p.price).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</span>
-                        <span className={`text-xs px-2 py-1 rounded-full border ${p.stock === 0 ? 'text-destructive border-destructive/40' : p.stock < 10 ? 'text-amber-600 border-amber-400/50' : 'text-muted-foreground border-border'}`}>{p.stock} in stock</span>
+                      <div>
+                        <h1 className="text-xl font-semibold leading-tight">{vendor.store_name}</h1>
+                        <p className="text-xs text-muted-foreground">Since {new Date(vendor.created_at || Date.now()).getFullYear()} • <span className="text-green-600 font-medium">Online</span></p>
                       </div>
-                      <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button size="sm" variant="secondary" className="h-7 px-2" onClick={() => { setEditingProduct(p); setEditOpen(true); }}><Edit className="h-3.5 w-3.5 mr-1" /> Edit</Button>
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-destructive border-destructive/40" onClick={async () => {
-                          if (!confirm('Delete this product?')) return;
-                          const { error: delErr } = await supabase
-                            .from('products')
-                            .delete()
-                            .eq('id', p.id);
-                          if (!delErr) setProducts(prev => prev.filter(pr => pr.id !== p.id));
-                        }}><Trash2 className="h-3.5 w-3.5 mr-1" /> Delete</Button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" asChild><Link to="/home">User View</Link></Button>
+                      <Button size="sm" variant="outline" disabled={refreshing || loading} onClick={() => loadVendorData(true)}>
+                        <RefreshCw className={`h-4 w-4 mr-1 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
+                      </Button>
+                      <Button size="sm" onClick={() => setOpen(true)}>
+                        <Plus className="h-4 w-4 mr-1" /> New Product
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
+                    <div className="rounded-lg border p-3 bg-muted/30">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>Today's Sales</span>
+                        <DollarSign className="h-3 w-3" />
                       </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                      <div className="mt-1 text-lg font-semibold">₱{metrics.salesToday.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+                    </div>
+                    <div className="rounded-lg border p-3 bg-muted/30">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>Today's Orders</span>
+                        <ShoppingCart className="h-3 w-3" />
+                      </div>
+                      <div className="mt-1 text-lg font-semibold">{metrics.ordersToday}</div>
+                    </div>
+                    <div className="rounded-lg border p-3 bg-muted/30">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>Total Sales</span>
+                        <DollarSign className="h-3 w-3" />
+                      </div>
+                      <div className="mt-1 text-lg font-semibold">₱{metrics.totalSales.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+                    </div>
+                    <div className="rounded-lg border p-3 bg-muted/30">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>Total Orders</span>
+                        <ShoppingCart className="h-3 w-3" />
+                      </div>
+                      <div className="mt-1 text-lg font-semibold">{metrics.totalOrders}</div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </TabsContent>
-            <TabsContent value="orders">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between py-4">
-              <CardTitle className="text-base flex items-center gap-2"><ShoppingCart className="h-4 w-4" /> Orders</CardTitle>
-              <Button size="sm" variant="outline" disabled={ordersLoading} onClick={() => vendor && loadVendorOrders(vendor.id)}>
-                <RefreshCw className="h-4 w-4 mr-1" /> Refresh
-              </Button>
-              </CardHeader>
-              <CardContent className="space-y-4">
-              {ordersError && <div className="text-xs text-destructive border border-destructive/40 p-2 rounded bg-destructive/5">{ordersError}</div>}
-              {ordersLoading && <div className="text-xs text-muted-foreground">Loading orders...</div>}
-              {!ordersLoading && vendorOrders.length === 0 && <div className="text-xs text-muted-foreground">No orders yet.</div>}
-              <div className="space-y-4">
-                {vendorOrders.map(o => {
-                const its = vendorOrderItems.filter(i => i.order_id === o.id);
-                const totalQty = its.reduce((s,i)=>s+i.quantity,0);
-                const normalized = normalizeStatus(o.status || '');
-                return (
-                  <div key={o.id} className="border rounded-md p-3 space-y-3 bg-muted/20">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1">
-                    <div className="text-xs font-medium">Order #{o.id}</div>
-                    <div className="text-[10px] text-muted-foreground">{new Date(o.created_at).toLocaleString()}</div>
-                    <div className="text-[10px] text-muted-foreground">Items: {its.length} • Qty: {totalQty}</div>
-                    </div>
-                    {vendorStatusBadge(o.status)}
-                  </div>
-                  <div className="space-y-2 text-xs">
-                    {its.map(it => (
-                    <div key={it.id} className="flex justify-between">
-                      <span className="truncate mr-2">{it.product?.name || it.product_id} × {it.quantity}</span>
-                      <span>₱{(it.unit_price * it.quantity).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</span>
-                    </div>
-                    ))}
-                  </div>
-                  <div className="flex items-center justify-between text-xs font-semibold pt-1 border-t mt-2">
-                    <span>Total</span>
-                    <span>₱{o.total.toLocaleString()}</span>
-                  </div>
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    {/* Action buttons with dual-flow + case-insensitive logic */}
-                    {(normalized === 'pending' || normalized === 'new' || normalized === 'created') && (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="h-7"
-                        disabled={updatingOrderIds.includes(o.id)}
-                        onClick={()=>changeOrderStatus(o.id,'preparing')}
-                      >
-                        {updatingOrderIds.includes(o.id) ? (
-                          <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />
-                        ) : (
-                          <Hourglass className="h-3.5 w-3.5 mr-1" />
+          <TabsContent value="products">
+            <div className="max-w-5xl mx-auto space-y-5">
+              <div className="flex justify-between items-center mb-3">
+                <h2 className="text-sm font-medium text-muted-foreground">Total Products: {products.length}</h2>
+                <Button size="sm" variant="outline" onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-1" /> Add Product</Button>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+                {products.map(p => {
+                  const statusBadge = p.stock === 0 ? (
+                    <Badge variant="destructive">Out of Stock</Badge>
+                  ) : p.stock < 10 ? (
+                    <Badge className="bg-amber-500 hover:bg-amber-500">Low Stock</Badge>
+                  ) : (
+                    <Badge className="bg-green-600 hover:bg-green-600">In Stock</Badge>
+                  );
+                  return (
+                    <Card key={p.id} className="relative group">
+                      <CardContent className="pt-4 space-y-3">
+                        {p.main_image_url && (
+                          <div className="aspect-video w-full overflow-hidden rounded-md border bg-muted">
+                            <img src={p.main_image_url} alt={p.name} className="w-full h-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display='none'; }} />
+                          </div>
                         )}
-                        Prep
-                      </Button>
-                    )}
-                    {normalized === 'preparing' && (
-                      <Button
-                        size="sm"
-                        variant="default"
-                        className="h-7 bg-orange-500 hover:bg-orange-500"
-                        disabled={updatingOrderIds.includes(o.id)}
-                        onClick={()=>changeOrderStatus(o.id,'for_delivery')}
-                      >
-                        {updatingOrderIds.includes(o.id) ? (
-                          <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />
-                        ) : (
-                          <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                        )}
-                        For Delivery
-                      </Button>
-                    )}
-                    {normalized === 'for_delivery' && (
-                      <Button
-                        size="sm"
-                        variant="default"
-                        className="h-7 bg-green-600 hover:bg-green-600"
-                        disabled={updatingOrderIds.includes(o.id)}
-                        onClick={()=>changeOrderStatus(o.id,'delivered')}
-                      >
-                        {updatingOrderIds.includes(o.id) ? (
-                          <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />
-                        ) : (
-                          <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                        )}
-                        Delivered
-                      </Button>
-                    )}
-                    {normalized !== 'cancelled' && normalized !== 'delivered' && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-destructive border-destructive/40"
-                        disabled={updatingOrderIds.includes(o.id)}
-                        onClick={()=>changeOrderStatus(o.id,'cancelled')}
-                      >
-                        {updatingOrderIds.includes(o.id) ? (
-                          <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />
-                        ) : (
-                          <XCircle className="h-3.5 w-3.5 mr-1" />
-                        )}
-                        Cancel
-                      </Button>
-                    )}
-                    <Button size="sm" variant="secondary" className="h-7" onClick={()=>openMessage(o.id)}>
-                      <MessageSquare className="h-3.5 w-3.5 mr-1" /> Message
-                    </Button>
-                  </div>
-                  </div>
-                );
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-xs text-muted-foreground">#{p.id}</div>
+                            <h3 className="font-medium leading-snug">{p.name}</h3>
+                            {p.description && <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{p.description}</p>}
+                          </div>
+                          {statusBadge}
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-semibold">₱{Number(p.price).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</span>
+                          <span className={`text-xs px-2 py-1 rounded-full border ${p.stock === 0 ? 'text-destructive border-destructive/40' : p.stock < 10 ? 'text-amber-600 border-amber-400/50' : 'text-muted-foreground border-border'}`}>{p.stock} in stock</span>
+                        </div>
+                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button size="sm" variant="secondary" className="h-7 px-2" onClick={() => { setEditingProduct(p); setEditOpen(true); }}><Edit className="h-3.5 w-3.5 mr-1" /> Edit</Button>
+                          <Button size="sm" variant="outline" className="h-7 px-2 text-destructive border-destructive/40" onClick={async () => {
+                            if (!confirm('Delete this product?')) return;
+                            const { error: delErr } = await supabase
+                              .from('products')
+                              .delete()
+                              .eq('id', p.id);
+                            if (!delErr) setProducts(prev => prev.filter(pr => pr.id !== p.id));
+                          }}><Trash2 className="h-3.5 w-3.5 mr-1" /> Delete</Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
                 })}
               </div>
-              </CardContent>
-            </Card>
-            </TabsContent>
-          <TabsContent value="settings">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center"><Settings className="h-5 w-5 mr-2" /> Store Settings</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-6 md:grid-cols-2">
+            </div>
+          </TabsContent>
+          <TabsContent value="orders">
+            <div className="max-w-5xl mx-auto">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between py-4">
+                  <CardTitle className="text-base flex items-center gap-2"><ShoppingCart className="h-4 w-4" /> Orders</CardTitle>
+                  <Button size="sm" variant="outline" disabled={ordersLoading} onClick={() => vendor && loadVendorOrders(vendor.id)}>
+                    <RefreshCw className="h-4 w-4 mr-1" /> Refresh
+                  </Button>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {ordersError && <div className="text-xs text-destructive border border-destructive/40 p-2 rounded bg-destructive/5">{ordersError}</div>}
+                  {ordersLoading && <div className="text-xs text-muted-foreground">Loading orders...</div>}
+                  {!ordersLoading && vendorOrders.length === 0 && <div className="text-xs text-muted-foreground">No orders yet.</div>}
                   <div className="space-y-4">
-                    <div className="space-y-2">
+                    {vendorOrders.map(o => {
+                      const its = vendorOrderItems.filter(i => i.order_id === o.id);
+                      const totalQty = its.reduce((s,i)=>s+i.quantity,0);
+                      const normalized = normalizeStatus(o.status || '');
+                      return (
+                        <div key={o.id} className="border rounded-md p-3 space-y-3 bg-muted/20">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="space-y-1">
+                              <div className="text-xs font-medium">Order #{o.id}</div>
+                              <div className="text-[10px] text-muted-foreground">{new Date(o.created_at).toLocaleString()}</div>
+                              <div className="text-[10px] text-muted-foreground">Items: {its.length} • Qty: {totalQty}</div>
+                            </div>
+                            {vendorStatusBadge(o.status)}
+                          </div>
+                          <div className="space-y-2 text-xs">
+                            {its.map(it => (
+                              <div key={it.id} className="flex justify-between">
+                                <span className="truncate mr-2">{it.product?.name || it.product_id} × {it.quantity}</span>
+                                <span>₱{(it.unit_price * it.quantity).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="flex items-center justify-between text-xs font-semibold pt-1 border-t mt-2">
+                            <span>Total</span>
+                            <span>₱{o.total.toLocaleString()}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2 pt-2">
+                            {(normalized === 'pending' || normalized === 'new' || normalized === 'created') && (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                className="h-7"
+                                disabled={updatingOrderIds.includes(o.id)}
+                                onClick={()=>changeOrderStatus(o.id,'preparing')}
+                              >
+                                {updatingOrderIds.includes(o.id) ? (
+                                  <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />
+                                ) : (
+                                  <Hourglass className="h-3.5 w-3.5 mr-1" />
+                                )}
+                                Prep
+                              </Button>
+                            )}
+                            {normalized === 'preparing' && (
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="h-7 bg-orange-500 hover:bg-orange-500"
+                                disabled={updatingOrderIds.includes(o.id)}
+                                onClick={()=>changeOrderStatus(o.id,'for_delivery')}
+                              >
+                                {updatingOrderIds.includes(o.id) ? (
+                                  <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />
+                                ) : (
+                                  <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                                )}
+                                For Delivery
+                              </Button>
+                            )}
+                            {normalized === 'for_delivery' && (
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="h-7 bg-green-600 hover:bg-green-600"
+                                disabled={updatingOrderIds.includes(o.id)}
+                                onClick={()=>changeOrderStatus(o.id,'delivered')}
+                              >
+                                {updatingOrderIds.includes(o.id) ? (
+                                  <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />
+                                ) : (
+                                  <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                                )}
+                                Delivered
+                              </Button>
+                            )}
+                            {normalized !== 'cancelled' && normalized !== 'delivered' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-destructive border-destructive/40"
+                                disabled={updatingOrderIds.includes(o.id)}
+                                onClick={()=>changeOrderStatus(o.id,'cancelled')}
+                              >
+                                {updatingOrderIds.includes(o.id) ? (
+                                  <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />
+                                ) : (
+                                  <XCircle className="h-3.5 w-3.5 mr-1" />
+                                )}
+                                Cancel
+                              </Button>
+                            )}
+                            <Button size="sm" variant="secondary" className="h-7" onClick={()=>openMessage(o.id)}>
+                              <MessageSquare className="h-3.5 w-3.5 mr-1" /> Message
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+          <TabsContent value="settings">
+            <div className="max-w-5xl mx-auto">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center"><Settings className="h-5 w-5 mr-2" /> Store Settings</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <div className="space-y-4">
+                      <div className="space-y-2">
                         <Label htmlFor="storeName">Store Name</Label>
                         <Input id="storeName" value={settings.store_name} onChange={e => setSettings(s => ({ ...s, store_name: e.target.value }))} />
-                    </div>
-                    <div className="space-y-2">
+                      </div>
+                      <div className="space-y-2">
                         <Label htmlFor="contactNumber">Contact Number</Label>
                         <Input id="contactNumber" value={settings.contact_phone} onChange={e => setSettings(s => ({ ...s, contact_phone: e.target.value }))} placeholder="e.g. 09xx-xxx-xxxx" />
-                    </div>
-                    <div className="space-y-2">
+                      </div>
+                      <div className="space-y-2">
                         <Label htmlFor="address">Address</Label>
                         <Textarea id="address" value={settings.address} onChange={e => setSettings(s => ({ ...s, address: e.target.value }))} placeholder="Full business address" />
-                    </div>
+                      </div>
                       <div className="space-y-2">
                         <Label htmlFor="logo">Logo URL</Label>
                         <Input id="logo" value={settings.logo_url} onChange={e => setSettings(s => ({ ...s, logo_url: e.target.value }))} placeholder="https://.../logo.png" />
@@ -658,32 +601,32 @@ export default function VendorDashboard() {
                         <Label htmlFor="hero">Hero Image URL</Label>
                         <Input id="hero" value={settings.hero_image_url} onChange={e => setSettings(s => ({ ...s, hero_image_url: e.target.value }))} placeholder="https://.../cover.jpg" />
                       </div>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Accepting Orders</Label>
-                      <div className="flex items-center gap-3 rounded-lg border p-3">
-                          <Switch id="accepting" checked={settings.accepting_orders} onCheckedChange={(v) => setSettings(s => ({ ...s, accepting_orders: !!v }))} />
-                        <Label htmlFor="accepting" className="font-normal text-sm text-muted-foreground">Toggle to pause or resume incoming orders.</Label>
-                      </div>
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Accepting Orders</Label>
+                        <div className="flex items-center gap-3 rounded-lg border p-3">
+                          <Switch id="accepting" checked={settings.accepting_orders} onCheckedChange={(v) => setSettings(s => ({ ...s, accepting_orders: !!v }))} />
+                          <Label htmlFor="accepting" className="font-normal text-sm text-muted-foreground">Toggle to pause or resume incoming orders.</Label>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
                         <Label htmlFor="deliveryFee">Base Delivery Fee (₱)</Label>
                         <Input id="deliveryFee" type="number" value={settings.base_delivery_fee} onChange={e => setSettings(s => ({ ...s, base_delivery_fee: e.target.value }))} placeholder="e.g. 20" />
-                    </div>
-                    <div className="space-y-2">
+                      </div>
+                      <div className="space-y-2">
                         <Label htmlFor="about">About Store</Label>
                         <Textarea id="about" value={settings.description} onChange={e => setSettings(s => ({ ...s, description: e.target.value }))} placeholder="Short description for customers" />
-                    </div>
+                      </div>
                       {settings.logo_url && (
                         <div className="flex items-center gap-3 text-xs text-muted-foreground">
                           <img src={settings.logo_url} alt="logo preview" className="h-10 w-10 rounded object-cover border" onError={(e) => { e.currentTarget.style.display='none'; }} />
                           <span>Preview</span>
                         </div>
                       )}
+                    </div>
                   </div>
-                </div>
-                <div className="flex justify-end mt-6 gap-2">
+                  <div className="flex justify-end mt-6 gap-2">
                     <Button variant="outline" size="sm" disabled={savingSettings} onClick={() => vendor && setSettings({
                       store_name: vendor.store_name || '',
                       contact_phone: vendor.contact_phone || '',
@@ -718,15 +661,119 @@ export default function VendorDashboard() {
                       }
                       setSavingSettings(false);
                     }}>{savingSettings ? 'Saving...' : 'Save Changes'}</Button>
-                </div>
-              </CardContent>
-            </Card>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
-      </div>
-    </div>
-    {/* Edit Product Dialog */}
-    <Dialog open={editOpen} onOpenChange={setEditOpen}>
+      </DashboardShell>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Product</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <Label htmlFor="prod-name">Name</Label>
+              <Input id="prod-name" value={newProduct.name} onChange={e => setNewProduct(p => ({ ...p, name: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label htmlFor="prod-price">Price (₱)</Label>
+                <Input id="prod-price" type="number" value={newProduct.price} onChange={e => setNewProduct(p => ({ ...p, price: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="prod-stock">Stock</Label>
+                <Input id="prod-stock" type="number" value={newProduct.stock} onChange={e => setNewProduct(p => ({ ...p, stock: e.target.value }))} />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="prod-image">Main Image URL</Label>
+              <Input id="prod-image" value={newProduct.main_image_url} onChange={e => setNewProduct(p => ({ ...p, main_image_url: e.target.value }))} placeholder="https://.../image.jpg" />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="prod-image-file">Upload Image (optional)</Label>
+              <Input id="prod-image-file" type="file" accept="image/*" onChange={(e) => setNewProductFile(e.target.files?.[0] || null)} />
+              {newProductFile && <p className="text-[11px] text-muted-foreground">Selected: {newProductFile.name}</p>}
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="prod-category">Category</Label>
+              <Select value={newProduct.category} onValueChange={(val) => setNewProduct(p => ({ ...p, category: val }))}>
+                <SelectTrigger id="prod-category">
+                  <SelectValue placeholder="Select a category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORY_OPTIONS.map(opt => (
+                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="prod-desc">Description</Label>
+              <Textarea id="prod-desc" value={newProduct.description} onChange={e => setNewProduct(p => ({ ...p, description: e.target.value }))} placeholder="Short product description" />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="prod-address">Product Address</Label>
+              <Textarea
+                id="prod-address"
+                value={vendorAddress || newProduct.address}
+                onChange={e => setNewProduct(p => ({ ...p, address: e.target.value }))}
+                placeholder="Uses your business address by default"
+                disabled={!!vendorAddress}
+              />
+              <p className="text-[11px] text-muted-foreground">{vendorAddress ? 'Using your registered business address.' : 'No business address on file; add one here.'}</p>
+            </div>
+            {creating && <p className="text-xs text-muted-foreground">Saving...</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)} type="button">Cancel</Button>
+            <Button disabled={creating || !newProduct.name.trim()} onClick={async () => {
+              if (!vendor?.id) return;
+              setCreating(true);
+              const priceNum = Number(newProduct.price);
+              const stockNum = Number(newProduct.stock);
+              let imageUrl = newProduct.main_image_url.trim() ? newProduct.main_image_url.trim() : null;
+              if (newProductFile) {
+                const uploaded = await uploadProductImage(newProductFile, String(vendor.id));
+                if (uploaded) imageUrl = uploaded;
+              }
+              const resolvedAddress = vendorAddress || newProduct.address.trim();
+              if (!resolvedAddress) {
+                toast({ title: 'Address required', description: 'Add a business address to save this product.', variant: 'destructive' });
+                setCreating(false);
+                return;
+              }
+              const { data: inserted, error: insertErr } = await supabase
+                .from('products')
+                .insert({
+                  vendor_id: vendor.id,
+                  name: newProduct.name.trim(),
+                  price: isNaN(priceNum) ? 0 : priceNum,
+                  stock: isNaN(stockNum) ? 0 : stockNum,
+                  description: newProduct.description.trim() ? newProduct.description.trim() : null,
+                  main_image_url: imageUrl,
+                  category: newProduct.category.trim() || null,
+                  address: resolvedAddress
+                })
+                .select('id,name,price,stock,description,main_image_url,category,address')
+                .single();
+              if (!insertErr && inserted) {
+                setProducts(prev => [inserted as any, ...prev]);
+                setOpen(false);
+                setNewProduct({ name: '', price: '', stock: '', description: '', main_image_url: '', category: '', address: vendorAddress || '' });
+                setNewProductFile(null);
+              }
+              setCreating(false);
+            }} type="button">Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Product Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Edit Product</DialogTitle>
@@ -773,6 +820,17 @@ export default function VendorDashboard() {
               <Label htmlFor="edit-desc">Description</Label>
               <Textarea id="edit-desc" value={editingProduct.description || ''} onChange={e => setEditingProduct(prev => prev ? { ...prev, description: e.target.value } : prev)} placeholder="Short product description" />
             </div>
+            <div className="space-y-1">
+              <Label htmlFor="edit-address">Product Address</Label>
+              <Textarea
+                id="edit-address"
+                value={vendorAddress || editingProduct.address || ''}
+                onChange={e => setEditingProduct(prev => prev ? { ...prev, address: e.target.value } : prev)}
+                placeholder="Uses your business address by default"
+                disabled={!!vendorAddress}
+              />
+              <p className="text-[11px] text-muted-foreground">{vendorAddress ? 'Locked to your business address.' : 'Add an address for this product.'}</p>
+            </div>
             {savingEdit && <p className="text-xs text-muted-foreground">Saving...</p>}
           </div>
         )}
@@ -786,6 +844,12 @@ export default function VendorDashboard() {
               const uploaded = await uploadProductImage(editingFile, String(vendor.id));
               if (uploaded) imageUrl = uploaded;
             }
+            const resolvedAddress = vendorAddress || editingProduct.address?.trim() || '';
+            if (!resolvedAddress) {
+              toast({ title: 'Address required', description: 'Add a business address to save this product.', variant: 'destructive' });
+              setSavingEdit(false);
+              return;
+            }
             const { error: updErr, data } = await supabase
               .from('products')
               .update({ 
@@ -794,10 +858,11 @@ export default function VendorDashboard() {
                 stock: editingProduct.stock, 
                 description: editingProduct.description?.trim() || null, 
                 main_image_url: imageUrl,
-                category: editingProduct.category?.trim() || null 
+                category: editingProduct.category?.trim() || null,
+                address: resolvedAddress
               })
               .eq('id', editingProduct.id)
-              .select('id,name,price,stock,description,main_image_url,category')
+              .select('id,name,price,stock,description,main_image_url,category,address')
               .single();
             if (!updErr && data) {
               setProducts(prev => prev.map(p => p.id === data.id ? (data as any) : p));

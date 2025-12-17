@@ -67,6 +67,10 @@ const Profile = () => {
   const [messageText, setMessageText] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
   const tagline = profile?.tagline || 'Here to support local shops in Tangub City.';
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
 
   // Determine user column (your schema might use profile_id instead of user_id)
   const userColumn = 'user_id'; // change to 'profile_id' if your orders table uses that
@@ -121,6 +125,30 @@ const Profile = () => {
         toast({ title: 'Orders Updated', description: summary });
       }
     }, 600); // group rapid changes within 600ms
+  };
+
+  const handlePasswordSave = async () => {
+    if (newPassword.length < 6) {
+      toast({ title: 'Password too short', description: 'Use at least 6 characters.', variant: 'destructive' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({ title: 'Passwords do not match', description: 'Please retype your new password.', variant: 'destructive' });
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      toast({ title: 'Password updated', description: 'Your new password is active.' });
+      setPasswordDialogOpen(false);
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (e: any) {
+      toast({ title: 'Update failed', description: e.message || 'Could not change password.', variant: 'destructive' });
+    } finally {
+      setChangingPassword(false);
+    }
   };
 
   // Realtime subscription to order status changes for this user
@@ -548,18 +576,18 @@ const Profile = () => {
                   <div className="space-y-4">
                     <h3 className="text-lg font-semibold">Account Actions</h3>
                     <div className="space-y-2">
-                      <Button variant="outline" className="w-full justify-start">
-                        <CreditCard className="h-4 w-4 mr-2" />
-                        Payment Methods
+                      <Button variant="outline" className="w-full justify-start" onClick={() => setIsEditing(true)}>
+                        <Edit className="h-4 w-4 mr-2" />
+                        Edit Profile
                       </Button>
-                      <Button variant="outline" className="w-full justify-start">
+                      <Button variant="outline" className="w-full justify-start" onClick={() => setPasswordDialogOpen(true)}>
                         <Settings className="h-4 w-4 mr-2" />
-                        Privacy Settings
+                        Change Password
                       </Button>
                       <Button 
                         variant="outline" 
                         className="w-full justify-start text-destructive hover:text-destructive"
-                        onClick={async () => { await signOut(); navigate('/'); }}
+                        onClick={async () => { await signOut(); navigate('/login/user'); }}
                       >
                         <LogOut className="h-4 w-4 mr-2" />
                         Log Out
@@ -572,6 +600,27 @@ const Profile = () => {
           </Tabs>
         </div>
       </div>
+      <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Change Password</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1">
+              <Label htmlFor="new-password">New Password</Label>
+              <Input id="new-password" type="password" value={newPassword} onChange={(e)=>setNewPassword(e.target.value)} placeholder="At least 6 characters" />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="confirm-password">Confirm Password</Label>
+              <Input id="confirm-password" type="password" value={confirmPassword} onChange={(e)=>setConfirmPassword(e.target.value)} />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={()=>setPasswordDialogOpen(false)} disabled={changingPassword}>Cancel</Button>
+              <Button onClick={handlePasswordSave} disabled={changingPassword}>{changingPassword ? 'Updating...' : 'Save Password'}</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
       <Dialog open={!!messageOrderId} onOpenChange={(o)=>{ if(!o){ setMessageOrderId(null);} }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

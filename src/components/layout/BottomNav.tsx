@@ -16,8 +16,11 @@ export default function BottomNav() {
   const { profile } = useAuth();
   const { items } = useCart({ autoCreate: false });
   const cartCount = items.reduce((sum, i) => sum + i.quantity, 0);
-
-  const visibleTabs = tabs.filter(t => !t.requiresAuth || !!profile);
+  const isVendor = profile?.role === 'vendor';
+  const visibleTabs = tabs.filter(t => {
+    if (isVendor && t.to === "/cart") return false;
+    return !t.requiresAuth || !!profile;
+  });
 
   return (
     <nav className="fixed bottom-0 inset-x-0 z-40 md:hidden border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">

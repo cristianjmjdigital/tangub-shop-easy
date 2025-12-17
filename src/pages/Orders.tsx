@@ -68,28 +68,35 @@ export default function Orders() {
   // Realtime updates for order status changes belonging to this user
   useEffect(() => {
     if (!profile?.id) return;
-    const statusCache = new Map<string,string>();
-    orders.forEach(o => statusCache.set(o.id, o.status));
+    const statusRef = new Map<string, string>();
+    orders.forEach(o => statusRef.set(o.id, o.status));
     const channel = supabase
       .channel('orders-user-' + profile.id)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `user_id=eq.${profile.id}` }, (payload: any) => {
         setOrders(prev => {
           const next = [...prev];
-            const idx = next.findIndex(o => o.id === payload.new.id);
-          const prevStatus = statusCache.get(payload.new.id);
+          const idx = next.findIndex(o => o.id === payload.new.id);
+          const prevStatus = statusRef.get(payload.new.id);
           const newStatus = payload.new.status;
-            if (idx >= 0) next[idx] = payload.new as any; else next.unshift(payload.new as any);
-          // Emit toast only for true status change events (UPDATE) and when status actually changes
+          if (idx >= 0) next[idx] = payload.new as any; else next.unshift(payload.new as any);
+
+          // Notify on meaningful status transitions
           if (payload.eventType === 'UPDATE' && prevStatus && prevStatus !== newStatus) {
-            toast({ title: 'Order status updated', description: `Order #${payload.new.id} is now ${newStatus}.` });
+            const normalized = (newStatus || '').toLowerCase();
+            let message: string | null = null;
+            if (normalized === 'preparing' || normalized === 'confirmed') message = 'Your order has been confirmed.';
+            if (normalized === 'for_delivery' || normalized === 'ready' || normalized === 'completed' || normalized === 'delivered') message = 'Your order is ready / completed.';
+            if (message) {
+              toast({ title: 'Order status updated', description: `Order #${payload.new.id}: ${message}` });
+            }
           }
-          statusCache.set(payload.new.id, newStatus);
+          statusRef.set(payload.new.id, newStatus);
           return next;
         });
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [profile?.id, toast, orders]);
+  }, [profile?.id, toast]);
 
   const grouped = useMemo(() => orders.map(o => ({
     order: o,

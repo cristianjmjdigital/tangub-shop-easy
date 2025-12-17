@@ -166,7 +166,9 @@ export default function Index() {
                 <h3 className="font-bold text-lg leading-snug">{p.title}</h3>
                 <p className="text-sm opacity-90">{p.subtitle}</p>
                 </div>
-                <Button size="sm" className="mt-auto rounded-full bg-accent text-accent-foreground hover:bg-accent/90">{p.cta}</Button>
+                <Button size="sm" className="mt-auto rounded-full bg-accent text-accent-foreground hover:bg-accent/90" asChild>
+                  <Link to="/vendors">{p.cta}</Link>
+                </Button>
               </div>
               </div>
             </div>

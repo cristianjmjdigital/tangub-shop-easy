@@ -19,6 +19,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "@/hooks/use-cart";
+import { useAuth } from "@/context/AuthContext";
 
 const Cart = () => {
   const { toast } = useToast();
@@ -26,6 +27,7 @@ const Cart = () => {
   const [paymentMethod] = useState("cash");
   const { items, updateQuantity, removeItem, subtotal, loading, checkout } = useCart();
   const navigate = useNavigate();
+  const { profile } = useAuth();
 
   const cartItems = items.map(i => ({
     id: i.id,
@@ -58,6 +60,31 @@ const Cart = () => {
       navigate('/order/confirmation', { state: { orderIds: orders.map((o:any)=>o.id), summary: orders.map((o:any)=>({ id: o.id, total: o.total })) } });
     }
   };
+
+  if (profile?.role === "vendor") {
+    return (
+      <div className="min-h-screen bg-gradient-subtle">
+        <div className="container mx-auto px-4 py-10">
+          <Card className="max-w-xl mx-auto">
+            <CardHeader>
+              <CardTitle className="text-lg">Cart unavailable for vendors</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <p>Only customer accounts can access the cart and place orders. Switch to a customer profile to continue shopping.</p>
+              <div className="flex gap-2">
+                <Button asChild variant="outline" className="flex-1">
+                  <Link to="/home">Go to Home</Link>
+                </Button>
+                <Button asChild className="flex-1" variant="secondary">
+                  <Link to="/vendor">Vendor Dashboard</Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   if (!loading && cartItems.length === 0) {
     return (

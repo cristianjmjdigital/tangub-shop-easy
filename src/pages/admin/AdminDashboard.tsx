@@ -5,28 +5,13 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Users, Store, Package, ShoppingCart, BarChart2, LogOut, Wallet, Plus, Pencil, Trash2 } from "lucide-react";
+import { Search, Users, Store, Package, ShoppingCart, BarChart2, LogOut, Wallet, Plus, Pencil, Trash2, Download, Eye } from "lucide-react";
 import { supabase, supabaseAdmin } from "@/lib/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
 import { StatusTimeline } from "@/components/ui/status-timeline";
-import {
-  SidebarProvider,
-  Sidebar,
-  SidebarContent,
-  SidebarHeader,
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarSeparator,
-  SidebarFooter,
-  SidebarInset,
-  SidebarRail,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
+import { DashboardShell } from "@/components/layout/DashboardShell";
 import {
   Dialog,
   DialogContent,
@@ -60,12 +45,13 @@ interface UserRow { id: string; full_name: string; email: string; role: string; 
 interface VendorRow { id: string; store_name: string; address: string | null }
 interface ProductRow { id: string; name: string; price: number; vendor_id: string }
 interface OrderRow { id: string | number; total: number; status: string | null; created_at?: string; user_id?: string | number | null }
+interface ArchiveRow { id: string; entity_type: string; entity_id: string; payload: any; created_at?: string }
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [filter, setFilter] = useState("");
   const qc = useQueryClient();
-  const [tab, setTab] = useState<"dashboard"|"users"|"vendors"|"products"|"orders"|"reports">("dashboard");
+  const [tab, setTab] = useState<"dashboard"|"users"|"vendors"|"products"|"orders"|"reports"|"archives">("dashboard");
 
   // Gate (still insecure placeholder) – keep localStorage role check
   useEffect(() => {
@@ -97,6 +83,15 @@ export default function AdminDashboard() {
     }
   });
 
+  const archivesQuery = useQuery({
+    queryKey: ['admin','archives'],
+    queryFn: async () => {
+      const { data, error } = await adminClient.from('archives').select('id,entity_type,entity_id,payload,created_at').order('created_at',{ascending:false}).limit(200);
+      if (error) throw error; return data as ArchiveRow[];
+    },
+    retry: 0,
+  });
+
   const ordersQuery = useQuery({
     queryKey: ['admin','orders'],
     queryFn: async () => {
@@ -126,9 +121,21 @@ export default function AdminDashboard() {
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin','users'] }),
   });
+  const archiveRecord = async (entity_type: string, entity_id: string, payload: any) => {
+    try {
+      await (adminClient ?? supabase)
+        .from('archives')
+        .insert({ entity_type, entity_id, payload });
+    } catch (e) {
+      console.warn('Archive insert failed', e);
+    }
+  };
+
   const deleteUser = useMutation({
     mutationFn: async (id: string) => {
       const client = adminClient ?? supabase;
+      const { data: row } = await client.from('users').select('*').eq('id', id).single();
+      if (row) await archiveRecord('user', String(id), row);
       const { error } = await client.from('users').delete().eq('id', id);
       if (error) throw error; return id;
     },
@@ -155,6 +162,8 @@ export default function AdminDashboard() {
   const deleteVendor = useMutation({
     mutationFn: async (id: string) => {
       const client = adminClient ?? supabase;
+      const { data: row } = await client.from('vendors').select('*').eq('id', id).single();
+      if (row) await archiveRecord('vendor', String(id), row);
       const { error } = await client.from('vendors').delete().eq('id', id);
       if (error) throw error; return id;
     },
@@ -184,6 +193,8 @@ export default function AdminDashboard() {
   const deleteProduct = useMutation({
     mutationFn: async (id: string) => {
       const client = adminClient ?? supabase;
+      const { data: row } = await client.from('products').select('*').eq('id', id).single();
+      if (row) await archiveRecord('product', String(id), row);
       const { error } = await client.from('products').delete().eq('id', id);
       if (error) throw error; return id;
     },
@@ -205,6 +216,7 @@ export default function AdminDashboard() {
   const vendorsData = vendorsQuery.data || [];
   const productsData = productsQuery.data || [];
   const ordersData = ordersQuery.data || [];
+  const archivesData = archivesQuery.data || [];
 
   const searchSuggestions = useMemo(() => {
     const seen = new Set<string>();
@@ -322,6 +334,7 @@ export default function AdminDashboard() {
   const filteredVendors = normalizedFilter ? vendorsData.filter(v => filterMatch(v.store_name) || filterMatch(v.address)) : vendorsData;
   const filteredProducts = normalizedFilter ? productsData.filter(p => filterMatch(p.name) || filterMatch(p.vendor_id)) : productsData;
   const filteredOrders = normalizedFilter ? ordersData.filter(o => filterMatch(o.id) || filterMatch(o.status)) : ordersData;
+  const filteredArchives = normalizedFilter ? archivesData.filter(a => filterMatch(a.entity_type) || filterMatch(a.entity_id) || filterMatch(JSON.stringify(a.payload||{}))) : archivesData;
 
   // (Effect removed—react-query handles fetching.)
 
@@ -330,102 +343,65 @@ export default function AdminDashboard() {
     navigate("/admin/login");
   };
 
+  const navItems = [
+    { key: "dashboard", label: "Dashboard", icon: BarChart2 },
+    { key: "users", label: "Users", icon: Users },
+    { key: "vendors", label: "Vendors", icon: Store },
+    { key: "products", label: "Products", icon: Package },
+    { key: "orders", label: "Orders", icon: ShoppingCart },
+    { key: "reports", label: "Reports", icon: Wallet },
+    { key: "archives", label: "Archives", icon: Trash2 },
+  ];
+
   return (
-    <SidebarProvider>
-      <Sidebar collapsible="icon" className="bg-sidebar">
-        <SidebarHeader className="px-3 py-4">
-          <div className="flex items-center gap-2 px-1">
-            <div className="h-7 w-7 rounded bg-primary/90" />
-            <span className="font-semibold tracking-wide">Admin</span>
-          </div>
-        </SidebarHeader>
-        <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupLabel>Overview</SidebarGroupLabel>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton isActive={tab==="dashboard"} onClick={()=>setTab("dashboard")}>
-                  <BarChart2 /> <span>Dashboard</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton isActive={tab==="users"} onClick={()=>setTab("users")}>
-                  <Users /> <span>Users</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton isActive={tab==="vendors"} onClick={()=>setTab("vendors")}>
-                  <Store /> <span>Vendors</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton isActive={tab==="products"} onClick={()=>setTab("products")}>
-                  <Package /> <span>Products</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton isActive={tab==="orders"} onClick={()=>setTab("orders")}>
-                  <ShoppingCart /> <span>Orders</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton isActive={tab==="reports"} onClick={()=>setTab("reports")}>
-                  <Wallet /> <span>Reports</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroup>
-        </SidebarContent>
-        <SidebarSeparator />
-        <SidebarFooter className="px-2 pb-3">
-          <Button variant="outline" size="sm" className="w-full" onClick={logout}><LogOut className="h-4 w-4 mr-1"/> Logout</Button>
-        </SidebarFooter>
-        <SidebarRail />
-      </Sidebar>
-      <SidebarInset>
-        {/* Top bar */}
-        <div className="flex items-center h-14 px-4 gap-3 border-b bg-background/80 supports-[backdrop-filter]:backdrop-blur">
-          <SidebarTrigger />
-          <div className="font-semibold">Admin Console</div>
-          <div className="ml-auto w-full max-w-xs">
-                <SearchBar value={filter} onChange={setFilter} placeholder="Search everything" suggestions={searchSuggestions} />
-          </div>
-        </div>
-        <div className="px-4 py-6">
+    <DashboardShell
+      roleLabel="Admin"
+      title="Admin Console"
+      navItems={navItems}
+      activeKey={tab}
+      onSelect={(key) => setTab(key as typeof tab)}
+      topRight={<SearchBar value={filter} onChange={setFilter} placeholder="Search everything" suggestions={searchSuggestions} />}
+      note={(
+        <>
           {adminClientNote && (
-            <div className="p-3 mb-4 border border-amber-300 bg-amber-50 text-amber-800 text-xs rounded">
+            <div className="p-3 border border-amber-300 bg-amber-50 text-amber-800 text-xs rounded">
               {adminClientNote}
             </div>
           )}
-          {errorMessage && <div className="p-3 mb-4 border border-destructive/40 bg-destructive/5 text-destructive text-xs rounded">{errorMessage}</div>}
-          {/* Metrics */}
-          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
-            {loading ? (
-              Array.from({ length: 6 }).map((_,i)=> (
-                <Card key={i} className="p-4"><Skeleton className="h-4 w-16 mb-3" /><Skeleton className="h-6 w-20" /></Card>
-              ))
-            ) : (
-              <>
-                <MetricCard icon={Users} label="Users" value={usersData.length} />
-                <MetricCard icon={Store} label="Vendors" value={vendorsData.length} />
-                <MetricCard icon={Package} label="Products" value={productsData.length} />
-                <MetricCard icon={ShoppingCart} label="Orders" value={ordersData.length} />
-                <MetricCard icon={Wallet} label="Total Sales" value={`₱${totalSales.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}`} />
-                <MetricCard icon={BarChart2} label="Active Today" value={activeToday} />
-              </>
-            )}
-          </div>
-          {/* Body */}
-          <Tabs value={tab} onValueChange={(v)=>setTab(v as typeof tab)} className="space-y-5 mt-5">
-            <TabsList className="overflow-x-auto">
-              <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-              <TabsTrigger value="users">Users</TabsTrigger>
-              <TabsTrigger value="vendors">Vendors</TabsTrigger>
-              <TabsTrigger value="products">Products</TabsTrigger>
-              <TabsTrigger value="orders">Orders</TabsTrigger>
-              <TabsTrigger value="reports">Reports</TabsTrigger>
-            </TabsList>
-            <TabsContent value="dashboard">
+          {errorMessage && <div className="p-3 border border-destructive/40 bg-destructive/5 text-destructive text-xs rounded">{errorMessage}</div>}
+        </>
+      )}
+      footerAction={<Button variant="outline" size="sm" className="w-full" onClick={logout}><LogOut className="h-4 w-4 mr-1"/> Logout</Button>}
+    >
+      {/* Metrics */}
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+        {loading ? (
+          Array.from({ length: 6 }).map((_,i)=> (
+            <Card key={i} className="p-4"><Skeleton className="h-4 w-16 mb-3" /><Skeleton className="h-6 w-20" /></Card>
+          ))
+        ) : (
+          <>
+            <MetricCard icon={Users} label="Users" value={usersData.length} />
+            <MetricCard icon={Store} label="Vendors" value={vendorsData.length} />
+            <MetricCard icon={Package} label="Products" value={productsData.length} />
+            <MetricCard icon={ShoppingCart} label="Orders" value={ordersData.length} />
+            <MetricCard icon={Wallet} label="Total Sales" value={`₱${totalSales.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}`} />
+            <MetricCard icon={BarChart2} label="Active Today" value={activeToday} />
+          </>
+        )}
+      </div>
+      {/* Body */}
+      <Tabs value={tab} onValueChange={(v)=>setTab(v as typeof tab)} className="space-y-5 mt-5">
+        <TabsList className="overflow-x-auto">
+          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+          <TabsTrigger value="users">Users</TabsTrigger>
+          <TabsTrigger value="vendors">Vendors</TabsTrigger>
+          <TabsTrigger value="products">Products</TabsTrigger>
+          <TabsTrigger value="orders">Orders</TabsTrigger>
+          <TabsTrigger value="reports">Reports</TabsTrigger>
+          <TabsTrigger value="archives">Archives</TabsTrigger>
+        </TabsList>
+        <TabsContent value="dashboard">
               <SectionCard title="Overview" description="Quick glance at trends.">
                 <div className="grid md:grid-cols-2 gap-4">
                   {/* Reuse existing charts */}
@@ -556,8 +532,9 @@ export default function AdminDashboard() {
                       </div>
                     )}
                     <div className="flex gap-2 mt-1">
+                      <ViewUserButton user={u} />
                       <EditUserButton user={u} onSave={(changes)=>updateUser.mutate({ id: u.id, ...changes })} />
-                      <DeleteButton label="Delete" onConfirm={()=>deleteUser.mutate(u.id)} />
+                      <DeleteButton label="Archive" onConfirm={()=>deleteUser.mutate(u.id)} />
                     </div>
                   </Card>
                 ))}
@@ -579,8 +556,9 @@ export default function AdminDashboard() {
                     <div className="text-xs text-muted-foreground">ID: {v.id}</div>
                     <div className="text-xs">Addr: {v.address || '—'}</div>
                     <div className="flex gap-2 mt-1">
+                      <ViewVendorButton vendor={v} />
                       <EditVendorButton vendor={v} onSave={(changes)=>updateVendor.mutate({ id: v.id, ...changes })} />
-                      <DeleteButton label="Remove" onConfirm={()=>deleteVendor.mutate(v.id)} />
+                      <DeleteButton label="Archive" onConfirm={()=>deleteVendor.mutate(v.id)} />
                     </div>
                   </Card>
                 ))}
@@ -631,6 +609,11 @@ export default function AdminDashboard() {
           </TabsContent>
           <TabsContent value="reports">
             <SectionCard title="Reports" description="High level insights.">
+              <div className="flex flex-wrap gap-2 mb-3">
+                <Button size="sm" variant="outline" onClick={()=>downloadCSV('orders-report.csv', ordersData)}><Download className="h-4 w-4 mr-1" /> Orders CSV</Button>
+                <Button size="sm" variant="outline" onClick={()=>downloadCSV('vendors-report.csv', vendorsData)}><Download className="h-4 w-4 mr-1" /> Vendors CSV</Button>
+                <Button size="sm" variant="outline" onClick={()=>downloadCSV('customers-report.csv', usersData.filter(u=>u.role!=='admin'))}><Download className="h-4 w-4 mr-1" /> Customers CSV</Button>
+              </div>
               <div className="grid md:grid-cols-2 gap-4">
                 <Card className="p-4">
                   <h3 className="font-semibold mb-2">Sales by Month</h3>
@@ -670,10 +653,29 @@ export default function AdminDashboard() {
               </div>
             </SectionCard>
           </TabsContent>
+          <TabsContent value="archives">
+            <SectionCard title="Archives" description="Deleted records kept for recovery.">
+              <SearchBar value={filter} onChange={setFilter} suggestions={searchSuggestions} />
+              {archivesQuery.isError && <div className="text-sm text-destructive">Archives table not reachable. Ensure table 'archives' exists with columns entity_type, entity_id, payload, created_at.</div>}
+              <div className="space-y-3">
+                {filteredArchives.map(a => (
+                  <Card key={a.id} className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-medium capitalize">{a.entity_type}</div>
+                        <div className="text-xs text-muted-foreground">Original ID: {a.entity_id}</div>
+                        <div className="text-[11px] text-muted-foreground">Archived {a.created_at ? formatDistanceToNow(new Date(a.created_at), { addSuffix: true }) : ''}</div>
+                      </div>
+                    </div>
+                    <pre className="mt-3 text-[11px] bg-muted/50 p-2 rounded overflow-auto max-h-48 whitespace-pre-wrap">{JSON.stringify(a.payload, null, 2)}</pre>
+                  </Card>
+                ))}
+                {filteredArchives.length === 0 && <div className="text-sm text-muted-foreground">No archived records.</div>}
+              </div>
+            </SectionCard>
+          </TabsContent>
         </Tabs>
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+    </DashboardShell>
   );
 }
 
@@ -687,6 +689,19 @@ function MetricCard({ icon: Icon, label, value }: { icon: ComponentType<{ classN
       <div className="text-lg font-semibold">{value}</div>
     </Card>
   );
+}
+
+function downloadCSV(filename: string, rows: any[]) {
+  if (!rows || rows.length === 0) return;
+  const headers = Object.keys(rows[0]);
+  const csv = [headers.join(',')].concat(rows.map(r => headers.map(h => JSON.stringify(r[h] ?? '')).join(','))).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 function SectionCard({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
@@ -834,6 +849,48 @@ function CreateVendorButton({ onCreate }: { onCreate: (payload: Partial<VendorRo
           <Button variant="outline" onClick={()=>setOpen(false)}>Cancel</Button>
           <Button onClick={()=>{ if(form.store_name) { onCreate(form); setOpen(false);} }}>Create</Button>
         </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ViewUserButton({ user }: { user: UserRow }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline" className="h-7 px-2"><Eye className="h-3.5 w-3.5 mr-1" /> Details</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader><DialogTitle>User Details</DialogTitle></DialogHeader>
+        <div className="text-sm space-y-1">
+          <div><span className="text-muted-foreground">Name:</span> {user.full_name || '—'}</div>
+          <div><span className="text-muted-foreground">Email:</span> {user.email}</div>
+          <div><span className="text-muted-foreground">Role:</span> {user.role}</div>
+          <div><span className="text-muted-foreground">Status:</span> {user.vendor_status || 'n/a'}</div>
+          <div><span className="text-muted-foreground">Barangay:</span> {user.barangay || '—'}</div>
+          <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 p-2 rounded">Verification documents are not stored; upload pipeline required.</div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ViewVendorButton({ vendor }: { vendor: VendorRow }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline" className="h-7 px-2"><Eye className="h-3.5 w-3.5 mr-1" /> Details</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Vendor Details</DialogTitle></DialogHeader>
+        <div className="text-sm space-y-1">
+          <div><span className="text-muted-foreground">Store:</span> {vendor.store_name}</div>
+          <div><span className="text-muted-foreground">ID:</span> {vendor.id}</div>
+          <div><span className="text-muted-foreground">Address:</span> {vendor.address || '—'}</div>
+          <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 p-2 rounded">No verification files recorded. Add storage fields to surface permits/IDs.</div>
+        </div>
       </DialogContent>
     </Dialog>
   );
