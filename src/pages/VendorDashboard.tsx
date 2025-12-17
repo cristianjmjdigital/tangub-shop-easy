@@ -400,15 +400,7 @@ export default function VendorDashboard() {
                         <p className="text-xs text-muted-foreground">Since {new Date(vendor.created_at || Date.now()).getFullYear()} • <span className="text-green-600 font-medium">Online</span></p>
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline" asChild><Link to="/home">User View</Link></Button>
-                      <Button size="sm" variant="outline" disabled={refreshing || loading} onClick={() => loadVendorData(true)}>
-                        <RefreshCw className={`h-4 w-4 mr-1 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
-                      </Button>
-                      <Button size="sm" onClick={() => setOpen(true)}>
-                        <Plus className="h-4 w-4 mr-1" /> New Product
-                      </Button>
-                    </div>
+                    
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
                     <div className="rounded-lg border p-3 bg-muted/30">
