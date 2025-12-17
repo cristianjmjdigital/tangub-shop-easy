@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -31,6 +31,7 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import Ratings from "./pages/Ratings";
 import VendorReviews from "./pages/VendorReviews";
 import { useAuth } from "./context/AuthContext";
+import { usePushSubscription } from "./hooks/use-push-subscription";
 
 const queryClient = new QueryClient();
 
@@ -55,8 +56,15 @@ const App = () => {
 
 function AppShell() {
   const location = useLocation();
+  const { profile } = useAuth();
+  const { syncIfGranted } = usePushSubscription(profile?.id);
   const isAdmin = location.pathname.startsWith("/admin");
   const isVendorShell = location.pathname.startsWith("/vendor") || location.pathname.startsWith("/login/vendor");
+
+  useEffect(() => {
+    // Silently sync push subscription if permission already granted
+    syncIfGranted();
+  }, [syncIfGranted]);
   return (
     <div className="min-h-screen bg-background pb-16 md:pb-0">
       {!isAdmin && !isVendorShell && <Navbar />}

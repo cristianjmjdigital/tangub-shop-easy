@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { StatusTimeline } from '@/components/ui/status-timeline';
 import { useNotifications } from '@/hooks/use-notifications';
+import { usePushSubscription } from '@/hooks/use-push-subscription';
 
 interface OrderRow { id: string; vendor_id: string; total: number; status: string; created_at: string }
 interface OrderItemRow { id: string; order_id: string; product_id: string; quantity: number; unit_price: number; subtotal: number; product?: { name: string; price: number } }
@@ -20,6 +21,7 @@ export default function Orders() {
   const { profile } = useAuth();
   const { toast } = useToast();
   const { isSupported: pushSupported, permission: pushPermission, requestPermission, notify } = useNotifications();
+  const { isSupported: pushCapable, ensureSubscription, syncIfGranted, status: pushStatus, lastError: pushError } = usePushSubscription(profile?.id);
   const [notifDismissed, setNotifDismissed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState<OrderRow[]>([]);
@@ -67,6 +69,8 @@ export default function Orders() {
   };
 
   useEffect(() => { load(); }, [profile?.id]);
+
+  useEffect(() => { syncIfGranted(); }, [syncIfGranted]);
 
   // Realtime updates for order status changes belonging to this user
   useEffect(() => {
@@ -145,16 +149,22 @@ export default function Orders() {
             <Button variant='outline' size='sm' onClick={load} disabled={loading}><RefreshCw className='h-4 w-4 mr-1 animate-spin' style={{ animationPlayState: loading ? 'running':'paused' }} /> Refresh</Button>
           </div>
         </div>
-        {pushSupported && pushPermission !== 'granted' && !notifDismissed && (
+        {pushCapable && Notification.permission !== 'granted' && !notifDismissed && (
           <div className='mb-4 border rounded-md p-3 bg-muted/40 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
             <div className='text-sm text-muted-foreground'>Enable browser notifications to get instant updates when your order status changes.</div>
             <div className='flex gap-2'>
               <Button size='sm' variant='default' onClick={async () => {
-                const granted = await requestPermission();
-                if (!granted) {
-                  toast({ title: 'Notifications blocked', description: 'You can enable them from your browser settings later.', variant: 'destructive' });
+                const res = await ensureSubscription({ prompt: true });
+                if (!res.ok) {
+                  const fallback = await requestPermission();
+                  if (fallback) {
+                    await ensureSubscription({ prompt: false });
+                    toast({ title: 'Notifications on', description: 'You will receive order status updates.' });
+                  } else {
+                    toast({ title: 'Notifications blocked', description: 'Enable notifications in your browser settings to get updates.', variant: 'destructive' });
+                  }
                 } else {
-                  toast({ title: 'Notifications on', description: 'We will notify you about order status changes.' });
+                  toast({ title: 'Notifications on', description: 'You will receive order status updates.' });
                 }
               }}>Enable</Button>
               <Button size='sm' variant='outline' onClick={() => setNotifDismissed(true)}>Dismiss</Button>
