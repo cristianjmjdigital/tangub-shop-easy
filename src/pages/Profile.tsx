@@ -587,7 +587,7 @@ const Profile = () => {
                       <Button 
                         variant="outline" 
                         className="w-full justify-start text-destructive hover:text-destructive"
-                        onClick={async () => { await signOut(); navigate('/login/user'); }}
+                        onClick={async () => { try { await signOut(); } finally { navigate('/login/user'); } }}
                       >
                         <LogOut className="h-4 w-4 mr-2" />
                         Log Out

@@ -50,8 +50,11 @@ const Navbar = () => {
   }, [profile?.id]);
 
   const handleLogout = async () => {
-    await signOut();
-    navigate(loginPath);
+    try {
+      await signOut();
+    } finally {
+      navigate(loginPath);
+    }
   };
 
   // Subscribe to unread messages and keep badge in sync
