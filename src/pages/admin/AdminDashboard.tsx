@@ -42,7 +42,7 @@ import {
 } from "recharts";
 
 interface UserRow { id: string; full_name: string; email: string; role: string; vendor_status?: string | null; barangay: string | null }
-interface VendorRow { id: string; store_name: string; address: string | null }
+interface VendorRow { id: string; store_name: string; address: string | null; owner_user_id?: string | null }
 interface ProductRow { id: string; name: string; price: number; vendor_id: string }
 interface OrderRow { id: string | number; total: number; status: string | null; created_at?: string; user_id?: string | number | null }
 interface ArchiveRow { id: string; entity_type: string; entity_id: string; payload: any; created_at?: string }
@@ -82,7 +82,7 @@ export default function AdminDashboard() {
   const vendorsQuery = useQuery({
     queryKey: ['admin','vendors'],
     queryFn: async () => {
-      const { data, error } = await adminClient.from('vendors').select('id,store_name,address').limit(500);
+      const { data, error } = await adminClient.from('vendors').select('id,store_name,address,owner_user_id').limit(500);
       if (error) throw error; return data as VendorRow[];
     }
   });
@@ -262,6 +262,12 @@ export default function AdminDashboard() {
     return m;
   }, [vendorsData]);
 
+  const vendorByOwner = useMemo(() => {
+    const m = new Map<string, VendorRow>();
+    vendorsData.forEach(v => { if (v.owner_user_id) m.set(String(v.owner_user_id), v); });
+    return m;
+  }, [vendorsData]);
+
   // Lookup helpers
   const userNameById = useMemo(() => {
     const m = new Map<string, string>();
@@ -343,6 +349,8 @@ export default function AdminDashboard() {
   const filterMatch = (val: unknown) => String(val ?? '').toLowerCase().includes(normalizedFilter);
   const filteredUsers = normalizedFilter ? usersData.filter(u => filterMatch(u.full_name) || filterMatch(u.email) || filterMatch(u.role) || filterMatch(u.vendor_status) || filterMatch(u.barangay)) : usersData;
   const filteredVendors = normalizedFilter ? vendorsData.filter(v => filterMatch(v.store_name) || filterMatch(v.address)) : vendorsData;
+  const userCustomers = filteredUsers.filter(u => (u.role || '').toLowerCase() === 'user');
+  const userVendors = filteredUsers.filter(u => (u.role || '').toLowerCase() === 'vendor');
   const filteredProducts = normalizedFilter ? productsData.filter(p => filterMatch(p.name) || filterMatch(p.vendor_id)) : productsData;
   const filteredOrders = normalizedFilter ? ordersData.filter(o => filterMatch(o.id) || filterMatch(o.status)) : ordersData;
   const filteredArchives = normalizedFilter ? archivesData.filter(a => filterMatch(a.entity_type) || filterMatch(a.entity_id) || filterMatch(JSON.stringify(a.payload||{}))) : archivesData;
@@ -522,7 +530,7 @@ export default function AdminDashboard() {
                 <SearchBar value={filter} onChange={setFilter} suggestions={searchSuggestions} />
               </div>
               <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {filteredUsers.map(u => (
+                {userCustomers.map(u => (
                   <Card key={u.id} className="group relative flex flex-col gap-2 overflow-hidden border border-border/70 bg-gradient-to-br from-white via-slate-50 to-slate-100/80 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:from-slate-900/70 dark:via-slate-900/60 dark:to-slate-900/55">
                     <div className="flex items-center justify-between">
                       <span className="font-medium">{u.full_name || '(no name)'} </span>
@@ -559,21 +567,30 @@ export default function AdminDashboard() {
                 <SearchBar value={filter} onChange={setFilter} suggestions={searchSuggestions} />
               </div>
               <div className="space-y-3">
-                {filteredVendors.map(v => (
-                  <Card key={v.id} className="group relative flex flex-col gap-2 overflow-hidden border border-border/70 bg-gradient-to-br from-white via-slate-50 to-slate-100/80 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:from-slate-900/70 dark:via-slate-900/60 dark:to-slate-900/55">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">{v.store_name}</span>
-                      <Badge className="bg-green-600">Active</Badge>
-                    </div>
-                    <div className="text-xs text-muted-foreground">ID: {v.id}</div>
-                    <div className="text-xs">Addr: {v.address || '—'}</div>
-                    <div className="flex gap-2 mt-1">
-                      <ViewVendorButton vendor={v} />
-                      <EditVendorButton vendor={v} onSave={(changes)=>updateVendor.mutate({ id: v.id, ...changes })} />
-                      <DeleteButton label="Archive" onConfirm={()=>deleteVendor.mutate(v.id)} />
-                    </div>
-                  </Card>
-                ))}
+                {userVendors.map(u => {
+                  const owned = vendorByOwner.get(String(u.id));
+                  return (
+                    <Card key={u.id} className="group relative flex flex-col gap-2 overflow-hidden border border-border/70 bg-gradient-to-br from-white via-slate-50 to-slate-100/80 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:from-slate-900/70 dark:via-slate-900/60 dark:to-slate-900/55">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">{u.full_name || u.email || '(no name)'} </span>
+                        <Badge variant={u.vendor_status === 'approved' ? 'default' : u.vendor_status === 'rejected' ? 'destructive' : 'outline'}>{u.vendor_status || 'pending'}</Badge>
+                      </div>
+                      <div className="text-xs text-muted-foreground">{u.email}</div>
+                      <div className="text-xs">Barangay: <span className="font-medium">{u.barangay || '—'}</span></div>
+                      <div className="text-xs">Business: <span className="font-medium">{owned?.store_name || 'Not set'}</span></div>
+                      <div className="flex gap-2 mt-1 flex-wrap">
+                        {owned && (
+                          <Button size="sm" variant="secondary" className="h-7 px-2" asChild>
+                            <a href={`/business/${owned.id}`} target="_blank" rel="noreferrer">View Shop</a>
+                          </Button>
+                        )}
+                        <ViewUserButton user={u} />
+                        <EditUserButton user={u} onSave={(changes)=>updateUser.mutate({ id: u.id, ...changes })} />
+                        <DeleteButton label="Archive" onConfirm={()=>deleteUser.mutate(u.id)} />
+                      </div>
+                    </Card>
+                  );
+                })}
               </div>
             </SectionCard>
           </TabsContent>
