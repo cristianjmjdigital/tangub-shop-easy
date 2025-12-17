@@ -352,6 +352,7 @@ export default function AdminDashboard() {
     { key: "reports", label: "Reports", icon: Wallet },
     { key: "archives", label: "Archives", icon: Trash2 },
   ];
+  const tabTriggerClass = "rounded-full px-4 py-2 text-sm transition data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm hover:bg-muted/60";
 
   return (
     <DashboardShell
@@ -381,31 +382,31 @@ export default function AdminDashboard() {
           ))
         ) : (
           <>
-            <MetricCard icon={Users} label="Users" value={usersData.length} />
-            <MetricCard icon={Store} label="Vendors" value={vendorsData.length} />
-            <MetricCard icon={Package} label="Products" value={productsData.length} />
-            <MetricCard icon={ShoppingCart} label="Orders" value={ordersData.length} />
-            <MetricCard icon={Wallet} label="Total Sales" value={`₱${totalSales.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}`} />
-            <MetricCard icon={BarChart2} label="Active Today" value={activeToday} />
+            <MetricCard icon={Users} label="Users" value={usersData.length} tone="sky" />
+            <MetricCard icon={Store} label="Vendors" value={vendorsData.length} tone="violet" />
+            <MetricCard icon={Package} label="Products" value={productsData.length} tone="amber" />
+            <MetricCard icon={ShoppingCart} label="Orders" value={ordersData.length} tone="fuchsia" />
+            <MetricCard icon={Wallet} label="Total Sales" value={`₱${totalSales.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}`} tone="emerald" />
+            <MetricCard icon={BarChart2} label="Active Today" value={activeToday} tone="slate" />
           </>
         )}
       </div>
       {/* Body */}
       <Tabs value={tab} onValueChange={(v)=>setTab(v as typeof tab)} className="space-y-5 mt-5">
-        <TabsList className="overflow-x-auto">
-          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-          <TabsTrigger value="users">Users</TabsTrigger>
-          <TabsTrigger value="vendors">Vendors</TabsTrigger>
-          <TabsTrigger value="products">Products</TabsTrigger>
-          <TabsTrigger value="orders">Orders</TabsTrigger>
-          <TabsTrigger value="reports">Reports</TabsTrigger>
-          <TabsTrigger value="archives">Archives</TabsTrigger>
+        <TabsList className="overflow-x-auto rounded-full border bg-background/70 p-1 shadow-sm backdrop-blur hidden">
+          <TabsTrigger value="dashboard" className={tabTriggerClass}>Dashboard</TabsTrigger>
+          <TabsTrigger value="users" className={tabTriggerClass}>Users</TabsTrigger>
+          <TabsTrigger value="vendors" className={tabTriggerClass}>Vendors</TabsTrigger>
+          <TabsTrigger value="products" className={tabTriggerClass}>Products</TabsTrigger>
+          <TabsTrigger value="orders" className={tabTriggerClass}>Orders</TabsTrigger>
+          <TabsTrigger value="reports" className={tabTriggerClass}>Reports</TabsTrigger>
+          <TabsTrigger value="archives" className={tabTriggerClass}>Archives</TabsTrigger>
         </TabsList>
         <TabsContent value="dashboard">
               <SectionCard title="Overview" description="Quick glance at trends.">
                 <div className="grid md:grid-cols-2 gap-4">
                   {/* Reuse existing charts */}
-                  <Card className="p-4">
+                  <Card className="relative overflow-hidden border border-border/70 bg-gradient-to-br from-white via-slate-50 to-slate-100/80 p-4 shadow-md dark:from-slate-900/70 dark:via-slate-900/60 dark:to-slate-900/55">
                     <h3 className="font-semibold mb-2">Sales by Month</h3>
                     <ChartContainer className="h-[260px]" config={{ sales: { label: 'Sales', color: 'hsl(var(--primary))' }}}>
                       <BarChart data={salesByMonth}>
@@ -417,7 +418,7 @@ export default function AdminDashboard() {
                       </BarChart>
                     </ChartContainer>
                   </Card>
-                  <Card className="p-4">
+                  <Card className="relative overflow-hidden border border-border/70 bg-gradient-to-br from-white via-slate-50 to-slate-100/80 p-4 shadow-md dark:from-slate-900/70 dark:via-slate-900/60 dark:to-slate-900/55">
                     <h3 className="font-semibold mb-2">Order Status</h3>
                     <ChartContainer
                       className="h-[260px]"
@@ -442,7 +443,7 @@ export default function AdminDashboard() {
                   </Card>
                 </div>
                 <div className="grid md:grid-cols-2 gap-4 mt-4">
-                  <Card className="p-4">
+                  <Card className="relative overflow-hidden border border-border/70 bg-gradient-to-br from-white via-slate-50 to-slate-100/80 p-4 shadow-md dark:from-slate-900/70 dark:via-slate-900/60 dark:to-slate-900/55">
                     <h3 className="font-semibold mb-2">Users by Barangay</h3>
                     <ChartContainer className="h-[260px]" config={{ users: { label: 'Users', color: 'hsl(var(--primary))' }}}>
                       <BarChart data={usersByBarangay}>
@@ -454,7 +455,7 @@ export default function AdminDashboard() {
                       </BarChart>
                     </ChartContainer>
                   </Card>
-                  <Card className="p-4">
+                  <Card className="relative overflow-hidden border border-border/70 bg-gradient-to-br from-white via-slate-50 to-slate-100/80 p-4 shadow-md dark:from-slate-900/70 dark:via-slate-900/60 dark:to-slate-900/55">
                     <h3 className="font-semibold mb-2">Orders by Barangay</h3>
                     <ChartContainer className="h-[260px]" config={{ orders: { label: 'Orders', color: 'hsl(var(--primary))' }}}>
                       <BarChart data={ordersByBarangay}>
@@ -468,7 +469,7 @@ export default function AdminDashboard() {
                   </Card>
                 </div>
                 <div className="grid md:grid-cols-2 gap-4 mt-4">
-                  <Card className="p-4">
+                  <Card className="relative overflow-hidden border border-border/70 bg-gradient-to-br from-white via-slate-50 to-slate-100/80 p-4 shadow-md dark:from-slate-900/70 dark:via-slate-900/60 dark:to-slate-900/55">
                     <h3 className="font-semibold mb-2">Top Customers (by orders)</h3>
                     <div className="space-y-2 text-sm">
                       {ordersByUser.map((row, idx) => (
@@ -483,7 +484,7 @@ export default function AdminDashboard() {
                       {ordersByUser.length === 0 && <div className="text-xs text-muted-foreground">No orders yet.</div>}
                     </div>
                   </Card>
-                  <Card className="p-4">
+                  <Card className="relative overflow-hidden border border-border/70 bg-gradient-to-br from-white via-slate-50 to-slate-100/80 p-4 shadow-md dark:from-slate-900/70 dark:via-slate-900/60 dark:to-slate-900/55">
                     <h3 className="font-semibold mb-2">Recent Orders</h3>
                     <div className="text-xs text-muted-foreground mb-2">Latest order IDs and totals</div>
                     <div className="space-y-2">
@@ -511,7 +512,7 @@ export default function AdminDashboard() {
               </div>
               <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                 {filteredUsers.map(u => (
-                  <Card key={u.id} className="p-4 flex flex-col gap-2">
+                  <Card key={u.id} className="group relative flex flex-col gap-2 overflow-hidden border border-border/70 bg-gradient-to-br from-white via-slate-50 to-slate-100/80 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:from-slate-900/70 dark:via-slate-900/60 dark:to-slate-900/55">
                     <div className="flex items-center justify-between">
                       <span className="font-medium">{u.full_name || '(no name)'} </span>
                       <div className="flex gap-1">
@@ -548,7 +549,7 @@ export default function AdminDashboard() {
               </div>
               <div className="space-y-3">
                 {filteredVendors.map(v => (
-                  <Card key={v.id} className="p-4 flex flex-col gap-2">
+                  <Card key={v.id} className="group relative flex flex-col gap-2 overflow-hidden border border-border/70 bg-gradient-to-br from-white via-slate-50 to-slate-100/80 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:from-slate-900/70 dark:via-slate-900/60 dark:to-slate-900/55">
                     <div className="flex items-center justify-between">
                       <span className="font-medium">{v.store_name}</span>
                       <Badge className="bg-green-600">Active</Badge>
@@ -573,7 +574,7 @@ export default function AdminDashboard() {
               </div>
               <div className="space-y-3">
                 {filteredProducts.map(p => (
-                  <Card key={p.id} className="p-4 flex flex-col gap-2">
+                  <Card key={p.id} className="group relative flex flex-col gap-2 overflow-hidden border border-border/70 bg-gradient-to-br from-white via-slate-50 to-slate-100/80 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:from-slate-900/70 dark:via-slate-900/60 dark:to-slate-900/55">
                     <div className="flex items-center justify-between">
                       <span className="font-medium">{p.name}</span>
                       <Badge className="bg-green-600">Active</Badge>
@@ -591,7 +592,7 @@ export default function AdminDashboard() {
               <SearchBar value={filter} onChange={setFilter} suggestions={searchSuggestions} />
               <div className="space-y-3">
                 {filteredOrders.map(o => (
-                  <Card key={o.id} className="p-4 flex flex-col gap-2 border-l-4" style={{borderLeftColor: o.status === 'Preparing'? '#d97706': o.status === 'For Delivery'? '#2563eb': o.status === 'Delivered'? '#15803d': '#dc2626'}}>
+                  <Card key={o.id} className="relative flex flex-col gap-2 overflow-hidden border border-border/70 bg-gradient-to-r from-primary/5 via-background to-background p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md" style={{borderLeftColor: o.status === 'Preparing'? '#d97706': o.status === 'For Delivery'? '#2563eb': o.status === 'Delivered'? '#15803d': '#dc2626', borderLeftWidth: 6}}>
                     <div className="flex items-center justify-between">
                       <span className="font-medium">Order #{o.id}</span>
                       <Badge>{o.status || 'n/a'}</Badge>
@@ -615,7 +616,7 @@ export default function AdminDashboard() {
                 <Button size="sm" variant="outline" onClick={()=>downloadCSV('customers-report.csv', usersData.filter(u=>u.role!=='admin'))}><Download className="h-4 w-4 mr-1" /> Customers CSV</Button>
               </div>
               <div className="grid md:grid-cols-2 gap-4">
-                <Card className="p-4">
+                <Card className="relative overflow-hidden border border-border/70 bg-gradient-to-br from-white via-slate-50 to-slate-100/80 p-4 shadow-md dark:from-slate-900/70 dark:via-slate-900/60 dark:to-slate-900/55">
                   <h3 className="font-semibold mb-2">Sales by Month</h3>
                   <ChartContainer className="h-[260px]" config={{ sales: { label: 'Sales', color: 'hsl(var(--primary))' }}}>
                     <BarChart data={salesByMonth}>
@@ -627,7 +628,7 @@ export default function AdminDashboard() {
                     </BarChart>
                   </ChartContainer>
                 </Card>
-                <Card className="p-4">
+                <Card className="relative overflow-hidden border border-border/70 bg-gradient-to-br from-white via-slate-50 to-slate-100/80 p-4 shadow-md dark:from-slate-900/70 dark:via-slate-900/60 dark:to-slate-900/55">
                   <h3 className="font-semibold mb-2">Order Status</h3>
                   <ChartContainer
                     className="h-[260px]"
@@ -659,7 +660,7 @@ export default function AdminDashboard() {
               {archivesQuery.isError && <div className="text-sm text-destructive">Archives table not reachable. Ensure table 'archives' exists with columns entity_type, entity_id, payload, created_at.</div>}
               <div className="space-y-3">
                 {filteredArchives.map(a => (
-                  <Card key={a.id} className="p-4">
+                  <Card key={a.id} className="relative overflow-hidden border border-border/70 bg-gradient-to-br from-white via-slate-50 to-slate-100/80 p-4 shadow-sm dark:from-slate-900/70 dark:via-slate-900/60 dark:to-slate-900/55">
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="font-medium capitalize">{a.entity_type}</div>
@@ -679,14 +680,33 @@ export default function AdminDashboard() {
   );
 }
 
-function MetricCard({ icon: Icon, label, value }: { icon: ComponentType<{ className?: string }>; label: string; value: number | string }) {
+type MetricTone = 'sky' | 'violet' | 'amber' | 'fuchsia' | 'emerald' | 'slate';
+const metricPalette: Record<MetricTone, { card: string; icon: string; ring: string; accent: string }> = {
+  sky: { card: 'from-sky-500/18 via-sky-500/5 to-white dark:to-slate-900', icon: 'bg-sky-500/15 text-sky-700 dark:text-sky-200', ring: 'ring-sky-200/60 dark:ring-sky-900/40', accent: 'bg-sky-500/20' },
+  violet: { card: 'from-violet-500/18 via-violet-500/6 to-white dark:to-slate-900', icon: 'bg-violet-500/15 text-violet-700 dark:text-violet-200', ring: 'ring-violet-200/60 dark:ring-violet-900/40', accent: 'bg-violet-500/20' },
+  amber: { card: 'from-amber-400/24 via-amber-300/12 to-white dark:to-slate-900', icon: 'bg-amber-400/20 text-amber-800 dark:text-amber-200', ring: 'ring-amber-200/70 dark:ring-amber-900/40', accent: 'bg-amber-400/25' },
+  fuchsia: { card: 'from-fuchsia-500/18 via-fuchsia-500/6 to-white dark:to-slate-900', icon: 'bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-200', ring: 'ring-fuchsia-200/60 dark:ring-fuchsia-900/40', accent: 'bg-fuchsia-500/20' },
+  emerald: { card: 'from-emerald-500/18 via-emerald-500/6 to-white dark:to-slate-900', icon: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-200', ring: 'ring-emerald-200/60 dark:ring-emerald-900/40', accent: 'bg-emerald-500/20' },
+  slate: { card: 'from-slate-900/10 via-slate-200/50 to-white dark:from-slate-900/70 dark:via-slate-900/50 dark:to-slate-950', icon: 'bg-slate-900/10 text-slate-800 dark:text-slate-200', ring: 'ring-slate-200/70 dark:ring-slate-800/60', accent: 'bg-slate-500/15' },
+};
+
+function MetricCard({ icon: Icon, label, value, tone = 'sky' }: { icon: ComponentType<{ className?: string }>; label: string; value: number | string; tone?: MetricTone }) {
+  const palette = metricPalette[tone] || metricPalette.sky;
   return (
-    <Card className="p-4 flex flex-col gap-1">
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">{label}</span>
-        <Icon className="h-4 w-4 text-primary" />
+    <Card className={`relative overflow-hidden border bg-gradient-to-br ${palette.card} p-4 shadow-lg ring-1 ${palette.ring}`}>
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.35),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(255,255,255,0.28),transparent_30%)]" />
+      <div className="relative flex items-start justify-between">
+        <div className="flex flex-col gap-1">
+          <span className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">{label}</span>
+          <div className="text-xl font-semibold leading-tight">{value}</div>
+        </div>
+        <div className={`rounded-full p-2 ${palette.icon}`}>
+          <Icon className="h-5 w-5" />
+        </div>
       </div>
-      <div className="text-lg font-semibold">{value}</div>
+      <div className={`relative mt-3 h-1.5 w-full overflow-hidden rounded-full bg-muted/60`}>
+        <span className={`absolute inset-y-0 left-0 w-1/2 rounded-full ${palette.accent}`} />
+      </div>
     </Card>
   );
 }
@@ -706,12 +726,16 @@ function downloadCSV(filename: string, rows: any[]) {
 
 function SectionCard({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">{title}</CardTitle>
-        <p className="text-xs text-muted-foreground font-normal -mt-2">{description}</p>
+    <Card className="relative overflow-hidden border border-primary/10 bg-gradient-to-br from-background via-background/90 to-primary/5 shadow-lg">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_10%,rgba(99,102,241,0.14),transparent_35%),radial-gradient(circle_at_90%_20%,rgba(45,212,191,0.14),transparent_35%),linear-gradient(120deg,rgba(255,255,255,0.12),transparent)]" />
+      <CardHeader className="relative border-b border-border/80 pb-4">
+        <CardTitle className="text-base flex items-center gap-2">
+          <span className="inline-block h-1.5 w-6 rounded-full bg-primary/50" />
+          {title}
+        </CardTitle>
+        <p className="text-xs text-muted-foreground font-normal -mt-1">{description}</p>
       </CardHeader>
-      <CardContent className="space-y-4">{children}</CardContent>
+      <CardContent className="relative space-y-4 pt-4">{children}</CardContent>
     </Card>
   );
 }

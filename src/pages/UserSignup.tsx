@@ -9,6 +9,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/context/AuthContext";
 
+const VERIFICATION_BUCKET = import.meta.env.VITE_VERIFICATION_BUCKET || 'verification-docs';
+
 const BARANGAYS = [
   "Aquino",
   "Barangay I - City Hall",
@@ -89,8 +91,20 @@ export default function UserSignup() {
   const [govIdPreview, setGovIdPreview] = useState<string | null>(null);
   const [businessPermitFile, setBusinessPermitFile] = useState<File | null>(null);
   const [businessPermitPreview, setBusinessPermitPreview] = useState<string | null>(null);
+  const isVendor = form.role === 'vendor';
   const normalizePhoneInput = (raw: string) => raw.replace(/\D/g, '').slice(0, 11);
   // Debug panel removed after stabilization
+
+  const uploadDoc = async (file: File | null, keyPrefix: string, userId: string) => {
+    if (!file) return null;
+    const ext = file.name.split('.').pop() || 'jpg';
+    const path = `${userId}/${keyPrefix}-${Date.now()}.${ext}`;
+    const { error: uploadErr } = await supabase.storage.from(VERIFICATION_BUCKET).upload(path, file, { upsert: true, contentType: file.type });
+    if (uploadErr) throw uploadErr;
+    const { data } = supabase.storage.from(VERIFICATION_BUCKET).getPublicUrl(path);
+    return data.publicUrl || null;
+  };
+
   const validate = () => {
     if (!form.first_name.trim()) return "First name required";
     if (!form.last_name.trim()) return "Last name required";
@@ -99,7 +113,7 @@ export default function UserSignup() {
     if (form.password.length < 6) return "Password must be at least 6 characters";
     if (form.password !== form.confirm) return "Passwords do not match";
     if (form.phone && !/^09\d{9}$/.test(form.phone)) return "Phone must be 11 digits starting with 09";
-    if (form.role === 'vendor' && !businessPermitFile) return "Business Permit image is required for vendors";
+    if (isVendor && !businessPermitFile) return "Business Permit image is required for vendors";
     return null;
   };
 
@@ -210,6 +224,16 @@ export default function UserSignup() {
 
       // Simplified: skip waiting for session (open RLS / email confirm disabled for school project)
 
+      // Upload verification documents (vendor: required permit; gov ID optional)
+      let govIdUrl: string | null = null;
+      let permitUrl: string | null = null;
+      try {
+        govIdUrl = await uploadDoc(govIdFile, 'gov-id', authUser.id);
+        permitUrl = await uploadDoc(businessPermitFile, 'business-permit', authUser.id);
+      } catch (uploadErr: any) {
+        throw new Error(uploadErr?.message || 'Failed to upload verification documents');
+      }
+
       // Direct upsert of profile (idempotent) — avoids trigger timing/RLS race.
       const desiredRole = form.role === 'vendor' ? 'vendor' : 'user';
       const vendorStatus = desiredRole === 'vendor' ? 'pending' : 'approved';
@@ -222,7 +246,9 @@ export default function UserSignup() {
           full_name: fullName,
           role: desiredRole,
           vendor_status: vendorStatus,
-          city: form.city || 'Tangub City'
+          city: form.city || 'Tangub City',
+          gov_id_url: govIdUrl,
+          business_permit_url: permitUrl,
         };
         // Only include barangay/phone if user entered (avoid errors if columns missing)
         if (form.barangay) profilePayload.barangay = form.barangay;
@@ -354,12 +380,22 @@ export default function UserSignup() {
               )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="business-permit">Business Permit (required for vendors)</Label>
-              <Input id="business-permit" type="file" accept="image/*" onChange={(e) => handlePermitChange(e.target.files)} />
-              <p className="text-xs text-muted-foreground">Image uploads only. Vendors must provide a valid permit to activate.</p>
-              {businessPermitPreview && (
-                <div className="border rounded-md p-2 bg-muted/30">
-                  <img src={businessPermitPreview} alt="Business permit preview" className="w-full rounded" />
+              {isVendor && (
+                <div className="space-y-2">
+                  <Label htmlFor="business-permit">Business Permit (required for vendors)</Label>
+                  <Input
+                    id="business-permit"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handlePermitChange(e.target.files)}
+                    required={isVendor}
+                  />
+                  <p className="text-xs text-muted-foreground">Image uploads only. Vendors must provide a valid permit to activate.</p>
+                  {businessPermitPreview && (
+                    <div className="border rounded-md p-2 bg-muted/30">
+                      <img src={businessPermitPreview} alt="Business permit preview" className="w-full rounded" />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
