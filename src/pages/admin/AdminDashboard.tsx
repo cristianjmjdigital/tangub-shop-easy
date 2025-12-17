@@ -356,7 +356,7 @@ export default function AdminDashboard() {
 
   const navItems = [
     { key: "dashboard", label: "Dashboard", icon: BarChart2 },
-    { key: "users", label: "Users", icon: Users },
+    { key: "users", label: "Customers", icon: Users },
     { key: "vendors", label: "Vendors", icon: Store },
     { key: "products", label: "Products", icon: Package },
     { key: "orders", label: "Orders", icon: ShoppingCart },
@@ -840,10 +840,10 @@ function CreateUserButton({ onCreate }: { onCreate: (payload: Partial<UserRow> &
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm"><Plus className="h-4 w-4 mr-1" /> New User</Button>
+        <Button size="sm"><Plus className="h-4 w-4 mr-1" /> New Customer</Button>
       </DialogTrigger>
       <DialogContent>
-        <DialogHeader><DialogTitle>Create user profile</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Create customer profile</DialogTitle></DialogHeader>
         <div className="grid gap-3">
           <LabeledInput label="Full name" value={form.full_name||''} onChange={v=>setForm({...form, full_name:v})} />
           <LabeledInput label="Email" type="email" value={form.email} onChange={v=>setForm({...form, email:v})} />
@@ -869,7 +869,7 @@ function EditUserButton({ user, onSave }: { user: UserRow; onSave: (changes: Par
         <Button size="sm" variant="secondary" className="h-7 px-2"><Pencil className="h-3.5 w-3.5 mr-1" /> Edit</Button>
       </DialogTrigger>
       <DialogContent>
-        <DialogHeader><DialogTitle>Edit user</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Edit Customer</DialogTitle></DialogHeader>
         <div className="grid gap-3">
           <LabeledInput label="Full name" value={form.full_name||''} onChange={v=>setForm({...form, full_name:v})} />
           <LabeledInput label="Email" type="email" value={form.email||''} onChange={v=>setForm({...form, email:v})} />
@@ -917,7 +917,7 @@ function ViewUserButton({ user }: { user: UserRow }) {
         <Button size="sm" variant="outline" className="h-7 px-2"><Eye className="h-3.5 w-3.5 mr-1" /> Details</Button>
       </DialogTrigger>
       <DialogContent>
-        <DialogHeader><DialogTitle>User Details</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Customer Details</DialogTitle></DialogHeader>
         <div className="text-sm space-y-1">
           <div><span className="text-muted-foreground">Name:</span> {user.full_name || '—'}</div>
           <div><span className="text-muted-foreground">Email:</span> {user.email}</div>

@@ -83,7 +83,7 @@ export default function UserSignup() {
     phone: "",
     city: "Tangub City",
     barangay: "Aquino",
-    role: "customer" // customer | vendor
+    role: "user" // user | vendor
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -406,12 +406,12 @@ export default function UserSignup() {
             </div>
             <div className="space-y-2">
               <Label>Account Type</Label>
-              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
+              <Select value={form.role} onValueChange={(v) => setForm(prev => ({ ...prev, role: v }))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="customer">Customer</SelectItem>
+                  <SelectItem value="user">Customer</SelectItem>
                   <SelectItem value="vendor">Vendor</SelectItem>
                 </SelectContent>
               </Select>
