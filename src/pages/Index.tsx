@@ -13,7 +13,7 @@ const promos = [
 ];
 
 const categories = [
-  { name: 'sashion', icon: Shirt },
+  { name: 'Fashion', icon: Shirt },
   { name: 'Food & Drinks', icon: Utensils },
   { name: 'Home & Living', icon: HomeIcon },
   { name: 'Gifts & Crafts', icon: Gift },
