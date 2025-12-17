@@ -10,6 +10,7 @@ import { ShoppingBag, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { StatusTimeline } from '@/components/ui/status-timeline';
+import { useNotifications } from '@/hooks/use-notifications';
 
 interface OrderRow { id: string; vendor_id: string; total: number; status: string; created_at: string }
 interface OrderItemRow { id: string; order_id: string; product_id: string; quantity: number; unit_price: number; subtotal: number; product?: { name: string; price: number } }
@@ -18,6 +19,8 @@ interface VendorRow { id: string; store_name: string }
 export default function Orders() {
   const { profile } = useAuth();
   const { toast } = useToast();
+  const { isSupported: pushSupported, permission: pushPermission, requestPermission, notify } = useNotifications();
+  const [notifDismissed, setNotifDismissed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [items, setItems] = useState<OrderItemRow[]>([]);
@@ -87,7 +90,11 @@ export default function Orders() {
             if (normalized === 'preparing' || normalized === 'confirmed') message = 'Your order has been confirmed.';
             if (normalized === 'for_delivery' || normalized === 'ready' || normalized === 'completed' || normalized === 'delivered') message = 'Your order is ready / completed.';
             if (message) {
-              toast({ title: 'Order status updated', description: `Order #${payload.new.id}: ${message}` });
+              const body = `Order #${payload.new.id}: ${message}`;
+              const pushed = notify('Order status updated', { body });
+              if (!pushed) {
+                toast({ title: 'Order status updated', description: body });
+              }
             }
           }
           statusRef.set(payload.new.id, newStatus);
@@ -138,6 +145,22 @@ export default function Orders() {
             <Button variant='outline' size='sm' onClick={load} disabled={loading}><RefreshCw className='h-4 w-4 mr-1 animate-spin' style={{ animationPlayState: loading ? 'running':'paused' }} /> Refresh</Button>
           </div>
         </div>
+        {pushSupported && pushPermission !== 'granted' && !notifDismissed && (
+          <div className='mb-4 border rounded-md p-3 bg-muted/40 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
+            <div className='text-sm text-muted-foreground'>Enable browser notifications to get instant updates when your order status changes.</div>
+            <div className='flex gap-2'>
+              <Button size='sm' variant='default' onClick={async () => {
+                const granted = await requestPermission();
+                if (!granted) {
+                  toast({ title: 'Notifications blocked', description: 'You can enable them from your browser settings later.', variant: 'destructive' });
+                } else {
+                  toast({ title: 'Notifications on', description: 'We will notify you about order status changes.' });
+                }
+              }}>Enable</Button>
+              <Button size='sm' variant='outline' onClick={() => setNotifDismissed(true)}>Dismiss</Button>
+            </div>
+          </div>
+        )}
         {error && <div className='p-3 border border-destructive/40 rounded text-destructive bg-destructive/5 text-sm mb-4'>{error}</div>}
         {loading && <div className='text-sm text-muted-foreground py-8'>Loading orders...</div>}
         {!loading && grouped.length === 0 && <div className='text-sm text-muted-foreground py-12 text-center'>No orders yet.</div>}

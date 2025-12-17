@@ -31,9 +31,11 @@ export default function VendorDashboard() {
   const [creating, setCreating] = useState(false);
   const [open, setOpen] = useState(false);
   const [newProduct, setNewProduct] = useState({ name: '', price: '', stock: '', description: '', main_image_url: '', category: '', address: '', size_options: [] as string[] });
+  const [newCategoryMode, setNewCategoryMode] = useState<string>('');
   const [newProductFile, setNewProductFile] = useState<File | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductRecord | null>(null);
+  const [editCategoryMode, setEditCategoryMode] = useState<string>('');
   const [editingFile, setEditingFile] = useState<File | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [vendorOrders, setVendorOrders] = useState<any[]>([]);
@@ -118,6 +120,7 @@ export default function VendorDashboard() {
 
     const PRODUCT_BUCKET = import.meta.env.VITE_PRODUCT_BUCKET || 'product-images';
     const CATEGORY_OPTIONS = ['Fashion','Food & Drinks','Home & Living','Gifts & Crafts','Electronics','Health & Beauty'];
+    const CUSTOM_CATEGORY_VALUE = '__custom__';
 
     const uploadProductImage = async (file: File, vendorId: string) => {
       const ext = file.name.split('.').pop() || 'jpg';
@@ -342,6 +345,29 @@ export default function VendorDashboard() {
     }
   }, [vendorAddress]);
 
+  useEffect(() => {
+    if (!open) {
+      setNewCategoryMode('');
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!editOpen) {
+      setEditCategoryMode('');
+    }
+  }, [editOpen]);
+
+  useEffect(() => {
+    if (!editingProduct) {
+      setEditCategoryMode('');
+      return;
+    }
+    const derived = CATEGORY_OPTIONS.includes(editingProduct.category || '')
+      ? (editingProduct.category || '')
+      : ((editingProduct.category || '') ? CUSTOM_CATEGORY_VALUE : '');
+    setEditCategoryMode(derived);
+  }, [editingProduct, CATEGORY_OPTIONS]);
+
   const navItems = [
     { key: "overview", label: "Overview", icon: Store },
     { key: "products", label: "Products", icon: Package },
@@ -365,6 +391,19 @@ export default function VendorDashboard() {
   if (!vendor) {
     return <div className="p-6 text-sm">No vendor record found. <Link to="/vendor/setup" className="text-primary underline">Create one</Link>.</div>;
   }
+
+  const newCategorySelectValue = newCategoryMode
+    ? newCategoryMode
+    : (CATEGORY_OPTIONS.includes(newProduct.category)
+      ? newProduct.category
+      : (newProduct.category ? CUSTOM_CATEGORY_VALUE : ''));
+  const newCategoryIsCustom = newCategorySelectValue === CUSTOM_CATEGORY_VALUE;
+  const editCategorySelectValue = editCategoryMode
+    ? editCategoryMode
+    : (editingProduct
+      ? (CATEGORY_OPTIONS.includes(editingProduct.category || '') ? (editingProduct.category || '') : ((editingProduct.category || '') ? CUSTOM_CATEGORY_VALUE : ''))
+      : '');
+  const editCategoryIsCustom = editCategorySelectValue === CUSTOM_CATEGORY_VALUE;
 
   return (
     <>
@@ -782,7 +821,17 @@ export default function VendorDashboard() {
             </div>
             <div className="space-y-1">
               <Label htmlFor="prod-category">Category</Label>
-              <Select value={newProduct.category} onValueChange={(val) => setNewProduct(p => ({ ...p, category: val, size_options: val === 'Fashion' ? p.size_options : [] }))}>
+              <Select
+                value={newCategorySelectValue}
+                onValueChange={(val) => {
+                  setNewCategoryMode(val);
+                  if (val === CUSTOM_CATEGORY_VALUE) {
+                    setNewProduct(p => ({ ...p, category: CATEGORY_OPTIONS.includes(p.category) ? '' : p.category, size_options: [] }));
+                    return;
+                  }
+                  setNewProduct(p => ({ ...p, category: val, size_options: val === 'Fashion' ? p.size_options : [] }));
+                }}
+              >
                 <SelectTrigger id="prod-category">
                   <SelectValue placeholder="Select a category" />
                 </SelectTrigger>
@@ -790,9 +839,22 @@ export default function VendorDashboard() {
                   {CATEGORY_OPTIONS.map(opt => (
                     <SelectItem key={opt} value={opt}>{opt}</SelectItem>
                   ))}
+                  <SelectItem value={CUSTOM_CATEGORY_VALUE}>Custom category</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            {newCategoryIsCustom && (
+              <div className="space-y-1">
+                <Label htmlFor="prod-category-custom">Custom Category</Label>
+                <Input
+                  id="prod-category-custom"
+                  value={newProduct.category}
+                  onChange={(e) => setNewProduct(p => ({ ...p, category: e.target.value }))}
+                  placeholder="Enter a custom category"
+                />
+                <p className="text-[11px] text-muted-foreground">Used when the product does not fit existing categories.</p>
+              </div>
+            )}
             {newProduct.category === 'Fashion' && (
               <div className="space-y-2">
                 <Label>Sizes</Label>
@@ -851,6 +913,12 @@ export default function VendorDashboard() {
                 setCreating(false);
                 return;
               }
+              const finalCategory = newProduct.category.trim();
+              if (newCategoryIsCustom && !finalCategory) {
+                toast({ title: 'Custom category required', description: 'Enter a category name or pick an existing one.', variant: 'destructive' });
+                setCreating(false);
+                return;
+              }
               const { data: inserted, error: insertErr } = await supabase
                 .from('products')
                 .insert({
@@ -860,9 +928,9 @@ export default function VendorDashboard() {
                   stock: isNaN(stockNum) ? 0 : stockNum,
                   description: newProduct.description.trim() ? newProduct.description.trim() : null,
                   main_image_url: imageUrl,
-                  category: newProduct.category.trim() || null,
+                  category: finalCategory || null,
                   address: resolvedAddress,
-                  size_options: newProduct.category === 'Fashion' ? newProduct.size_options : []
+                  size_options: finalCategory === 'Fashion' ? newProduct.size_options : []
                 })
                 .select('id,name,price,stock,description,main_image_url,category,address,size_options')
                 .single();
@@ -870,6 +938,7 @@ export default function VendorDashboard() {
                 setProducts(prev => [{ ...(inserted as any), size_options: (inserted as any).size_options || [] }, ...prev]);
                 setOpen(false);
                 setNewProduct({ name: '', price: '', stock: '', description: '', main_image_url: '', category: '', address: vendorAddress || '', size_options: [] });
+                setNewCategoryMode('');
                 setNewProductFile(null);
               }
               setCreating(false);
@@ -911,7 +980,19 @@ export default function VendorDashboard() {
             </div>
             <div className="space-y-1">
               <Label htmlFor="edit-category">Category</Label>
-              <Select value={editingProduct.category || ''} onValueChange={(val) => setEditingProduct(prev => prev ? { ...prev, category: val, size_options: val === 'Fashion' ? (prev.size_options || []) : [] } : prev)}>
+              <Select
+                value={editCategorySelectValue}
+                onValueChange={(val) => {
+                  setEditCategoryMode(val);
+                  setEditingProduct(prev => {
+                    if (!prev) return prev;
+                    if (val === CUSTOM_CATEGORY_VALUE) {
+                      return { ...prev, category: CATEGORY_OPTIONS.includes(prev.category || '') ? '' : (prev.category || ''), size_options: [] };
+                    }
+                    return { ...prev, category: val, size_options: val === 'Fashion' ? (prev.size_options || []) : [] };
+                  });
+                }}
+              >
                 <SelectTrigger id="edit-category">
                   <SelectValue placeholder="Select a category" />
                 </SelectTrigger>
@@ -919,9 +1000,22 @@ export default function VendorDashboard() {
                   {CATEGORY_OPTIONS.map(opt => (
                     <SelectItem key={opt} value={opt}>{opt}</SelectItem>
                   ))}
+                  <SelectItem value={CUSTOM_CATEGORY_VALUE}>Custom category</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            {editCategoryIsCustom && (
+              <div className="space-y-1">
+                <Label htmlFor="edit-category-custom">Custom Category</Label>
+                <Input
+                  id="edit-category-custom"
+                  value={editingProduct.category || ''}
+                  onChange={(e) => setEditingProduct(prev => prev ? { ...prev, category: e.target.value } : prev)}
+                  placeholder="Enter a custom category"
+                />
+                <p className="text-[11px] text-muted-foreground">Saved exactly as typed.</p>
+              </div>
+            )}
             <div className="space-y-1">
               <Label htmlFor="edit-desc">Description</Label>
               <Textarea id="edit-desc" value={editingProduct.description || ''} onChange={e => setEditingProduct(prev => prev ? { ...prev, description: e.target.value } : prev)} placeholder="Short product description" />
@@ -979,6 +1073,12 @@ export default function VendorDashboard() {
               setSavingEdit(false);
               return;
             }
+            const finalCategory = (editingProduct.category || '').trim();
+            if (editCategoryIsCustom && !finalCategory) {
+              toast({ title: 'Custom category required', description: 'Enter a category name or pick an existing one.', variant: 'destructive' });
+              setSavingEdit(false);
+              return;
+            }
             const { error: updErr, data } = await supabase
               .from('products')
               .update({ 
@@ -987,9 +1087,9 @@ export default function VendorDashboard() {
                 stock: editingProduct.stock, 
                 description: editingProduct.description?.trim() || null, 
                 main_image_url: imageUrl,
-                category: editingProduct.category?.trim() || null,
+                category: finalCategory || null,
                 address: resolvedAddress,
-                size_options: editingProduct.category === 'Fashion' ? (editingProduct.size_options || []) : []
+                size_options: finalCategory === 'Fashion' ? (editingProduct.size_options || []) : []
               })
               .eq('id', editingProduct.id)
               .select('id,name,price,stock,description,main_image_url,category,address,size_options')

@@ -30,6 +30,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { showOrderNotification } from "@/hooks/use-notifications";
 
 const Profile = () => {
   const { toast } = useToast();
@@ -119,9 +120,11 @@ const Profile = () => {
       if (changes.length === 0) return;
       if (changes.length === 1) {
         const c = changes[0];
+        showOrderNotification('Order status updated', `Order #${c.id} is now ${c.status}.`);
         toast({ title: 'Order Status Updated', description: `Order #${c.id} is now ${c.status}.` });
       } else {
         const summary = changes.map(c => `#${c.id.slice(0,6)}→${c.status}`).join(', ');
+        showOrderNotification('Orders updated', summary);
         toast({ title: 'Orders Updated', description: summary });
       }
     }, 600); // group rapid changes within 600ms
