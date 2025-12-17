@@ -379,26 +379,6 @@ export default function UserSignup() {
                 </div>
               )}
             </div>
-            <div className="space-y-2">
-              {isVendor && (
-                <div className="space-y-2">
-                  <Label htmlFor="business-permit">Business Permit (required for vendors)</Label>
-                  <Input
-                    id="business-permit"
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handlePermitChange(e.target.files)}
-                    required={isVendor}
-                  />
-                  <p className="text-xs text-muted-foreground">Image uploads only. Vendors must provide a valid permit to activate.</p>
-                  {businessPermitPreview && (
-                    <div className="border rounded-md p-2 bg-muted/30">
-                      <img src={businessPermitPreview} alt="Business permit preview" className="w-full rounded" />
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
@@ -435,6 +415,26 @@ export default function UserSignup() {
                   <SelectItem value="vendor">Vendor</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              {isVendor && (
+                <div className="space-y-2">
+                  <Label htmlFor="business-permit">Business Permit (required for vendors)</Label>
+                  <Input
+                    id="business-permit"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handlePermitChange(e.target.files)}
+                    required={isVendor}
+                  />
+                  <p className="text-xs text-muted-foreground">Image uploads only. Vendors must provide a valid permit to activate.</p>
+                  {businessPermitPreview && (
+                    <div className="border rounded-md p-2 bg-muted/30">
+                      <img src={businessPermitPreview} alt="Business permit preview" className="w-full rounded" />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
