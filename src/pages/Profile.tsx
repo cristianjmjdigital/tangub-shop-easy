@@ -348,20 +348,14 @@ const Profile = () => {
                 </div>
 
                 <div className="flex space-x-2">
-                  <Button variant="outline" onClick={() => setIsEditing(!isEditing)} aria-label="Edit Profile">
-                  <Edit className="h-4 w-4 mr-2" />
-                  <span className="hidden md:inline">Edit Profile</span>
-                  </Button>
+                  
                   <Button asChild aria-label="Messages">
                   <Link to="/messages">
                     <MessageSquare className="h-4 w-4 mr-2" />
                     <span className="hidden md:inline">Message</span>
                   </Link>
                   </Button>
-                  <Button variant="outline" aria-label="Settings">
-                  <Settings className="h-4 w-4 mr-2" />
-                  <span className="hidden md:inline">Settings</span>
-                  </Button>
+                  
                 </div>
               </div>
             </CardContent>
