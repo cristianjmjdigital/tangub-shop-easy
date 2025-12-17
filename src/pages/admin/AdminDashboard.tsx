@@ -406,7 +406,7 @@ export default function AdminDashboard() {
             <MetricCard icon={Package} label="Products" value={productsData.length} tone="amber" />
             <MetricCard icon={ShoppingCart} label="Orders" value={ordersData.length} tone="fuchsia" />
             <MetricCard icon={Wallet} label="Total Sales" value={`₱${totalSales.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}`} tone="emerald" />
-            <MetricCard icon={BarChart2} label="Active Today" value={activeToday} tone="slate" />
+            
           </>
         )}
       </div>
