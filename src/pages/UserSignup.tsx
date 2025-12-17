@@ -92,6 +92,8 @@ export default function UserSignup() {
   const [businessPermitFile, setBusinessPermitFile] = useState<File | null>(null);
   const [businessPermitPreview, setBusinessPermitPreview] = useState<string | null>(null);
   const isVendor = form.role === 'vendor';
+  const desiredRole = isVendor ? 'vendor' : 'user';
+  const vendorStatus = desiredRole === 'vendor' ? 'pending' : 'approved';
   const normalizePhoneInput = (raw: string) => raw.replace(/\D/g, '').slice(0, 11);
   // Debug panel removed after stabilization
 
@@ -141,7 +143,17 @@ export default function UserSignup() {
         const { data, error } = await supabase.auth.signUp({
           email: emailTrim,
           password: form.password,
-          options: { data: { full_name: fullName, first_name: firstName, last_name: lastName, middle_name: middleName }, emailRedirectTo }
+          options: {
+            data: {
+              full_name: fullName,
+              first_name: firstName,
+              last_name: lastName,
+              middle_name: middleName,
+              role: desiredRole,
+              vendor_status: vendorStatus,
+            },
+            emailRedirectTo,
+          }
         });
         signUpData = data; signUpError = error;
         if (!error) break;
@@ -237,8 +249,6 @@ export default function UserSignup() {
       }
 
       // Direct upsert of profile (idempotent) — avoids trigger timing/RLS race.
-      const desiredRole = form.role === 'vendor' ? 'vendor' : 'user';
-      const vendorStatus = desiredRole === 'vendor' ? 'pending' : 'approved';
       let upsertSuccess = false;
       let lastUpsertErr: any = null;
       for (let attempt = 0; attempt < 3; attempt++) {
