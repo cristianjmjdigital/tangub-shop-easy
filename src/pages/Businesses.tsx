@@ -19,7 +19,7 @@ import {
 import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 
-interface VendorRow { id: string; store_name: string; description?: string | null; address?: string | null; barangay?: string | null; created_at?: string; logo_url?: string | null }
+interface VendorRow { id: string; store_name: string; description?: string | null; address?: string | null; barangay?: string | null; created_at?: string; logo_url?: string | null; contact_phone?: string | null }
 interface ProductRow { id: string; vendor_id: string }
 
 const Businesses = () => {
@@ -34,7 +34,7 @@ const Businesses = () => {
       setLoading(true); setError(null);
       const { data: vRows, error: vErr } = await supabase
         .from('vendors')
-        .select('id,store_name,description,address,created_at,logo_url')
+        .select('id,store_name,description,address,created_at,logo_url,contact_phone')
         .limit(200);
       if (vErr) { setError(vErr.message); setLoading(false); return; }
       setVendors(vRows as VendorRow[]);
@@ -72,7 +72,7 @@ const Businesses = () => {
         isVerified: true,
         subscriptionPlan: 'Standard',
         openTime: '—',
-        phone: '',
+        phone: v.contact_phone || '',
         email: '',
         featured: false,
       };
@@ -91,6 +91,8 @@ const Businesses = () => {
   const BusinessCard = ({ business }: { business: any }) => {
     const [showFallback, setShowFallback] = useState(!business.image);
     const initials = (business.name || 'Shop').split(' ').slice(0, 2).map((p: string) => p[0]).join('').toUpperCase();
+    const sanitizedPhone = business.phone ? String(business.phone).replace(/[^\d+]/g, '') : '';
+    const telHref = sanitizedPhone ? `tel:${sanitizedPhone}` : '';
 
     return (
       <Card className="overflow-hidden hover:shadow-elegant transition-all duration-300 group">
@@ -179,10 +181,19 @@ const Businesses = () => {
                 Visit Store
               </Link>
             </Button>
-            <Button variant="outline" className="flex-1">
-              <Phone className="h-4 w-4 mr-2" />
-              Contact
-            </Button>
+            {telHref ? (
+              <Button variant="outline" className="flex-1" asChild>
+                <a href={telHref}>
+                  <Phone className="h-4 w-4 mr-2" />
+                  Contact
+                </a>
+              </Button>
+            ) : (
+              <Button variant="outline" className="flex-1" disabled>
+                <Phone className="h-4 w-4 mr-2" />
+                Contact
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
