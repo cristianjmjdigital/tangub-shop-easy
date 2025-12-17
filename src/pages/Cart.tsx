@@ -56,7 +56,7 @@ const Cart = () => {
       toast({ title: "Cart is empty", description: "Please add items to your cart before placing an order.", variant: "destructive" });
       return;
     }
-    const { orders } = await checkout();
+    const { orders } = await checkout({ deliveryFee });
     if (orders.length) {
       navigate('/order/confirmation', { state: { orderIds: orders.map((o:any)=>o.id), summary: orders.map((o:any)=>({ id: o.id, total: o.total })) } });
     }

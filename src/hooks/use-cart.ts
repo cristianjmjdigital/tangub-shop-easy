@@ -193,7 +193,7 @@ export function useCart(options: UseCartOptions = {}) {
   const subtotal = useMemo(() => items.reduce((sum, i) => sum + (i.product?.price ?? 0) * i.quantity, 0), [items]);
 
   // Checkout: try RPC to finalize server-side (creates order, copies items, clears cart), fallback to client flow
-  const checkout = useCallback(async () => {
+  const checkout = useCallback(async (options: { deliveryFee?: number } = {}) => {
     if (!authUser) {
       toast({ title: 'Please login', description: 'Login required to checkout', variant: 'destructive' });
       return { orders: [] };
@@ -206,6 +206,19 @@ export function useCart(options: UseCartOptions = {}) {
     const snapshotItems = [...items];
     const snapshotCart = cart;
     const userRowId = profile?.id || authUser.id;
+    const normalizedDeliveryFee = Number.isFinite(Number(options.deliveryFee))
+      ? Math.max(0, Number(options.deliveryFee))
+      : 0;
+    const vendorIds = Array.from(
+      new Set(
+        items
+          .map(it => it.product?.vendor_id)
+          .filter((v): v is string | number => Boolean(v))
+      )
+    );
+    const deliveryFeePerOrder = vendorIds.length > 0
+      ? normalizedDeliveryFee / vendorIds.length
+      : normalizedDeliveryFee;
     try {
       setLoading(true);
 
@@ -216,18 +229,44 @@ export function useCart(options: UseCartOptions = {}) {
         currentCart = cart;
       }
 
-      // Preferred: server-side finalize (also clears cart_items)
-      const { data: orderId, error: rpcErr } = await supabase.rpc('finalize_checkout_bigint', {
-        p_user_id: userRowId,
-        p_vendor_id: currentCart?.vendor_id ?? null,
-      });
+      // Preferred: server-side finalize (also clears cart_items) when single-vendor cart
+      const primaryVendorId = currentCart?.vendor_id ?? vendorIds[0] ?? null;
+      if (vendorIds.length <= 1) {
+        const { data: orderId, error: rpcErr } = await supabase.rpc('finalize_checkout_bigint', {
+          p_user_id: userRowId,
+          p_vendor_id: primaryVendorId,
+        });
 
-      if (!rpcErr && orderId) {
-        // Best effort refetch cart to update UI
-        setItems([]);
-        await loadCart();
-        toast({ title: 'Order placed', description: 'Checkout completed.' });
-        return { orders: [{ id: orderId }] };
+        if (!rpcErr && orderId) {
+          let orderRecord: any = { id: orderId };
+
+          // Add delivery fee to the stored total so vendor/customer views stay consistent
+          const { data: existing } = await supabase
+            .from('orders')
+            .select('id,total,total_amount')
+            .eq('id', orderId)
+            .maybeSingle();
+          const baseTotal = Number(existing?.total ?? existing?.total_amount ?? 0);
+          const updatedTotal = baseTotal + normalizedDeliveryFee;
+
+          if (normalizedDeliveryFee > 0) {
+            const { data: updated } = await supabase
+              .from('orders')
+              .update({ total: updatedTotal })
+              .eq('id', orderId)
+              .select('*')
+              .maybeSingle();
+            orderRecord = updated || { ...existing, id: orderId, total: updatedTotal };
+          } else {
+            orderRecord = existing || { id: orderId, total: baseTotal };
+          }
+
+          // Best effort refetch cart to update UI
+          setItems([]);
+          await loadCart();
+          toast({ title: 'Order placed', description: 'Checkout completed.' });
+          return { orders: [{ ...orderRecord, total: orderRecord.total ?? updatedTotal ?? baseTotal }] };
+        }
       }
 
       // Fallback to client-side flow per vendor grouping
@@ -243,10 +282,11 @@ export function useCart(options: UseCartOptions = {}) {
 
       for (const [vendorId, groupItems] of Object.entries(groups)) {
         if (vendorId === 'unknown') continue;
-        const total = groupItems.reduce((sum, it) => sum + (it.product?.price ?? 0) * it.quantity, 0);
+        const itemsTotal = groupItems.reduce((sum, it) => sum + (it.product?.price ?? 0) * it.quantity, 0);
+        const total = itemsTotal + deliveryFeePerOrder;
         const { data: order, error: orderErr } = await supabase
           .from('orders')
-          .insert({ user_id: userRowId, vendor_id: vendorId, total })
+          .insert({ user_id: userRowId, vendor_id: vendorId, total, total_amount: itemsTotal })
           .select('*')
           .single();
         if (orderErr) throw orderErr;
