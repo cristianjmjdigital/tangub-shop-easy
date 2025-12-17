@@ -49,15 +49,18 @@ export default function OrderConfirmation() {
             )}
             {summary.length > 0 && (
               <div className="space-y-3">
-                {summary.map(o => (
-                  <div key={o.id} className="flex items-center justify-between border rounded-md p-3 text-sm">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline">#{o.id}</Badge>
-                      <span>Order</span>
+                {summary.map(o => {
+                  const totalNumber = Number((o as any).total ?? (o as any).total_amount ?? 0);
+                  return (
+                    <div key={o.id} className="flex items-center justify-between border rounded-md p-3 text-sm">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">#{o.id}</Badge>
+                        <span>Order</span>
+                      </div>
+                      <span className="font-semibold">₱{totalNumber.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</span>
                     </div>
-                    <span className="font-semibold">₱{o.total.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
             {loading && <div className="text-xs text-muted-foreground">Loading items...</div>}

@@ -227,38 +227,21 @@ const Businesses = () => {
         </div>
 
         {/* Business Tabs */}
-        <Tabs defaultValue="featured" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 max-w-md mx-auto mb-8">
-            <TabsTrigger value="all">All Businesses</TabsTrigger>
-            <TabsTrigger value="featured">Featured</TabsTrigger>
-          </TabsList>
+        {/* Nav bar (same as /vendors page) */}
+        {/* If your /vendors page uses a Navbar component, render it here */}
+        {/* Example: <Navbar /> */}
 
-          <TabsContent value="featured">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {featuredBusinesses.map((business) => (
-                <BusinessCard key={business.id} business={business} />
-              ))}
-            </div>
-            {featuredBusinesses.length === 0 && (
-              <div className="text-center py-12">
-                <p className="text-muted-foreground">No featured businesses found.</p>
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="all">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {allBusinesses.map((business) => (
-                <BusinessCard key={business.id} business={business} />
-              ))}
-            </div>
-            {allBusinesses.length === 0 && (
-              <div className="text-center py-12">
-                <p className="text-muted-foreground">No businesses found matching your search.</p>
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+        {/* All Businesses */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {allBusinesses.map((business) => (
+            <BusinessCard key={business.id} business={business} />
+          ))}
+        </div>
+        {allBusinesses.length === 0 && (
+          <div className="text-center py-12">
+            <p className="text-muted-foreground">No businesses found matching your search.</p>
+          </div>
+        )}
 
       </div>
     </div>
