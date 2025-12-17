@@ -414,7 +414,7 @@ export default function VendorDashboard() {
                     <div className="rounded-lg border p-3 bg-muted/30">
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span>Today's Sales</span>
-                        <DollarSign className="h-3 w-3" />
+                        
                       </div>
                       <div className="mt-1 text-lg font-semibold">₱{metrics.salesToday.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</div>
                     </div>
@@ -428,7 +428,7 @@ export default function VendorDashboard() {
                     <div className="rounded-lg border p-3 bg-muted/30">
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span>Total Sales</span>
-                        <DollarSign className="h-3 w-3" />
+                        
                       </div>
                       <div className="mt-1 text-lg font-semibold">₱{metrics.totalSales.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</div>
                     </div>
