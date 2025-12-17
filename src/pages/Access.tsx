@@ -13,7 +13,7 @@ export default function Access() {
       </div>
       <div className="w-full max-w-sm space-y-4">
         <Button size="lg" className="w-full rounded-full" asChild>
-          <Link to="/login/user">User Login</Link>
+          <Link to="/login/user">Customer Login</Link>
         </Button>
         <Button size="lg" variant="outline" className="w-full rounded-full border-primary text-primary hover:bg-secondary" asChild>
           <Link to="/login/vendor">Vendor Login</Link>

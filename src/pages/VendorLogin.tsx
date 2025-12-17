@@ -18,7 +18,7 @@ export default function VendorLogin() {
   const [error, setError] = useState<string | null>(null);
   const [portalLock, setPortalLock] = useState<string | null>(null);
   const portalHint = (portalLock || error)?.toLowerCase().includes('customer') || (portalLock || error)?.toLowerCase().includes('admin')
-    ? { title: 'Customer session detected', ctaLabel: 'Go to User Login', href: '/login/user' }
+    ? { title: 'Customer session detected', ctaLabel: 'Go to Customer Login', href: '/login/user' }
     : null;
   const customerBlocked = Boolean(portalLock);
 
@@ -26,7 +26,7 @@ export default function VendorLogin() {
   useEffect(() => {
     const lock = searchParams.get('portalLock');
     if (lock === 'customer') {
-      const msg = 'You are logged in as a customer. Please use the User Login portal.';
+      const msg = 'You are logged in as a customer. Please use the Customer Login portal.';
       setPortalLock(msg);
       setError(msg);
     }
@@ -36,7 +36,7 @@ export default function VendorLogin() {
   useEffect(() => {
     const role = (profile?.role || '').toLowerCase();
     if (role && role !== "vendor") {
-      const msg = "You are logged in as a customer/admin. Please use the User Login portal.";
+      const msg = "You are logged in as a customer/admin. Please use the Customer Login portal.";
       setPortalLock(msg);
       setError(msg);
       signOut().finally(() => {
@@ -62,7 +62,7 @@ export default function VendorLogin() {
         .maybeSingle();
       const role = profileRow?.role;
       if ((role || '').toLowerCase() !== 'vendor') {
-        const msg = 'This account is not a vendor. Use the user login or set up a vendor profile.';
+        const msg = 'This account is not a vendor. Use the Customer Login or set up a vendor profile.';
         setPortalLock(msg);
         setError(msg);
         // Sign out to avoid lingering session as wrong role

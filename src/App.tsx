@@ -55,9 +55,10 @@ const App = () => {
 function AppShell() {
   const location = useLocation();
   const isAdmin = location.pathname.startsWith("/admin");
+  const isVendorShell = location.pathname.startsWith("/vendor") || location.pathname.startsWith("/login/vendor");
   return (
     <div className="min-h-screen bg-background pb-16 md:pb-0">
-      {!isAdmin && <Navbar />}
+      {!isAdmin && !isVendorShell && <Navbar />}
       <main>
         <Routes>
                   <Route path="/" element={<LoggedOutRoute><Access /></LoggedOutRoute>} />
@@ -86,15 +87,19 @@ function AppShell() {
                   <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
-      {!isAdmin && <BottomNav />}
+      {!isAdmin && !isVendorShell && <BottomNav />}
     </div>
   );
 }
 
 function LoggedOutRoute({ children }: { children: JSX.Element }) {
-  const { session, loading } = useAuth();
+  const { session, loading, profile } = useAuth();
   if (loading) return null;
-  if (session) return <Navigate to="/home" replace />;
+  if (session) {
+    const role = (profile?.role || '').toLowerCase();
+    if (role === 'vendor') return <Navigate to="/vendor" replace />;
+    return <Navigate to="/home" replace />;
+  }
   return children;
 }
 

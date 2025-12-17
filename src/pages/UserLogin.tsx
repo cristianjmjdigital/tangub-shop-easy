@@ -30,7 +30,7 @@ export default function UserLogin() {
     }
   }, [searchParams]);
 
-  // Prevent cross-portal use: if a vendor session hits user login, show message and sign out.
+  // Prevent cross-portal use: if a vendor session hits Customer Login, show message and sign out.
   useEffect(() => {
     const role = (profile?.role || '').toLowerCase();
     if (role === "vendor") {

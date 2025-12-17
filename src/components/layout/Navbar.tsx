@@ -193,7 +193,7 @@ const Navbar = () => {
             {!loading && !loggedIn && (
               <div className="flex gap-2">
                 <Link to="/login/user">
-                  <Button variant="secondary" size="sm">User Login</Button>
+                  <Button variant="secondary" size="sm">Customer Login</Button>
                 </Link>
                 <Link to="/login/vendor">
                   <Button variant="outline" size="sm" className="border-white/40 text-white hover:bg-white/10">Vendor</Button>
