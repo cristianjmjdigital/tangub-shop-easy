@@ -1,0 +1,44 @@
+Tangub Shopeasy - Thesis Defense Brief (Technical)
+
+System Overview:
+- Web/mobile commerce platform for Tangub City: customer shopping, vendor dashboards, admin controls.
+- Roles: customer, vendor, admin; vendor approval; business permit capture.
+
+Tech Stack:
+- Frontend: React + TypeScript (Vite), TailwindCSS + shadcn/ui components.
+- State/Data: Supabase JS client; React Query in admin for caching.
+- Backend/DB: Supabase (PostgreSQL), RLS policies, Supabase Auth (email/password), Supabase Storage for images.
+- Tooling: ESLint, PostCSS; Capacitor/Android scaffold present.
+
+Key Features:
+- Customer: browse/featured shops, cart, orders with realtime status toasts, 1–3 star ratings, vendor messaging.
+- Vendor: dashboard metrics and charts (7-day sales, status mix), product CRUD (address inherits vendor address), order status flow, messaging, store settings.
+- Admin: dashboards, approvals, CSV report downloads, soft-delete via archives table, user/vendor/product/order views, detail dialogs.
+
+Schema Highlights:
+- Tables: users (role, vendor_status, contact), vendors (store_name, address, permit fields suggested), products (name, price, stock, category, vendor_id, address), orders, order_items, order_ratings, messages, archives.
+- DDL used/suggested: archives table (entity_type, entity_id, payload, created_at); products.address; vendors.business_permit_url/gov_id_url (optional for doc storage).
+
+Architecture Notes:
+- Client-heavy rendering; Supabase BaaS for CRUD/auth/realtime.
+- Role gating in UI; cart blocked for vendors; pending/rejected vendors denied dashboard.
+- Soft-deletes: records archived before delete; CSV exports client-side.
+
+Demo Flow (short):
+1) Customer: login → featured shops/products → place order → rating (max 3 stars) → show status toast when order advanced.
+2) Vendor: login (approved) → overview metrics/charts → add product (address auto-filled) → advance order status → message customer.
+3) Admin: approve/reject vendor → download Orders CSV → archive a vendor and view in Archives tab.
+
+Panel Q&A Prep:
+- Why Supabase? rapid auth/DB/realtime; trade-offs: vendor lock-in, service role needed for privileged ops.
+- Security: RLS per user/vendor; role checks; soft-delete archive; need Storage access controls for permits.
+- Data integrity: FKs orders→users/vendors; order_items→orders/products; status enums.
+- Realtime: Supabase channels on orders/messages per user/vendor.
+- Scaling: add indexes on orders(user_id,vendor_id,status,created_at), products(vendor_id), archives(entity_type,entity_id); paginate queries.
+- Testing gaps: add Cypress/RTL and policy tests.
+- Failure modes: missing archives table, missing service-role key for admin, upload failures.
+
+Next Improvements:
+- Surface permit/ID files in admin detail (add Storage links).
+- Move admin mutations to serverless (service role) for stricter RLS.
+- Add pagination, monitoring, automated tests.

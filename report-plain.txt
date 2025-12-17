@@ -1,0 +1,28 @@
+Tangub Shopeasy - Brief (Plain Language)
+
+What it is:
+- An online marketplace for Tangub City where customers shop, vendors manage their store, and admins oversee everything.
+
+Who uses it:
+- Customers: browse shops and products, order, rate (1–3 stars), message vendors, see order updates.
+- Vendors: add products, see sales and order charts, change order status, message customers, edit store details.
+- Admins: approve vendors, view users/vendors/orders, download reports, and keep deleted records in an archive.
+
+How it’s built:
+- Uses web tech (React + TypeScript) for the app.
+- Supabase provides the database, logins, file storage for images, and live updates (so order status changes show immediately).
+
+Key safety checks:
+- Different logins for customers and vendors; unapproved vendors can’t use the vendor dashboard.
+- “Deletes” are archived so data isn’t lost right away.
+- Vendor cart access is blocked (vendors don’t buy).
+
+Demo story (short):
+1) Customer logs in, shops, orders, rates up to 3 stars, and sees status updates in real time.
+2) Vendor logs in, sees sales charts, adds a product, updates an order status, and messages the customer.
+3) Admin approves a vendor, downloads an orders report, and views archived records.
+
+If asked “what next?”:
+- Show actual permit/ID files in admin view.
+- Add more testing and monitoring.
+- Add pagination for very large data sets.
