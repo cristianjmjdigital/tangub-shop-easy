@@ -184,6 +184,12 @@ const Messages = () => {
     return () => { supabase.removeChannel(chan); };
   }, [profile?.id]);
 
+  const unreadTotal = useMemo(() => {
+    const userId = profile?.id;
+    if (!userId) return 0;
+    return rawMessages.reduce((sum, m) => sum + (m.receiver_user_id === userId && !m.read_at ? 1 : 0), 0);
+  }, [rawMessages, profile?.id]);
+
   const baseConversations: ConversationSummary[] = useMemo(() => {
     const userId = profile?.id;
     if (!userId) return [];
@@ -309,13 +315,16 @@ const Messages = () => {
   // Selected conversation details
   const currentConversation = useMemo(() => conversations.find(c => c.id === selectedChat) || null, [conversations, selectedChat]);
 
-  // Mark unread messages as read when opening
+  // Mark unread messages as read when opening (optimistic local update + DB)
   useEffect(() => {
     if (!profile?.id || !currentConversation) return;
     const unread = currentConversation.messages.filter(m => m.receiver_user_id === profile.id && !m.read_at);
     if (!unread.length) return;
     const ids = unread.map(m => m.id);
-    supabase.from('messages').update({ read_at: new Date().toISOString() }).in('id', ids).then();
+    const now = new Date().toISOString();
+    // Optimistic local mark-read so badges update instantly
+    setRawMessages(prev => prev.map(m => ids.includes(m.id) ? { ...m, read_at: now } : m));
+    supabase.from('messages').update({ read_at: now }).in('id', ids).then();
   }, [currentConversation, profile?.id]);
 
   const sendMessage = useCallback(async () => {
@@ -443,7 +452,7 @@ const Messages = () => {
                     <Skeleton className="h-5 w-16" />
                   ) : (
                     <Badge variant="secondary" className="hidden lg:inline-flex">
-                      {conversations.filter(c => c.unreadCount > 0).length} unread
+                      {unreadTotal} unread
                     </Badge>
                   )}
                 </div>
