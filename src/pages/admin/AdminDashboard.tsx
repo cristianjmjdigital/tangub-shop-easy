@@ -380,7 +380,7 @@ export default function AdminDashboard() {
       navItems={navItems}
       activeKey={tab}
       onSelect={(key) => setTab(key as typeof tab)}
-      topRight={<SearchBar value={filter} onChange={setFilter} placeholder="Search everything" suggestions={searchSuggestions} />}
+      
       note={(
         <>
           {adminClientNote && (
