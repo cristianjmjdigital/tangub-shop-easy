@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/components/ui/use-toast";
 import { DashboardShell } from "@/components/layout/DashboardShell";
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar, PieChart, Pie, Cell } from "recharts";
 
 interface VendorRecord { id: string; store_name: string; address: string | null; created_at?: string; owner_user_id?: string; contact_phone?: string | null; accepting_orders?: boolean; base_delivery_fee?: number | null; logo_url?: string | null; hero_image_url?: string | null; description?: string | null }
 interface ProductRecord { id: string; name: string; price: number; stock: number; description?: string | null; main_image_url?: string | null; category?: string | null; address?: string | null }
@@ -58,6 +59,31 @@ export default function VendorDashboard() {
   const [sendingMsg, setSendingMsg] = useState(false);
   const [tab, setTab] = useState<"overview" | "products" | "orders" | "settings">("overview");
   const vendorAddress = vendor?.address?.trim() || '';
+
+  const sales7d = useMemo(() => {
+    const map = new Map<string, number>();
+    const today = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const key = d.toISOString().slice(0,10);
+      map.set(key, 0);
+    }
+    vendorOrders.forEach(o => {
+      const key = o.created_at ? new Date(o.created_at).toISOString().slice(0,10) : '';
+      if (map.has(key)) map.set(key, (map.get(key) || 0) + Number(o.total || 0));
+    });
+    return Array.from(map.entries()).map(([date, total]) => ({ date: date.slice(5), total }));
+  }, [vendorOrders]);
+
+  const statusBreakdown = useMemo(() => {
+    const map = new Map<string, number>();
+    vendorOrders.forEach(o => {
+      const key = (o.status || 'pending').toLowerCase();
+      map.set(key, (map.get(key) || 0) + 1);
+    });
+    return Array.from(map.entries()).map(([status, value]) => ({ status, value }));
+  }, [vendorOrders]);
 
   // Block pending/rejected vendors from using dashboard
   useEffect(() => {
@@ -397,6 +423,41 @@ export default function VendorDashboard() {
                       </div>
                       <div className="mt-1 text-lg font-semibold">{metrics.totalOrders}</div>
                     </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                    <Card className="border-none shadow-none bg-muted/40">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">Sales (Last 7 Days)</CardTitle>
+                      </CardHeader>
+                      <CardContent className="h-44">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={sales7d}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                            <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                            <YAxis tick={{ fontSize: 11 }} width={50} />
+                            <Tooltip formatter={(v:number)=>`₱${Number(v).toLocaleString(undefined,{minimumFractionDigits:2})}`} labelFormatter={(l)=>`Date: ${l}`} />
+                            <Line type="monotone" dataKey="total" stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </CardContent>
+                    </Card>
+                    <Card className="border-none shadow-none bg-muted/40">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">Order Status Mix</CardTitle>
+                      </CardHeader>
+                      <CardContent className="h-44">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie data={statusBreakdown} dataKey="value" nameKey="status" outerRadius={70} label>
+                              {statusBreakdown.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={["#2563eb", "#f59e0b", "#10b981", "#ef4444", "#6366f1"][index % 5]} />
+                              ))}
+                            </Pie>
+                            <Tooltip formatter={(v:number, _name, d:any)=>[v, (d?.payload?.status||'').replace(/_/g,' ')]} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </CardContent>
+                    </Card>
                   </div>
                 </CardContent>
               </Card>
