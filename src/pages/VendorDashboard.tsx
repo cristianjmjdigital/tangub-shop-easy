@@ -440,7 +440,7 @@ export default function VendorDashboard() {
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline" asChild><Link to="/home">User View</Link></Button>
+                  
                       <Button size="sm" variant="outline" disabled={refreshing || loading} onClick={() => loadVendorData(true)}>
                         <RefreshCw className={`h-4 w-4 mr-1 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
                       </Button>
@@ -453,7 +453,7 @@ export default function VendorDashboard() {
                     <div className="rounded-lg border p-3 bg-muted/30">
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span>Today's Sales</span>
-                        <DollarSign className="h-3 w-3" />
+                        
                       </div>
                       <div className="mt-1 text-lg font-semibold">₱{metrics.salesToday.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</div>
                     </div>
@@ -467,7 +467,7 @@ export default function VendorDashboard() {
                     <div className="rounded-lg border p-3 bg-muted/30">
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span>Total Sales</span>
-                        <DollarSign className="h-3 w-3" />
+                        
                       </div>
                       <div className="mt-1 text-lg font-semibold">₱{metrics.totalSales.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</div>
                     </div>
