@@ -19,6 +19,9 @@ interface ProductCardProps {
   storePath?: string;
   onAdd?: () => void;
   adding?: boolean;
+  sizeOptions?: string[];
+  selectedSize?: string;
+  onSelectSize?: (size: string) => void;
 }
 
 const ProductCard = ({
@@ -35,7 +38,10 @@ const ProductCard = ({
   vendorId,
   storePath,
   onAdd,
-  adding
+  adding,
+  sizeOptions,
+  selectedSize,
+  onSelectSize
 }: ProductCardProps) => {
   const src = imageUrl || image || "/placeholder.svg";
   const storeHref = storePath || (vendorId ? `/business/${vendorId}` : undefined);
@@ -119,6 +125,29 @@ const ProductCard = ({
         <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
           {description || 'This product is available from this vendor. Tap to view the full store.'}
         </p>
+        {sizeOptions && sizeOptions.length > 0 && (
+          <div className="space-y-2 mb-3">
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Available Sizes</div>
+            <div className="flex flex-wrap gap-2">
+              {sizeOptions.map((size) => {
+                const selected = selectedSize === size;
+                return (
+                  <Button
+                    key={size}
+                    type="button"
+                    size="sm"
+                    variant={selected ? 'secondary' : 'outline'}
+                    className="h-8 px-3"
+                    onClick={() => onSelectSize?.(size)}
+                  >
+                    {size}
+                  </Button>
+                );
+              })}
+            </div>
+            {!selectedSize && <div className="text-[11px] text-muted-foreground">Select a size to add to cart.</div>}
+          </div>
+        )}
         <div className="flex items-center">
           <span className="text-xl font-bold text-primary">
             ₱{price.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}
@@ -130,7 +159,13 @@ const ProductCard = ({
           )}
         </div>
         {onAdd && (
-          <Button className="mt-4 w-full" variant="default" size="sm" disabled={adding} onClick={onAdd}>
+          <Button
+            className="mt-4 w-full"
+            variant="default"
+            size="sm"
+            disabled={adding || (sizeOptions && sizeOptions.length > 0 && !selectedSize)}
+            onClick={onAdd}
+          >
             {adding ? 'Adding...' : 'Add to Cart'}
           </Button>
         )}

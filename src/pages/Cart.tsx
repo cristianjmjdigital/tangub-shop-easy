@@ -34,6 +34,7 @@ const Cart = () => {
     name: i.product?.name || 'Product',
     price: i.product?.price || 0,
     quantity: i.quantity,
+    size: (i as any).size || null,
     business: i.product?.vendor?.name || 'Vendor',
     businessLocation: i.product?.vendor?.barangay || 'Location',
     image: i.product?.image_url || '/placeholder.svg',
@@ -139,6 +140,7 @@ const Cart = () => {
                       <div className="flex-1">
                         <h3 className="font-medium">{item.name}</h3>
                         <p className="text-primary font-semibold">₱{item.price.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</p>
+                        {item.size && <p className="text-xs text-muted-foreground">Size: {item.size}</p>}
                       </div>
 
                       <div className="flex items-center space-x-2">

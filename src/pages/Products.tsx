@@ -25,6 +25,7 @@ interface RawProductRow {
   location?: string | null; // if product stores its own location
   created_at?: string;
   description?: string | null;
+  size_options?: string[] | null;
 }
 
 interface VendorRow { id: string; store_name: string; address?: string | null; barangay?: string | null }
@@ -44,11 +45,13 @@ interface UIProduct {
   discount?: number;
   featured?: boolean;
   description?: string;
+  sizeOptions?: string[];
 }
 
 const Products = () => {
   const { toast } = useToast();
   const { addItem } = useCart();
+  const [selectedSizes, setSelectedSizes] = useState<Record<string, string>>({});
   const DEFAULT_CATEGORIES = [
     "Electronics",
     "Fashion",
@@ -137,7 +140,7 @@ const Products = () => {
         const [{ data: pData, error: pErr }, { data: vRows, error: vErr }] = await Promise.all([
           supabase
             .from('products')
-            .select('id,name,price,stock,vendor_id,main_image_url,image_url,description,created_at,category')
+            .select('id,name,price,stock,vendor_id,main_image_url,image_url,description,created_at,category,size_options')
             .limit(200),
           supabase
             .from('vendors')
@@ -170,6 +173,7 @@ const Products = () => {
       const category = (p as any).category || 'General';
       const location = p.location || vendor?.barangay || vendor?.address || 'Unknown';
       const description = (p as any).description || 'Detailed product information is provided by the vendor.';
+      const sizeOptions = (p as any).size_options || [];
       return {
         id: p.id,
         name: p.name,
@@ -184,6 +188,7 @@ const Products = () => {
         category,
         featured: false,
         description,
+        sizeOptions,
       };
     });
   }, [rawProducts, vendors]);
@@ -227,7 +232,16 @@ const Products = () => {
 
   const addToCart = async (product: UIProduct) => {
     try {
-      await addItem(product.id, 1);
+      if (product.sizeOptions && product.sizeOptions.length) {
+        const chosen = selectedSizes[product.id];
+        if (!chosen) {
+          toast({ title: 'Choose a size', description: 'Select a size before adding to cart.', variant: 'destructive' });
+          return;
+        }
+        await addItem(product.id, 1, product.name, chosen);
+        return;
+      }
+      await addItem(product.id, 1, product.name);
     } catch (e: any) {
       toast({ title: 'Error', description: e.message || 'Failed to add to cart', variant: 'destructive' });
     }
@@ -501,6 +515,31 @@ const Products = () => {
                         ₱{product.price.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}
                       </span>
                     </div>
+                    {product.sizeOptions && product.sizeOptions.length > 0 && (
+                      <div className="space-y-2 mb-2">
+                        <div className="text-xs uppercase tracking-wide text-muted-foreground">Available Sizes</div>
+                        <div className="flex flex-wrap gap-2">
+                          {product.sizeOptions.map((size) => {
+                            const selected = selectedSizes[product.id] === size;
+                            return (
+                              <Button
+                                key={size}
+                                type="button"
+                                size="sm"
+                                variant={selected ? 'secondary' : 'outline'}
+                                className="h-8 px-3"
+                                onClick={() => setSelectedSizes(prev => ({ ...prev, [product.id]: size }))}
+                              >
+                                {size}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                        {!selectedSizes[product.id] && (
+                          <div className="text-[11px] text-muted-foreground">Select a size before adding to cart.</div>
+                        )}
+                      </div>
+                    )}
                     <p className="text-sm text-muted-foreground line-clamp-3">{product.description || 'Detailed description provided by the vendor.'}</p>
                     <div className="mt-3 border-t pt-3 text-xs space-y-1 text-muted-foreground">
                       <div className="font-semibold text-foreground text-sm">Order Deals</div>

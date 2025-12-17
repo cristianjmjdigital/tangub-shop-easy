@@ -5,6 +5,7 @@ import { ArrowRight, Shirt, Utensils, Home as HomeIcon, Gift, Smartphone, Heart,
 import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { useCart } from '@/hooks/use-cart';
+import { useToast } from '@/hooks/use-toast';
 
 const promos = [
   { title: 'Buy 1 Pizza, Get 1 Free!', subtitle: 'Limited time only.', cta: 'Order Now', image: '/promo-1.svg' },
@@ -29,9 +30,11 @@ export default function Index() {
   const [error, setError] = useState<string | null>(null);
   const { addItem, loading: cartLoading } = useCart();
   const [addingId, setAddingId] = useState<string | null>(null);
+  const [selectedSizes, setSelectedSizes] = useState<Record<string, string>>({});
   const [vendors, setVendors] = useState<any[]>([]);
   const [vendorsLoading, setVendorsLoading] = useState(false);
   const [vendorsError, setVendorsError] = useState<string|null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     let cancelled = false;
@@ -39,7 +42,7 @@ export default function Index() {
       setLoading(true); setError(null);
       const { data, error } = await supabase
         .from('products')
-        .select('id,name,price,stock,main_image_url,description,created_at,vendor_id,vendors(store_name,address)')
+        .select('id,name,price,stock,main_image_url,description,created_at,vendor_id,size_options,vendors(store_name,address)')
         .order('created_at', { ascending: false })
         .limit(60);
       if (!cancelled) {
@@ -55,6 +58,7 @@ export default function Index() {
             imageUrl: p.main_image_url || undefined,
             description: p.description,
             stock: p.stock,
+            sizeOptions: p.size_options || [],
             created_at: p.created_at
           })));
         }
@@ -221,9 +225,16 @@ export default function Index() {
                     description={p.description || 'View store for full product details.'}
                     vendorId={p.vendorId}
                     storePath={p.vendorId ? `/business/${p.vendorId}` : undefined}
+                    sizeOptions={p.sizeOptions}
+                    selectedSize={selectedSizes[p.id]}
+                    onSelectSize={(size) => setSelectedSizes(prev => ({ ...prev, [p.id]: size }))}
                     onAdd={async () => {
+                      if (p.sizeOptions && p.sizeOptions.length > 0 && !selectedSizes[p.id]) {
+                        toast({ title: 'Choose a size', description: 'Please select a size before adding to cart.' });
+                        return;
+                      }
                       setAddingId(p.id);
-                      await addItem(p.id, 1, p.name);
+                      await addItem(p.id, 1, p.name, selectedSizes[p.id]);
                       setAddingId(id => (id === p.id ? null : id));
                     }}
                     adding={addingId === p.id || cartLoading}

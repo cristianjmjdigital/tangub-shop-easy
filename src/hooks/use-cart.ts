@@ -9,6 +9,7 @@ export interface CartItemRow {
   cart_id: string;
   product_id: string;
   quantity: number;
+  size?: string | null;
   created_at?: string;
   updated_at?: string;
   product?: any; // minimal typing; refine later
@@ -66,7 +67,7 @@ export function useCart(options: UseCartOptions = {}) {
       if (current) {
         const { data: itemRows, error: itemsErr } = await supabase
           .from('cart_items')
-          .select('*, product:products(id,name,price,stock,vendor_id)')
+          .select('*, product:products(id,name,price,stock,vendor_id,size_options)')
           .eq('cart_id', current.id);
         if (itemsErr) throw itemsErr;
         setItems(itemRows as any);
@@ -83,7 +84,7 @@ export function useCart(options: UseCartOptions = {}) {
 
   useEffect(() => { loadCart(); }, [loadCart]);
 
-  const addItem = useCallback(async (productId: string, quantity = 1, productName?: string) => {
+  const addItem = useCallback(async (productId: string, quantity = 1, productName?: string, size?: string | null) => {
     if (!authUser) {
       toast({ title: 'Please login', description: 'You must be logged in to add items to cart', variant: 'destructive' });
       return;
@@ -105,21 +106,21 @@ export function useCart(options: UseCartOptions = {}) {
       }
 
       // Upsert or increment existing item
-      const existing = items.find(i => i.product_id === productId);
+      const existing = items.find(i => i.product_id === productId && (i.size || null) === (size || null));
       if (existing) {
         const { data, error: updErr } = await supabase
           .from('cart_items')
           .update({ quantity: existing.quantity + quantity })
           .eq('id', existing.id)
-          .select('*, product:products(id,name,price,stock,vendor_id)')
+          .select('*, product:products(id,name,price,stock,vendor_id,size_options)')
           .single();
         if (updErr) throw updErr;
         setItems(prev => prev.map(i => i.id === existing.id ? (data as any) : i));
       } else {
         const { data, error: insErr } = await supabase
           .from('cart_items')
-          .insert({ cart_id: current.id, product_id: productId, quantity })
-          .select('*, product:products(id,name,price,stock,vendor_id)')
+          .insert({ cart_id: current.id, product_id: productId, quantity, size: size || null })
+          .select('*, product:products(id,name,price,stock,vendor_id,size_options)')
           .single();
         if (insErr) throw insErr;
         setItems(prev => [...prev, data as any]);
@@ -255,6 +256,7 @@ export function useCart(options: UseCartOptions = {}) {
           product_id: it.product_id,
           quantity: it.quantity,
           unit_price: it.product?.price || 0,
+          size: it.size || null,
         }));
         const { error: oiErr } = await supabase.from('order_items').insert(orderItemsPayload);
         if (oiErr) throw oiErr;
