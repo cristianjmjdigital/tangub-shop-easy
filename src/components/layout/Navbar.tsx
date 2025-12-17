@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import { useCart } from "@/hooks/use-cart";
 import { Skeleton } from "@/components/ui/skeleton";
-import { computeUnreadForUser } from '@/pages/Messages';
 import { supabase } from '@/lib/supabaseClient';
 const logo = "/logo.jpg"; // served from public/
 
@@ -36,42 +35,64 @@ const Navbar = () => {
   const isVendor = profile?.role === 'vendor';
   const loginPath = isVendor ? '/login/vendor' : '/login/user';
 
+  const fetchUnreadCount = useCallback(async () => {
+    const userId = profile?.id;
+    if (!userId) {
+      setMessageCount(0);
+      return;
+    }
+    const { count, error } = await supabase
+      .from('messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('receiver_user_id', userId)
+      .is('read_at', null);
+    if (!error) setMessageCount(count ?? 0);
+  }, [profile?.id]);
+
   const handleLogout = async () => {
     await signOut();
     navigate(loginPath);
   };
 
-  // subscribe to unread messages
-  useEffect(()=>{
-    let userId = profile?.id; // fallback later once profile loads
-    if (!userId) return; // wait for profile
-    let isMounted = true;
-    const load = async () => {
-      const { data } = await supabase
-        .from('messages')
-        .select('id,receiver_user_id,read_at')
-        .eq('receiver_user_id', userId)
-        .is('read_at', null);
-      if (isMounted) setMessageCount((data||[]).length);
-    };
-    load();
+  // Subscribe to unread messages and keep badge in sync
+  useEffect(() => {
+    const userId = profile?.id;
+    if (!userId) { setMessageCount(0); return; }
+    let active = true;
+
+    fetchUnreadCount();
+
     const channel = supabase.channel('navbar-messages-' + userId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `receiver_user_id=eq.${userId}` }, payload => {
+        const newRow: any = payload.new;
+        if (!newRow) return;
         setMessageCount(prev => {
-          const newRow: any = payload.new;
-          if (!newRow) return prev;
-          // If message inserted for this user and unread
           if (payload.eventType === 'INSERT' && !newRow.read_at) return prev + 1;
-          // If message updated (read_at set) reduce count
-            if (payload.eventType === 'UPDATE') {
-              if (newRow.read_at) return Math.max(0, prev - 1);
-            }
+          if (payload.eventType === 'UPDATE') {
+            // When read_at is set, drop count; if unread stays null, keep as is
+            if (newRow.read_at) return Math.max(0, prev - 1);
+          }
           return prev;
         });
       })
       .subscribe();
-    return () => { isMounted = false; supabase.removeChannel(channel); };
-  }, [profile?.id]);
+
+    const interval = window.setInterval(() => { if (active) fetchUnreadCount(); }, 30000);
+    const onVisibility = () => { if (document.visibilityState === 'visible') fetchUnreadCount(); };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      active = false;
+      supabase.removeChannel(channel);
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [profile?.id, fetchUnreadCount]);
+
+  // When user opens messages page, refresh unread count to clear badge promptly
+  useEffect(() => {
+    if (location.pathname.startsWith('/messages')) fetchUnreadCount();
+  }, [location.pathname, fetchUnreadCount]);
 
   const isActive = (path: string) => location.pathname === path;
 

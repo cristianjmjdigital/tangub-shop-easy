@@ -335,6 +335,7 @@ export default function VendorDashboard() {
     { key: "products", label: "Products", icon: Package },
     { key: "orders", label: "Orders", icon: ShoppingCart },
     { key: "settings", label: "Settings", icon: Settings },
+    { key: "messages", label: "Messages", icon: MessageSquare },
   ];
 
   if (loading) {
@@ -360,7 +361,10 @@ export default function VendorDashboard() {
         title="Vendor Console"
         navItems={navItems}
         activeKey={tab}
-        onSelect={(key) => setTab(key as typeof tab)}
+        onSelect={(key) => {
+          if (key === 'messages') { navigate('/messages'); return; }
+          setTab(key as typeof tab);
+        }}
         footerAction={<Button variant="outline" size="sm" className="w-full" onClick={async () => { await signOut(); navigate('/login/vendor'); }}><LogOut className="h-4 w-4 mr-1" /> Logout</Button>}
       >
         <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="space-y-6">

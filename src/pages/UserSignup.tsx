@@ -136,7 +136,7 @@ export default function UserSignup() {
       let signUpData, signUpError;
   // (removed debug panel logic)
   let ambiguousDbError = false;
-      const emailRedirectTo = `${window.location.origin}/login/user`;
+      const emailRedirectTo = `https://tangubshopeasy.netlify.app/login/user`;
       for (let attempt = 0; attempt < 2; attempt++) {
         const { data, error } = await supabase.auth.signUp({
           email: emailTrim,

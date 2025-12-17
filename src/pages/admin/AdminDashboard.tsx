@@ -659,18 +659,38 @@ export default function AdminDashboard() {
               <SearchBar value={filter} onChange={setFilter} suggestions={searchSuggestions} />
               {archivesQuery.isError && <div className="text-sm text-destructive">Archives table not reachable. Ensure table 'archives' exists with columns entity_type, entity_id, payload, created_at.</div>}
               <div className="space-y-3">
-                {filteredArchives.map(a => (
-                  <Card key={a.id} className="relative overflow-hidden border border-border/70 bg-gradient-to-br from-white via-slate-50 to-slate-100/80 p-4 shadow-sm dark:from-slate-900/70 dark:via-slate-900/60 dark:to-slate-900/55">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="font-medium capitalize">{a.entity_type}</div>
-                        <div className="text-xs text-muted-foreground">Original ID: {a.entity_id}</div>
-                        <div className="text-[11px] text-muted-foreground">Archived {a.created_at ? formatDistanceToNow(new Date(a.created_at), { addSuffix: true }) : ''}</div>
+                {filteredArchives.map(a => {
+                  const payload = a.payload || {};
+                  const entries = typeof payload === 'object' && payload !== null ? Object.entries(payload) : [];
+                  const displayed = entries.slice(0, 8);
+                  return (
+                    <Card key={a.id} className="relative overflow-hidden border border-border/70 bg-gradient-to-br from-white via-slate-50 to-slate-100/80 p-4 shadow-sm dark:from-slate-900/70 dark:via-slate-900/60 dark:to-slate-900/55">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium capitalize flex items-center gap-2">
+                            {a.entity_type}
+                            <Badge variant="outline" className="text-[11px]">#{a.entity_id}</Badge>
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">Archived {a.created_at ? formatDistanceToNow(new Date(a.created_at), { addSuffix: true }) : ''}</div>
+                        </div>
                       </div>
-                    </div>
-                    <pre className="mt-3 text-[11px] bg-muted/50 p-2 rounded overflow-auto max-h-48 whitespace-pre-wrap">{JSON.stringify(a.payload, null, 2)}</pre>
-                  </Card>
-                ))}
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        {displayed.length === 0 && (
+                          <div className="text-xs text-muted-foreground">No fields captured in payload.</div>
+                        )}
+                        {displayed.map(([key, val]) => (
+                          <div key={key} className="rounded-lg border border-border/60 bg-muted/40 p-2">
+                            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{key}</div>
+                            <div className="text-sm break-words text-foreground">{typeof val === 'object' ? JSON.stringify(val) : String(val)}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {entries.length > displayed.length && (
+                        <div className="mt-2 text-[11px] text-muted-foreground">+{entries.length - displayed.length} more fields</div>
+                      )}
+                    </Card>
+                  );
+                })}
                 {filteredArchives.length === 0 && <div className="text-sm text-muted-foreground">No archived records.</div>}
               </div>
             </SectionCard>

@@ -43,6 +43,8 @@ const Ratings = () => {
   const [ratingValue, setRatingValue] = useState(3);
   const [reviewText, setReviewText] = useState("");
 
+  const clampRating = (value: number) => Math.min(3, Math.max(1, Number.isFinite(value) ? value : 1));
+
   useEffect(() => {
     setSelectedOrderId(initialOrderId);
   }, [initialOrderId]);
@@ -55,7 +57,7 @@ const Ratings = () => {
 
   useEffect(() => {
     if (existingRating) {
-      setRatingValue(Math.min(3, Math.max(1, existingRating.rating)));
+      setRatingValue(clampRating(existingRating.rating));
       setReviewText(existingRating.review || "");
     } else {
       setReviewText("");
@@ -319,7 +321,8 @@ const Ratings = () => {
                       min={1}
                       max={3}
                       value={ratingValue}
-                      onChange={(e) => setRatingValue(Number(e.target.value))}
+                      onChange={(e) => setRatingValue(clampRating(Number(e.target.value)))}
+                      onBlur={(e) => setRatingValue(clampRating(Number(e.target.value)))}
                     />
                   </div>
                   <div className="space-y-2">
