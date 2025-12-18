@@ -115,6 +115,14 @@ export default function Orders() {
     items: items.filter(it => it.order_id === o.id),
   })), [orders, vendors, items]);
 
+  const totalsFor = (g: { order: OrderRow; items: OrderItemRow[] }) => {
+    const subtotal = g.items.reduce((acc, it) => acc + (it.subtotal || 0), 0);
+    const storedTotal = typeof g.order.total === 'number' ? g.order.total : g.order.total_amount;
+    // Ensure we show grand total (items + any delivery fee) and never just the fee
+    const grandTotal = storedTotal && storedTotal > subtotal ? storedTotal : subtotal;
+    return { subtotal, grandTotal };
+  };
+
   const statusBadge = (status: string) => {
     const base = 'text-xs capitalize';
     switch (status) {
@@ -199,7 +207,10 @@ export default function Orders() {
                 <Separator />
                 <div className='flex items-center justify-between text-sm'>
                   <span>Total</span>
-                  <span className='font-bold text-primary'>₱{g.order.total.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</span>
+                  {(() => {
+                    const { grandTotal } = totalsFor(g);
+                    return <span className='font-bold text-primary'>₱{grandTotal.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</span>;
+                  })()}
                 </div>
               </CardContent>
             </Card>
