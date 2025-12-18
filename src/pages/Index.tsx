@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import ProductCard from '@/components/ui/ProductCard';
-import { ArrowRight, Shirt, Utensils, Home as HomeIcon, Gift, Smartphone, Heart, Building2 } from 'lucide-react';
+import { ArrowRight, Shirt, Utensils, Home as HomeIcon, Gift, Smartphone, Heart, Building2, Tag } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { useCart } from '@/hooks/use-cart';
@@ -13,7 +13,7 @@ const promos = [
   { title: 'New Local Deals', subtitle: 'Support Tangub businesses', cta: 'Shop Now', image: '/promo-3.svg' }
 ];
 
-const categories = [
+const baseCategories = [
   { name: 'Fashion', icon: Shirt },
   { name: 'Food & Drinks', icon: Utensils },
   { name: 'Home & Living', icon: HomeIcon },
@@ -34,6 +34,7 @@ export default function Index() {
   const [vendors, setVendors] = useState<any[]>([]);
   const [vendorsLoading, setVendorsLoading] = useState(false);
   const [vendorsError, setVendorsError] = useState<string|null>(null);
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -66,6 +67,21 @@ export default function Index() {
       }
     };
     load();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Load distinct custom categories from products
+  useEffect(() => {
+    let cancelled = false;
+    const loadCategories = async () => {
+      const { data, error } = await supabase.from('products').select('category');
+      if (cancelled || error) return;
+      const names = Array.from(new Set((data || []).map((row: any) => (row.category || '').trim()).filter(Boolean)));
+      const baseSet = new Set(baseCategories.map(c => c.name.toLowerCase()));
+      const custom = names.filter(name => !baseSet.has(name.toLowerCase()));
+      setCustomCategories(custom);
+    };
+    loadCategories();
     return () => { cancelled = true; };
   }, []);
 
@@ -107,6 +123,7 @@ export default function Index() {
   const popularProducts = products.slice(0, 12);
   const featuredProducts = products.slice(0, 9);
   const featuredVendors = vendors;
+  const displayCategories = [...baseCategories, ...customCategories.map(name => ({ name, icon: Tag }))];
 
   const handleScanClick = async () => {
     const input = document.createElement('input');
@@ -188,7 +205,7 @@ export default function Index() {
             <Link to="/products" className="text-primary text-sm">See All</Link>
           </div>
           <div className="flex gap-4 overflow-x-auto no-scrollbar pb-1">
-            {categories.map(cat => (
+            {displayCategories.map(cat => (
               <Link
                 key={cat.name}
                 to={`/products?category=${encodeURIComponent(cat.name)}`}
