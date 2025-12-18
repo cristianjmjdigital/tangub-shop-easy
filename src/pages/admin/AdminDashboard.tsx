@@ -46,17 +46,27 @@ interface VendorRow { id: string; store_name: string; address: string | null; ow
 interface ProductRow { id: string; name: string; price: number; vendor_id: string }
 interface OrderRow { id: string | number; total: number; status: string | null; created_at?: string; user_id?: string | number | null }
 interface ArchiveRow { id: string; entity_type: string; entity_id: string; payload: any; created_at?: string }
+type TabKey = "dashboard"|"users"|"vendors"|"products"|"orders"|"reports"|"archives";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const [filter, setFilter] = useState("");
   const qc = useQueryClient();
   const adminTabKey = 'admin-dashboard-tab';
-  const allowedTabs: Array<"dashboard"|"users"|"vendors"|"products"|"orders"|"reports"|"archives"> = ["dashboard","users","vendors","products","orders","reports","archives"];
-  const [tab, setTab] = useState<"dashboard"|"users"|"vendors"|"products"|"orders"|"reports"|"archives">(() => {
+  const allowedTabs: Array<TabKey> = ["dashboard","users","vendors","products","orders","reports","archives"];
+  const [tab, setTab] = useState<TabKey>(() => {
     const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(adminTabKey) : null;
     return allowedTabs.includes(stored as any) ? stored as any : "dashboard";
   });
+  const [filters, setFilters] = useState<Record<TabKey,string>>({
+    dashboard: '',
+    users: '',
+    vendors: '',
+    products: '',
+    orders: '',
+    reports: '',
+    archives: '',
+  });
+  const setFilterFor = (key: TabKey, value: string) => setFilters(prev => ({ ...prev, [key]: value }));
 
   useEffect(() => {
     if (typeof localStorage !== 'undefined') {
@@ -229,15 +239,26 @@ export default function AdminDashboard() {
   const ordersData = ordersQuery.data || [];
   const archivesData = archivesQuery.data || [];
 
-  const searchSuggestions = useMemo(() => {
+  const customerSuggestions = useMemo(() => {
     const seen = new Set<string>();
     const out: { label: string; value: string; type: string }[] = [];
-    usersData.forEach(u => {
+    usersData.filter(u => (u.role || '').toLowerCase() === 'user').forEach(u => {
       const label = u.full_name || u.email || String(u.id);
-      if (!label) return;
-      if (seen.has(label)) return;
+      if (!label || seen.has(label)) return;
       seen.add(label);
-      out.push({ label, value: label, type: 'User' });
+      out.push({ label, value: label, type: 'Customer' });
+    });
+    return out.slice(0, 200);
+  }, [usersData]);
+
+  const vendorSuggestions = useMemo(() => {
+    const seen = new Set<string>();
+    const out: { label: string; value: string; type: string }[] = [];
+    usersData.filter(u => (u.role || '').toLowerCase() === 'vendor').forEach(u => {
+      const label = u.full_name || u.email || String(u.id);
+      if (!label || seen.has(label)) return;
+      seen.add(label);
+      out.push({ label, value: label, type: 'Vendor' });
     });
     vendorsData.forEach(v => {
       const label = v.store_name || String(v.id);
@@ -245,14 +266,44 @@ export default function AdminDashboard() {
       seen.add(label);
       out.push({ label, value: label, type: 'Vendor' });
     });
+    return out.slice(0, 200);
+  }, [usersData, vendorsData]);
+
+  const productSuggestions = useMemo(() => {
+    const seen = new Set<string>();
+    const out: { label: string; value: string; type: string }[] = [];
     productsData.forEach(p => {
       const label = p.name || String(p.id);
       if (!label || seen.has(label)) return;
       seen.add(label);
       out.push({ label, value: label, type: 'Product' });
     });
-    return out.slice(0, 300);
-  }, [usersData, vendorsData, productsData]);
+    return out.slice(0, 200);
+  }, [productsData]);
+
+  const orderSuggestions = useMemo(() => {
+    const seen = new Set<string>();
+    const out: { label: string; value: string; type: string }[] = [];
+    ordersData.forEach(o => {
+      const label = `Order #${o.id}`;
+      if (!label || seen.has(label)) return;
+      seen.add(label);
+      out.push({ label, value: String(o.id), type: o.status || 'Order' });
+    });
+    return out.slice(0, 200);
+  }, [ordersData]);
+
+  const archiveSuggestions = useMemo(() => {
+    const seen = new Set<string>();
+    const out: { label: string; value: string; type: string }[] = [];
+    archivesData.forEach(a => {
+      const label = `${friendlyEntityLabel(a.entity_type)} #${a.entity_id}`;
+      if (!label || seen.has(label)) return;
+      seen.add(label);
+      out.push({ label, value: label, type: friendlyEntityLabel(a.entity_type) });
+    });
+    return out.slice(0, 200);
+  }, [archivesData]);
 
   const vendorNameById = useMemo(() => {
     const m = new Map<string, string>();
@@ -344,16 +395,31 @@ export default function AdminDashboard() {
     return Array.from(map.entries()).map(([barangay, count]) => ({ barangay, count })).sort((a,b)=> b.count - a.count).slice(0,8);
   }, [usersData]);
 
-  // Filter logic (simple text contains across main fields)
-  const normalizedFilter = String(filter || '').trim().toLowerCase();
-  const filterMatch = (val: unknown) => String(val ?? '').toLowerCase().includes(normalizedFilter);
-  const filteredUsers = normalizedFilter ? usersData.filter(u => filterMatch(u.full_name) || filterMatch(u.email) || filterMatch(u.role) || filterMatch(u.vendor_status) || filterMatch(u.barangay)) : usersData;
-  const filteredVendors = normalizedFilter ? vendorsData.filter(v => filterMatch(v.store_name) || filterMatch(v.address)) : vendorsData;
+  // Filter logic per tab (simple text contains across main fields)
+  const normalizeFilter = (v: string) => String(v || '').trim().toLowerCase();
+  const filterMatch = (needle: string, val: unknown) => !needle || String(val ?? '').toLowerCase().includes(needle);
+
+  const normalizedUsersFilter = normalizeFilter(filters.users);
+  const filteredUsers = normalizedUsersFilter
+    ? usersData.filter(u => filterMatch(normalizedUsersFilter, u.full_name) || filterMatch(normalizedUsersFilter, u.email) || filterMatch(normalizedUsersFilter, u.role) || filterMatch(normalizedUsersFilter, u.vendor_status) || filterMatch(normalizedUsersFilter, u.barangay))
+    : usersData;
   const userCustomers = filteredUsers.filter(u => (u.role || '').toLowerCase() === 'user');
-  const userVendors = filteredUsers.filter(u => (u.role || '').toLowerCase() === 'vendor');
-  const filteredProducts = normalizedFilter ? productsData.filter(p => filterMatch(p.name) || filterMatch(p.vendor_id)) : productsData;
-  const filteredOrders = normalizedFilter ? ordersData.filter(o => filterMatch(o.id) || filterMatch(o.status)) : ordersData;
-  const filteredArchives = normalizedFilter ? archivesData.filter(a => filterMatch(a.entity_type) || filterMatch(a.entity_id) || filterMatch(JSON.stringify(a.payload||{}))) : archivesData;
+
+  const normalizedVendorsFilter = normalizeFilter(filters.vendors);
+  const filteredUsersForVendors = normalizedVendorsFilter
+    ? usersData.filter(u => filterMatch(normalizedVendorsFilter, u.full_name) || filterMatch(normalizedVendorsFilter, u.email) || filterMatch(normalizedVendorsFilter, u.role) || filterMatch(normalizedVendorsFilter, u.vendor_status) || filterMatch(normalizedVendorsFilter, u.barangay))
+    : usersData;
+  const userVendors = filteredUsersForVendors.filter(u => (u.role || '').toLowerCase() === 'vendor');
+  const filteredVendors = normalizedVendorsFilter ? vendorsData.filter(v => filterMatch(normalizedVendorsFilter, v.store_name) || filterMatch(normalizedVendorsFilter, v.address)) : vendorsData;
+
+  const normalizedProductsFilter = normalizeFilter(filters.products);
+  const filteredProducts = normalizedProductsFilter ? productsData.filter(p => filterMatch(normalizedProductsFilter, p.name) || filterMatch(normalizedProductsFilter, p.vendor_id)) : productsData;
+
+  const normalizedOrdersFilter = normalizeFilter(filters.orders);
+  const filteredOrders = normalizedOrdersFilter ? ordersData.filter(o => filterMatch(normalizedOrdersFilter, o.id) || filterMatch(normalizedOrdersFilter, o.status)) : ordersData;
+
+  const normalizedArchivesFilter = normalizeFilter(filters.archives);
+  const filteredArchives = normalizedArchivesFilter ? archivesData.filter(a => filterMatch(normalizedArchivesFilter, a.entity_type) || filterMatch(normalizedArchivesFilter, a.entity_id) || filterMatch(normalizedArchivesFilter, JSON.stringify(a.payload||{}))) : archivesData;
 
   // (Effect removed—react-query handles fetching.)
 
@@ -401,7 +467,7 @@ export default function AdminDashboard() {
           ))
         ) : (
           <>
-            <MetricCard icon={Users} label="Users" value={usersData.length} tone="sky" />
+            <MetricCard icon={Users} label="Customers" value={usersData.length} tone="sky" />
             <MetricCard icon={Store} label="Vendors" value={vendorsData.length} tone="violet" />
             <MetricCard icon={Package} label="Products" value={productsData.length} tone="amber" />
             <MetricCard icon={ShoppingCart} label="Orders" value={ordersData.length} tone="fuchsia" />
@@ -414,7 +480,7 @@ export default function AdminDashboard() {
       <Tabs value={tab} onValueChange={(v)=>setTab(v as typeof tab)} className="space-y-5 mt-5">
         <TabsList className="overflow-x-auto rounded-full border bg-background/70 p-1 shadow-sm backdrop-blur hidden">
           <TabsTrigger value="dashboard" className={tabTriggerClass}>Dashboard</TabsTrigger>
-          <TabsTrigger value="users" className={tabTriggerClass}>Users</TabsTrigger>
+          <TabsTrigger value="users" className={tabTriggerClass}>Customers</TabsTrigger>
           <TabsTrigger value="vendors" className={tabTriggerClass}>Vendors</TabsTrigger>
           <TabsTrigger value="products" className={tabTriggerClass}>Products</TabsTrigger>
           <TabsTrigger value="orders" className={tabTriggerClass}>Orders</TabsTrigger>
@@ -463,8 +529,8 @@ export default function AdminDashboard() {
                 </div>
                 <div className="grid md:grid-cols-2 gap-4 mt-4">
                   <Card className="relative overflow-hidden border border-border/70 bg-gradient-to-br from-white via-slate-50 to-slate-100/80 p-4 shadow-md dark:from-slate-900/70 dark:via-slate-900/60 dark:to-slate-900/55">
-                    <h3 className="font-semibold mb-2">Users by Barangay</h3>
-                    <ChartContainer className="h-[260px]" config={{ users: { label: 'Users', color: 'hsl(var(--primary))' }}}>
+                    <h3 className="font-semibold mb-2">Customers by Barangay</h3>
+                    <ChartContainer className="h-[260px]" config={{ users: { label: 'Customers', color: 'hsl(var(--primary))' }}}>
                       <BarChart data={usersByBarangay}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="barangay" hide />
@@ -525,9 +591,9 @@ export default function AdminDashboard() {
               </SectionCard>
             </TabsContent>
           <TabsContent value="users">
-            <SectionCard title="Users" description="All registered accounts.">
+            <SectionCard title="Customers" description="All registered accounts.">
               <div className="flex items-center justify-between gap-3">
-                <SearchBar value={filter} onChange={setFilter} suggestions={searchSuggestions} />
+                <SearchBar value={filters.users} onChange={(v)=>setFilterFor('users', v)} suggestions={customerSuggestions} />
               </div>
               <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                 {userCustomers.map(u => (
@@ -564,7 +630,7 @@ export default function AdminDashboard() {
           <TabsContent value="vendors">
             <SectionCard title="Vendors" description="Registered merchant accounts.">
               <div className="flex items-center justify-between gap-3">
-                <SearchBar value={filter} onChange={setFilter} suggestions={searchSuggestions} />
+                <SearchBar value={filters.vendors} onChange={(v)=>setFilterFor('vendors', v)} suggestions={vendorSuggestions} />
               </div>
               <div className="space-y-3">
                 {userVendors.map(u => {
@@ -597,7 +663,7 @@ export default function AdminDashboard() {
           <TabsContent value="products">
             <SectionCard title="Products" description="Read-only catalog. Vendors own their listings and manage updates.">
               <div className="flex items-center justify-between gap-3">
-                <SearchBar value={filter} onChange={setFilter} suggestions={searchSuggestions} />
+                <SearchBar value={filters.products} onChange={(v)=>setFilterFor('products', v)} suggestions={productSuggestions} />
                 <Badge variant="outline">Vendor-managed</Badge>
               </div>
               <div className="space-y-3">
@@ -617,7 +683,7 @@ export default function AdminDashboard() {
           </TabsContent>
           <TabsContent value="orders">
             <SectionCard title="Orders" description="Recent order activity.">
-              <SearchBar value={filter} onChange={setFilter} suggestions={searchSuggestions} />
+              <SearchBar value={filters.orders} onChange={(v)=>setFilterFor('orders', v)} suggestions={orderSuggestions} />
               <div className="space-y-3">
                 {filteredOrders.map(o => (
                   <Card key={o.id} className="relative flex flex-col gap-2 overflow-hidden border border-border/70 bg-gradient-to-r from-primary/5 via-background to-background p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md" style={{borderLeftColor: o.status === 'Preparing'? '#d97706': o.status === 'For Delivery'? '#2563eb': o.status === 'Delivered'? '#15803d': '#dc2626', borderLeftWidth: 6}}>
@@ -684,19 +750,20 @@ export default function AdminDashboard() {
           </TabsContent>
           <TabsContent value="archives">
             <SectionCard title="Archives" description="Deleted records kept for recovery.">
-              <SearchBar value={filter} onChange={setFilter} suggestions={searchSuggestions} />
+              <SearchBar value={filters.archives} onChange={(v)=>setFilterFor('archives', v)} suggestions={archiveSuggestions} />
               {archivesQuery.isError && <div className="text-sm text-destructive">Archives table not reachable. Ensure table 'archives' exists with columns entity_type, entity_id, payload, created_at.</div>}
               <div className="space-y-3">
                 {filteredArchives.map(a => {
                   const payload = a.payload || {};
                   const entries = typeof payload === 'object' && payload !== null ? Object.entries(payload) : [];
                   const displayed = entries.slice(0, 8);
+                  const entityLabel = friendlyEntityLabel(a.entity_type);
                   return (
                     <Card key={a.id} className="relative overflow-hidden border border-border/70 bg-gradient-to-br from-white via-slate-50 to-slate-100/80 p-4 shadow-sm dark:from-slate-900/70 dark:via-slate-900/60 dark:to-slate-900/55">
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="font-medium capitalize flex items-center gap-2">
-                            {a.entity_type}
+                            {entityLabel}
                             <Badge variant="outline" className="text-[11px]">#{a.entity_id}</Badge>
                           </div>
                           <div className="text-[11px] text-muted-foreground">Archived {a.created_at ? formatDistanceToNow(new Date(a.created_at), { addSuffix: true }) : ''}</div>
@@ -819,7 +886,7 @@ function SearchBar({ value, onChange, placeholder, suggestions }: { value?: stri
               onMouseDown={(e)=>{ e.preventDefault(); onChange?.(String(s.value || '')); setOpen(false); }}
             >
               <span className="truncate">{s.label}</span>
-              <span className="text-[10px] text-muted-foreground ml-2">{s.type}</span>
+              <span className="text-[10px] text-muted-foreground ml-2">{friendlyEntityLabel(s.type)}</span>
             </button>
           ))}
         </div>
@@ -1056,4 +1123,11 @@ function LabeledInput({ label, value, onChange, type = 'text', placeholder }: { 
       <Input value={value} onChange={(e)=>onChange(e.target.value)} type={type} placeholder={placeholder} />
     </div>
   );
+}
+
+function friendlyEntityLabel(entityType: string | null | undefined): string {
+  const lower = String(entityType || '').toLowerCase();
+  if (lower === 'user') return 'Customer';
+  if (lower === 'users') return 'Customers';
+  return entityType || '';
 }
