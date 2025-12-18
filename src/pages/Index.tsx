@@ -174,28 +174,6 @@ export default function Index() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Promo Carousel */}
-      <section className="px-6 mt-4">
-        <div className="max-w-6xl mx-auto flex gap-4 overflow-x-auto no-scrollbar snap-x snap-mandatory scroll-smooth">
-          {promos.map((p,i)=>(
-            <div key={i} className="snap-start min-w-[85%] sm:min-w-[480px]">
-              <div className="relative rounded-2xl overflow-hidden shadow-sm bg-secondary">
-              <img src={p.image} alt={p.title} className="h-40 w-full object-cover" onError={(e)=>{e.currentTarget.src='/promo-1.svg';}} />
-              <div className="absolute inset-0 bg-gradient-to-r from-black/40 to-transparent" />
-              <div className="absolute inset-0 p-4 flex flex-col">
-                <div className="text-white max-w-[60%]">
-                <h3 className="font-bold text-lg leading-snug">{p.title}</h3>
-                <p className="text-sm opacity-90">{p.subtitle}</p>
-                </div>
-                <Button size="sm" className="mt-auto rounded-full bg-accent text-accent-foreground hover:bg-accent/90" asChild>
-                  <Link to="/vendors">{p.cta}</Link>
-                </Button>
-              </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
 
       {/* Categories */}
       <section className="py-4 px-6">
