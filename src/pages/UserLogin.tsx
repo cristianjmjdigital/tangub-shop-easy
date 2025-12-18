@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth, isArchivedAccount } from "@/context/AuthContext";
 
 export default function UserLogin() {
   const navigate = useNavigate();
@@ -67,6 +67,15 @@ export default function UserLogin() {
       // Check role to prevent vendors from entering the customer portal
       const authId = sessionUserId;
       if (!authId) throw new Error('No authenticated user returned');
+
+      const archived = await isArchivedAccount(authId, data?.user?.email || email);
+      if (archived) {
+        const msg = 'This account was archived and can no longer access.';
+        setError(msg);
+        await supabase.auth.signOut();
+        setLoading(false);
+        return;
+      }
       const { data: profileRow, error: profileErr } = await supabase
         .from('users')
         .select('id, role, vendor_status')

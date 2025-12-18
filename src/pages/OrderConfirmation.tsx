@@ -9,7 +9,7 @@ import { CheckCircle2, ShoppingBag } from 'lucide-react';
 
 interface LocationState {
   orderIds?: string[];
-  summary?: { id: string; total: number }[];
+  summary?: { id: string; total: number; total_amount?: number }[];
 }
 
 export default function OrderConfirmation() {
@@ -19,16 +19,50 @@ export default function OrderConfirmation() {
   const summary = state.summary || [];
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [orderMeta, setOrderMeta] = useState<Record<string, { total: number; subtotal: number }>>({});
 
   useEffect(() => {
     const load = async () => {
       if (!orderIds.length) return;
       setLoading(true);
-      const { data, error } = await supabase
-        .from('order_items')
-        .select('order_id,quantity,unit_price,product:products(name)')
-        .in('order_id', orderIds);
+      const [{ data, error }, { data: ordersData }] = await Promise.all([
+        supabase
+          .from('order_items')
+          .select('order_id,quantity,unit_price,product:products(name)')
+          .in('order_id', orderIds),
+        supabase
+          .from('orders')
+          .select('id,total,total_amount')
+          .in('id', orderIds),
+      ]);
       if (!error && data) setItems(data as any);
+      if (ordersData) {
+        const meta: Record<string, { total: number; subtotal: number }> = {};
+        ordersData.forEach((o: any) => {
+          const subtotalVal = Number(o.total_amount ?? 0);
+          meta[String(o.id)] = {
+            total: Number(o.total ?? o.total_amount ?? 0),
+            subtotal: subtotalVal,
+          };
+        });
+        // Fallback: if DB totals are missing delivery fee, prefer totals passed via navigation state
+        summary.forEach(s => {
+          const key = String(s.id);
+          const summaryTotal = Number((s as any).total ?? 0);
+          const summarySubtotal = Number((s as any).total_amount ?? 0);
+          if (!meta[key]) {
+            meta[key] = { total: summaryTotal, subtotal: summarySubtotal }; // may be 0; better than missing
+            return;
+          }
+          if (summaryTotal && (!meta[key].total || meta[key].total === meta[key].subtotal)) {
+            meta[key].total = summaryTotal;
+          }
+          if (summarySubtotal && !meta[key].subtotal) {
+            meta[key].subtotal = summarySubtotal;
+          }
+        });
+        setOrderMeta(meta);
+      }
       setLoading(false);
     };
     load();
@@ -50,7 +84,9 @@ export default function OrderConfirmation() {
             {summary.length > 0 && (
               <div className="space-y-3">
                 {summary.map(o => {
-                  const totalNumber = Number((o as any).total ?? (o as any).total_amount ?? 0);
+                  const fallbackTotal = Number((o as any).total ?? (o as any).total_amount ?? 0);
+                  const meta = orderMeta[String(o.id)];
+                  const totalNumber = meta?.total ?? fallbackTotal;
                   return (
                     <div key={o.id} className="flex items-center justify-between border rounded-md p-3 text-sm">
                       <div className="flex items-center gap-2">
@@ -69,6 +105,14 @@ export default function OrderConfirmation() {
                 {orderIds.map(oid => {
                   const group = items.filter(it => it.order_id === oid);
                   if (!group.length) return null;
+                  const groupSubtotal = group.reduce((s,it)=>s + it.unit_price*it.quantity,0);
+                  const meta = orderMeta[String(oid)] || { total: groupSubtotal, subtotal: groupSubtotal };
+                  const subtotal = meta.subtotal || groupSubtotal;
+                  const deliveryFeeRaw = (meta.total || 0) - subtotal;
+                  // If DB total is missing fee, try summary totals; otherwise fallback to computed subtotal
+                  const deliveryFee = deliveryFeeRaw > 0
+                    ? deliveryFeeRaw
+                    : Math.max(0, (meta.total || groupSubtotal) - subtotal);
                   return (
                     <div key={oid} className="border rounded-md p-3">
                       <div className="text-xs font-medium mb-2">Items in Order #{oid}</div>
@@ -81,9 +125,20 @@ export default function OrderConfirmation() {
                         ))}
                       </div>
                       <Separator className="my-2" />
-                      <div className="flex justify-between text-xs font-semibold">
-                        <span>Subtotal</span>
-                        <span>₱{group.reduce((s,it)=>s + it.unit_price*it.quantity,0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</span>
+                      <div className="space-y-1 text-xs font-semibold">
+                        <div className="flex justify-between">
+                          <span>Subtotal</span>
+                          <span>₱{groupSubtotal.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Delivery Fee</span>
+                          <span>{deliveryFee === 0 ? 'Free' : `₱${deliveryFee.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}`}</span>
+                        </div>
+                        <Separator className="my-2" />
+                        <div className="flex justify-between text-[13px]">
+                          <span>Grand Total</span>
+                          <span>₱{(groupSubtotal + deliveryFee).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</span>
+                        </div>
                       </div>
                     </div>
                   );

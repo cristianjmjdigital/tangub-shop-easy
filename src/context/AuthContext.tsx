@@ -57,6 +57,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadProfile = async (authUserId: string, currentSession = session) => {
     setProfileLoading(true);
     try {
+      const archived = await isArchivedAccount(authUserId, currentSession?.user?.email || undefined);
+      if (archived) {
+        await supabase.auth.signOut();
+        setProfile(null);
+        return;
+      }
       const { data, error } = await supabase
         .from('users')
         .select('*')
@@ -102,4 +108,24 @@ export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
+}
+
+export async function isArchivedAccount(authUserId: string | null | undefined, email?: string | null): Promise<boolean> {
+  if (!authUserId) return false;
+  const orParts = [`payload->>auth_user_id.eq.${authUserId}`];
+  if (email) orParts.push(`payload->>email.eq.${email}`);
+  orParts.push(`entity_id.eq.${authUserId}`);
+  try {
+    const { data } = await supabase
+      .from('archives')
+      .select('id')
+      .eq('entity_type', 'user')
+      .or(orParts.join(','))
+      .limit(1)
+      .maybeSingle();
+    return Boolean(data);
+  } catch (e) {
+    console.warn('Archive lookup failed', e);
+    return false;
+  }
 }

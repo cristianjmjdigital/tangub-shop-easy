@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
+import { isArchivedAccount } from "@/context/AuthContext";
 import { ShieldCheck, ArrowLeft, Store } from "lucide-react";
 
 export default function AdminLogin() {
@@ -23,6 +24,12 @@ export default function AdminLogin() {
       if (signErr) throw signErr;
       const user = data.user;
       if (!user) throw new Error("Login failed");
+
+      const archived = await isArchivedAccount(user.id, user.email);
+      if (archived) {
+        await supabase.auth.signOut();
+        throw new Error("This account was archived and can no longer access");
+      }
 
       const { data: roleData, error: roleErr } = await supabase.rpc('get_profile_role', { auth_uid: user.id });
       if (roleErr) throw roleErr;

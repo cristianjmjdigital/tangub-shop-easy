@@ -13,7 +13,7 @@ import { StatusTimeline } from '@/components/ui/status-timeline';
 import { useNotifications } from '@/hooks/use-notifications';
 import { usePushSubscription } from '@/hooks/use-push-subscription';
 
-interface OrderRow { id: string; vendor_id: string; total: number; status: string; created_at: string }
+interface OrderRow { id: string; vendor_id: string; total: number; status: string; created_at: string; delivery_method?: string }
 interface OrderItemRow { id: string; order_id: string; product_id: string; quantity: number; unit_price: number; subtotal: number; product?: { name: string; price: number } }
 interface VendorRow { id: string; store_name: string }
 
@@ -149,7 +149,6 @@ export default function Orders() {
             <Button variant='outline' size='sm' onClick={load} disabled={loading}><RefreshCw className='h-4 w-4 mr-1 animate-spin' style={{ animationPlayState: loading ? 'running':'paused' }} /> Refresh</Button>
           </div>
         </div>
-        {pushCapable && Notification.permission !== 'granted' && !notifDismissed && (
           <div className='mb-4 border rounded-md p-3 bg-muted/40 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
             <div className='text-sm text-muted-foreground'>Enable browser notifications to get instant updates when your order status changes.</div>
             <div className='flex gap-2'>
@@ -170,7 +169,6 @@ export default function Orders() {
               <Button size='sm' variant='outline' onClick={() => setNotifDismissed(true)}>Dismiss</Button>
             </div>
           </div>
-        )}
         {error && <div className='p-3 border border-destructive/40 rounded text-destructive bg-destructive/5 text-sm mb-4'>{error}</div>}
         {loading && <div className='text-sm text-muted-foreground py-8'>Loading orders...</div>}
         {!loading && grouped.length === 0 && <div className='text-sm text-muted-foreground py-12 text-center'>No orders yet.</div>}
@@ -187,7 +185,7 @@ export default function Orders() {
               </CardHeader>
               <CardContent className='p-4 pt-0 space-y-3'>
                 <div className='py-2'>
-                  <StatusTimeline status={g.order.status} />
+                  <StatusTimeline status={g.order.status} mode={g.order.delivery_method === 'pickup' ? 'pickup' : 'delivery'} />
                 </div>
                 {g.items.map(it => (
                   <div key={it.id} className='flex items-center justify-between text-sm border rounded-md p-3'>

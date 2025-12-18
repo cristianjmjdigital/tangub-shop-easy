@@ -28,6 +28,12 @@ interface UseCartOptions {
   autoCreate?: boolean;
 }
 
+interface CheckoutOptions {
+  deliveryFee?: number;
+  deliveryFeeByVendor?: Record<string, number>;
+  deliveryMethod?: 'delivery' | 'pickup';
+}
+
 export function useCart(options: UseCartOptions = {}) {
   const { vendorId = null, autoCreate = true } = options;
   const { session, profile } = useAuth();
@@ -67,7 +73,7 @@ export function useCart(options: UseCartOptions = {}) {
       if (current) {
         const { data: itemRows, error: itemsErr } = await supabase
           .from('cart_items')
-          .select('*, product:products(id,name,price,stock,vendor_id,size_options)')
+          .select('*, product:products(id,name,price,stock,vendor_id,size_options, vendor:vendors(id,store_name,barangay,base_delivery_fee))')
           .eq('cart_id', current.id);
         if (itemsErr) throw itemsErr;
         setItems(itemRows as any);
@@ -112,7 +118,7 @@ export function useCart(options: UseCartOptions = {}) {
           .from('cart_items')
           .update({ quantity: existing.quantity + quantity })
           .eq('id', existing.id)
-          .select('*, product:products(id,name,price,stock,vendor_id,size_options)')
+          .select('*, product:products(id,name,price,stock,vendor_id,size_options, vendor:vendors(id,store_name,barangay,base_delivery_fee))')
           .single();
         if (updErr) throw updErr;
         setItems(prev => prev.map(i => i.id === existing.id ? (data as any) : i));
@@ -120,7 +126,7 @@ export function useCart(options: UseCartOptions = {}) {
         const { data, error: insErr } = await supabase
           .from('cart_items')
           .insert({ cart_id: current.id, product_id: productId, quantity, size: size || null })
-          .select('*, product:products(id,name,price,stock,vendor_id,size_options)')
+          .select('*, product:products(id,name,price,stock,vendor_id,size_options, vendor:vendors(id,store_name,barangay,base_delivery_fee))')
           .single();
         if (insErr) throw insErr;
         setItems(prev => [...prev, data as any]);
@@ -142,7 +148,7 @@ export function useCart(options: UseCartOptions = {}) {
         .from('cart_items')
         .update({ quantity })
         .eq('id', itemId)
-        .select('*, product:products(id,name,price,stock,vendor_id)')
+        .select('*, product:products(id,name,price,stock,vendor_id, vendor:vendors(id,store_name,barangay,base_delivery_fee))')
         .single();
       if (updErr) throw updErr;
       setItems(prev => prev.map(i => i.id === itemId ? (data as any) : i));
@@ -193,7 +199,7 @@ export function useCart(options: UseCartOptions = {}) {
   const subtotal = useMemo(() => items.reduce((sum, i) => sum + (i.product?.price ?? 0) * i.quantity, 0), [items]);
 
   // Checkout: try RPC to finalize server-side (creates order, copies items, clears cart), fallback to client flow
-  const checkout = useCallback(async (options: { deliveryFee?: number } = {}) => {
+  const checkout = useCallback(async (options: CheckoutOptions = {}) => {
     if (!authUser) {
       toast({ title: 'Please login', description: 'Login required to checkout', variant: 'destructive' });
       return { orders: [] };
@@ -216,9 +222,17 @@ export function useCart(options: UseCartOptions = {}) {
           .filter((v): v is string | number => Boolean(v))
       )
     );
+    const deliveryFeeByVendor = options.deliveryFeeByVendor || null;
     const deliveryFeePerOrder = vendorIds.length > 0
       ? normalizedDeliveryFee / vendorIds.length
       : normalizedDeliveryFee;
+    const feeForVendor = (vendorId: string | number | null) => {
+      const key = vendorId === null ? null : String(vendorId);
+      if (key && deliveryFeeByVendor && Object.prototype.hasOwnProperty.call(deliveryFeeByVendor, key)) {
+        return Math.max(0, Number(deliveryFeeByVendor[key] ?? 0));
+      }
+      return deliveryFeePerOrder;
+    };
     try {
       setLoading(true);
 
@@ -246,26 +260,52 @@ export function useCart(options: UseCartOptions = {}) {
             .select('id,total,total_amount')
             .eq('id', orderId)
             .maybeSingle();
-          const baseTotal = Number(existing?.total ?? existing?.total_amount ?? 0);
-          const updatedTotal = baseTotal + normalizedDeliveryFee;
+          let baseTotal = Number(existing?.total_amount ?? existing?.total ?? 0);
+          if (!Number.isFinite(baseTotal) || baseTotal === 0) {
+            // Fallback: derive subtotal from order_items when RPC/table didn't populate total_amount
+            const { data: itemAgg } = await supabase
+              .from('order_items')
+              .select('quantity,unit_price')
+              .eq('order_id', orderId);
+            if (itemAgg && itemAgg.length > 0) {
+              baseTotal = itemAgg.reduce((sum: number, it: any) => sum + Number(it.unit_price || 0) * Number(it.quantity || 0), 0);
+            }
+          }
+          const fee = feeForVendor(primaryVendorId);
+          const updatedTotal = baseTotal + fee;
 
-          if (normalizedDeliveryFee > 0) {
-            const { data: updated } = await supabase
-              .from('orders')
-              .update({ total: updatedTotal })
-              .eq('id', orderId)
-              .select('*')
-              .maybeSingle();
-            orderRecord = updated || { ...existing, id: orderId, total: updatedTotal };
+          if (fee > 0) {
+            try {
+              const { data: updated } = await supabase
+                .from('orders')
+                .update({ total: updatedTotal, total_amount: baseTotal, delivery_method: options.deliveryMethod })
+                .eq('id', orderId)
+                .select('*')
+                .maybeSingle();
+              orderRecord = updated || { ...existing, id: orderId, total: updatedTotal, total_amount: baseTotal };
+            } catch (_) {
+              // fallback without delivery_method column
+              const { data: updated } = await supabase
+                .from('orders')
+                .update({ total: updatedTotal, total_amount: baseTotal })
+                .eq('id', orderId)
+                .select('*')
+                .maybeSingle();
+              orderRecord = updated || { ...existing, id: orderId, total: updatedTotal, total_amount: baseTotal };
+            }
           } else {
-            orderRecord = existing || { id: orderId, total: baseTotal };
+            // Still persist delivery_method if provided
+            if (options.deliveryMethod) {
+              try { await supabase.from('orders').update({ delivery_method: options.deliveryMethod }).eq('id', orderId); } catch (_) {}
+            }
+            orderRecord = existing || { id: orderId, total: baseTotal, total_amount: baseTotal };
           }
 
           // Best effort refetch cart to update UI
           setItems([]);
           await loadCart();
           toast({ title: 'Order placed', description: 'Checkout completed.' });
-          return { orders: [{ ...orderRecord, total: orderRecord.total ?? updatedTotal ?? baseTotal }] };
+          return { orders: [{ ...orderRecord, total: orderRecord.total ?? updatedTotal ?? baseTotal, total_amount: orderRecord.total_amount ?? baseTotal, delivery_method: options.deliveryMethod }] };
         }
       }
 
@@ -283,13 +323,27 @@ export function useCart(options: UseCartOptions = {}) {
       for (const [vendorId, groupItems] of Object.entries(groups)) {
         if (vendorId === 'unknown') continue;
         const itemsTotal = groupItems.reduce((sum, it) => sum + (it.product?.price ?? 0) * it.quantity, 0);
-        const total = itemsTotal + deliveryFeePerOrder;
-        const { data: order, error: orderErr } = await supabase
-          .from('orders')
-          .insert({ user_id: userRowId, vendor_id: vendorId, total, total_amount: itemsTotal })
-          .select('*')
-          .single();
-        if (orderErr) throw orderErr;
+        const vendorFee = feeForVendor(vendorId);
+        const total = itemsTotal + vendorFee;
+        let order: any;
+        try {
+          const { data: inserted, error: orderErr } = await supabase
+            .from('orders')
+            .insert({ user_id: userRowId, vendor_id: vendorId, total, total_amount: itemsTotal, delivery_method: options.deliveryMethod })
+            .select('*')
+            .single();
+          if (orderErr) throw orderErr;
+          order = inserted;
+        } catch (e) {
+          // Retry without delivery_method if column missing
+          const { data: inserted, error: orderErr } = await supabase
+            .from('orders')
+            .insert({ user_id: userRowId, vendor_id: vendorId, total, total_amount: itemsTotal })
+            .select('*')
+            .single();
+          if (orderErr) throw orderErr;
+          order = inserted;
+        }
 
         const orderItemsPayload = groupItems.map(it => ({
           order_id: order.id,

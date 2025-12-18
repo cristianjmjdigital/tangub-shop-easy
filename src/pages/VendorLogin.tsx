@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth, isArchivedAccount } from "@/context/AuthContext";
 import { useToast } from "@/components/ui/use-toast";
 
 export default function VendorLogin() {
@@ -53,6 +53,14 @@ export default function VendorLogin() {
     try {
       const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
       if (signInError) throw signInError;
+      const archived = await isArchivedAccount(data.user?.id, data.user?.email || email);
+      if (archived) {
+        const msg = 'This account was archived and can no longer access.';
+        setError(msg);
+        await supabase.auth.signOut();
+        setLoading(false);
+        return;
+      }
       await refreshProfile();
       // After refresh, check role from profile table
       const { data: profileRow } = await supabase

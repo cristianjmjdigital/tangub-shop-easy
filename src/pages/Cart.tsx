@@ -29,23 +29,45 @@ const Cart = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
 
-  const cartItems = items.map(i => ({
-    id: i.id,
-    name: i.product?.name || 'Product',
-    price: i.product?.price || 0,
-    quantity: i.quantity,
-    size: (i as any).size || null,
-    business: i.product?.vendor?.name || 'Vendor',
-    businessLocation: i.product?.vendor?.barangay || 'Location',
-    image: i.product?.image_url || '/placeholder.svg',
-    maxQuantity: i.product?.stock || 99,
-  }));
+  const cartItems = items.map(i => {
+    const vendor = i.product?.vendor || {};
+    const vendorId = i.product?.vendor_id || vendor?.id || 'unknown';
+    return {
+      id: i.id,
+      name: i.product?.name || 'Product',
+      price: i.product?.price || 0,
+      quantity: i.quantity,
+      size: (i as any).size || null,
+      business: vendor.store_name || vendor.name || 'Vendor',
+      businessLocation: vendor.barangay || 'Location',
+      vendorId,
+      baseDeliveryFee: Number(vendor.base_delivery_fee ?? 0) || 0,
+      image: i.product?.image_url || '/placeholder.svg',
+      maxQuantity: i.product?.stock || 99,
+    };
+  });
 
-  const deliveryFee = deliveryMethod === "delivery" ? 50 : 0;
+  const deliveryFeeMap = useMemo(() => {
+    if (deliveryMethod !== "delivery") return {} as Record<string, number>;
+    const map: Record<string, number> = {};
+    cartItems.forEach(item => {
+      const key = String(item.vendorId || 'unknown');
+      if (!map[key]) map[key] = 0;
+      // Use the vendor's base delivery fee; if multiple items same vendor, do not double count
+      map[key] = Math.max(map[key], item.baseDeliveryFee);
+    });
+    return map;
+  }, [cartItems, deliveryMethod]);
+
+  const deliveryFee = useMemo(() => {
+    if (deliveryMethod !== "delivery") return 0;
+    return Object.values(deliveryFeeMap).reduce((sum, fee) => sum + (Number.isFinite(fee) ? Number(fee) : 0), 0);
+  }, [deliveryMethod, deliveryFeeMap]);
+
   const total = subtotal + deliveryFee;
 
   const businessGroups = useMemo(() => cartItems.reduce((groups, item) => {
-    const key = item.business;
+    const key = String(item.vendorId || item.business);
     if (!groups[key]) groups[key] = [];
     groups[key].push(item);
     return groups;
@@ -56,9 +78,9 @@ const Cart = () => {
       toast({ title: "Cart is empty", description: "Please add items to your cart before placing an order.", variant: "destructive" });
       return;
     }
-    const { orders } = await checkout({ deliveryFee });
+    const { orders } = await checkout({ deliveryFee, deliveryFeeByVendor: deliveryFeeMap, deliveryMethod });
     if (orders.length) {
-      navigate('/order/confirmation', { state: { orderIds: orders.map((o:any)=>o.id), summary: orders.map((o:any)=>({ id: o.id, total: o.total })) } });
+      navigate('/order/confirmation', { state: { orderIds: orders.map((o:any)=>o.id), summary: orders.map((o:any)=>({ id: o.id, total: o.total, total_amount: o.total_amount })) } });
     }
   };
 
@@ -211,7 +233,9 @@ const Cart = () => {
                           <Truck className="h-4 w-4 mr-2 text-primary" />
                           <div>
                             <p className="font-medium">Cash on Delivery</p>
-                            <p className="text-sm text-muted-foreground">₱50 delivery fee within City Proper </p>
+                            <p className="text-sm text-muted-foreground">
+                              Delivery fee uses each vendor's base fee
+                            </p>
                           </div>
                         </div>
                       </Label>
@@ -259,7 +283,7 @@ const Cart = () => {
                 
                 <div className="flex justify-between">
                   <span>Delivery Fee</span>
-                  <span>{deliveryFee === 0 ? "Free" : `₱${deliveryFee}`}</span>
+                  <span>{deliveryFee === 0 ? "Free" : `₱${deliveryFee.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}`}</span>
                 </div>
                 
                 <Separator />
