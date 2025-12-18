@@ -130,10 +130,23 @@ export default function OrderConfirmation() {
                           <span>Subtotal</span>
                           <span>₱{groupSubtotal.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</span>
                         </div>
-                        <div className="flex justify-between">
-                          <span>Delivery Fee</span>
-                          <span>{deliveryFee === 0 ? 'Free' : `₱${deliveryFee.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}`}</span>
-                        </div>
+                        {deliveryFee === 0 ? (
+                          <div className="flex justify-between">
+                          <span>Delivery Method</span>
+                          <span>Pick-up</span>
+                          </div>
+                        ) : (
+                          <>
+                          <div className="flex justify-between">
+                            <span>Delivery Method</span>
+                            <span>Delivery</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Delivery Fee</span>
+                            <span>₱{deliveryFee.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</span>
+                          </div>
+                          </>
+                        )}
                         <Separator className="my-2" />
                         <div className="flex justify-between text-[13px]">
                           <span>Grand Total</span>

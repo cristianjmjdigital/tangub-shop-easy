@@ -645,11 +645,6 @@ export default function AdminDashboard() {
                       <div className="text-xs">Barangay: <span className="font-medium">{u.barangay || '—'}</span></div>
                       <div className="text-xs">Business: <span className="font-medium">{owned?.store_name || 'Not set'}</span></div>
                       <div className="flex gap-2 mt-1 flex-wrap">
-                        {owned && (
-                          <Button size="sm" variant="secondary" className="h-7 px-2" asChild>
-                            <a href={`/business/${owned.id}`} target="_blank" rel="noreferrer">View Shop</a>
-                          </Button>
-                        )}
                         <ViewUserButton user={u} />
                         <EditUserButton user={u} onSave={(changes)=>updateUser.mutate({ id: u.id, ...changes })} />
                         <DeleteButton label="Archive" onConfirm={()=>deleteUser.mutate(u.id)} />
