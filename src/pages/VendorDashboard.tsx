@@ -882,7 +882,7 @@ export default function VendorDashboard() {
               <Label htmlFor="prod-desc">Description</Label>
               <Textarea id="prod-desc" value={newProduct.description} onChange={e => setNewProduct(p => ({ ...p, description: e.target.value }))} placeholder="Short product description" />
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1 hidden">
               <Label htmlFor="prod-address">Product Address</Label>
               <Textarea
                 id="prod-address"
