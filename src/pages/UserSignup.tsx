@@ -281,21 +281,49 @@ export default function UserSignup() {
         // As a fallback, see if profile row exists already (race or previous attempt)
         const { data: existingRow } = await supabase
           .from('users')
-          .select('id')
+          .select('id, role, vendor_status')
           .eq('auth_user_id', authUser.id)
           .maybeSingle();
         if (!existingRow) {
           throw new Error(`Profile save failed: ${lastUpsertErr?.message || 'unknown error'}`);
         }
+        // If the existing row is missing vendor flags, force an update so we do not silently fall back to user
+        if (existingRow.role !== desiredRole || existingRow.vendor_status !== vendorStatus) {
+          const { error: promoteErr } = await supabase
+            .from('users')
+            .update({ role: desiredRole, vendor_status: vendorStatus })
+            .eq('auth_user_id', authUser.id);
+          if (promoteErr) {
+            throw new Error(`Profile save failed after fallback: ${promoteErr.message}`);
+          }
+        }
       }
 
-      // Verify persistence (best-effort)
+      // Verify persistence (best-effort); if flags are wrong, correct them immediately
       const { data: verifyRow } = await supabase
         .from('users')
         .select('id, role, vendor_status, barangay, phone')
         .eq('auth_user_id', authUser.id)
         .maybeSingle();
       if (!verifyRow) console.warn('[signup] verify row missing after upsert');
+      if (verifyRow && (verifyRow.role !== desiredRole || verifyRow.vendor_status !== vendorStatus)) {
+        const { error: fixErr } = await supabase
+          .from('users')
+          .update({
+            role: desiredRole,
+            vendor_status: vendorStatus,
+            barangay: form.barangay || null,
+            phone: form.phone || null,
+            gov_id_url: govIdUrl,
+            business_permit_url: permitUrl,
+          })
+          .eq('auth_user_id', authUser.id);
+        if (fixErr) {
+          setError('Could not finalize vendor status. Please retry.');
+          setSubmitting(false);
+          return;
+        }
+      }
 
       await refreshProfile();
 
