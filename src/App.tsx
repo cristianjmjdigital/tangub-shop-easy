@@ -32,6 +32,7 @@ import Ratings from "./pages/Ratings";
 import VendorReviews from "./pages/VendorReviews";
 import { useAuth } from "./context/AuthContext";
 import { usePushSubscription } from "./hooks/use-push-subscription";
+import OrderStatusListener from "./components/OrderStatusListener";
 
 const queryClient = new QueryClient();
 
@@ -60,6 +61,8 @@ function AppShell() {
   const { syncIfGranted } = usePushSubscription(profile?.id);
   const isAdmin = location.pathname.startsWith("/admin");
   const isVendorShell = location.pathname.startsWith("/vendor") || location.pathname.startsWith("/login/vendor");
+  const role = (profile?.role || "").toLowerCase();
+  const isUserRole = role === "user";
 
   useEffect(() => {
     // Silently sync push subscription if permission already granted
@@ -67,6 +70,7 @@ function AppShell() {
   }, [syncIfGranted]);
   return (
     <div className="min-h-screen bg-background pb-16 md:pb-0">
+      {isUserRole && <OrderStatusListener enabled />}
       {!isAdmin && !isVendorShell && <Navbar />}
       <main>
         <Routes>

@@ -72,46 +72,49 @@ const Messages = () => {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const broadcastChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const [ephemeral, setEphemeral] = useState<Record<string, DbMessage>>({});
+  const [refreshing, setRefreshing] = useState(false);
 
   // Fetch messages involving current user (must use users.id = profile.id; session.user.id is auth id)
-  useEffect(() => {
-    const userId = profile?.id; // only proceed when profile row resolved
+  const loadMessages = useCallback(async () => {
+    const userId = profile?.id;
     if (!userId) return;
-    let isMounted = true;
-    const load = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const { data: rows, error: msgErr } = await supabase
-          .from('messages')
-          .select('*')
-          .or(`sender_user_id.eq.${userId},receiver_user_id.eq.${userId}`)
-          .order('created_at', { ascending: true });
-        if (msgErr) throw msgErr;
-        if (!isMounted) return;
-        setRawMessages(rows || []);
-        // Collect vendor ids
-        const vIds = Array.from(new Set((rows || []).map(r => r.vendor_id).filter(Boolean))) as string[];
-        if (vIds.length) {
-          const { data: vRows, error: vErr } = await supabase
-            .from('vendors')
-            .select('id,store_name,address,owner_user_id')
-            .in('id', vIds);
-          if (vErr) throw vErr;
-          if (!isMounted) return;
-            const map: Record<string, VendorRow> = {};
-            (vRows || []).forEach(v => { map[v.id] = v as VendorRow; });
-            setVendors(map);
-        } else {
-          setVendors({});
-        }
-      } catch (e: any) {
-        if (isMounted) setError(e.message || 'Failed to load messages');
-      } finally {
-        if (isMounted) setLoading(false);
+    setLoading(true);
+    setError(null);
+    try {
+      const { data: rows, error: msgErr } = await supabase
+        .from('messages')
+        .select('*')
+        .or(`sender_user_id.eq.${userId},receiver_user_id.eq.${userId}`)
+        .order('created_at', { ascending: true });
+      if (msgErr) throw msgErr;
+      setRawMessages(rows || []);
+      const vIds = Array.from(new Set((rows || []).map(r => r.vendor_id).filter(Boolean))) as string[];
+      if (vIds.length) {
+        const { data: vRows, error: vErr } = await supabase
+          .from('vendors')
+          .select('id,store_name,address,owner_user_id')
+          .in('id', vIds);
+        if (vErr) throw vErr;
+        const map: Record<string, VendorRow> = {};
+        (vRows || []).forEach(v => { map[v.id] = v as VendorRow; });
+        setVendors(map);
+      } else {
+        setVendors({});
       }
-    };
-    load();
+    } catch (e: any) {
+      setError(e.message || 'Failed to load messages');
+    } finally {
+      setLoading(false);
+    }
+  }, [profile?.id]);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+    let isMounted = true;
+    (async () => {
+      await loadMessages();
+      if (!isMounted) return;
+    })();
 
     // Basic realtime subscription (optional enhancements later)
     const channel = supabase.channel('messages-realtime')
@@ -149,7 +152,7 @@ const Messages = () => {
       })
       .subscribe();
     return () => { isMounted = false; supabase.removeChannel(channel); };
-  }, [profile?.id]);
+  }, [profile?.id, loadMessages]);
 
   // Prefetch vendor directory for new conversations (dropdown instead of raw ID)
   useEffect(() => {
@@ -474,6 +477,14 @@ const Messages = () => {
                     className="pl-10 h-10 text-sm"
                   />
                   <div className="flex gap-2 pt-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      type="button"
+                      className="h-8"
+                      disabled={refreshing || loading}
+                      onClick={async ()=>{ setRefreshing(true); await loadMessages(); setRefreshing(false); }}
+                    >{refreshing ? 'Refreshing...' : 'Refresh'}</Button>
                     <Button size="sm" variant="outline" type="button" className="h-8" onClick={()=> setShowNewConv(s=>!s)}>New</Button>
                   </div>
                   {showNewConv && (
