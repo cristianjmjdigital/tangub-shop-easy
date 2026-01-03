@@ -6,6 +6,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth, isArchivedAccount } from "@/context/AuthContext";
 import { useToast } from "@/components/ui/use-toast";
+import { Eye, EyeOff } from "lucide-react";
 
 export default function VendorLogin() {
   const navigate = useNavigate();
@@ -14,6 +15,8 @@ export default function VendorLogin() {
   const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [portalLock, setPortalLock] = useState<string | null>(null);
@@ -49,6 +52,7 @@ export default function VendorLogin() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setResetMessage(null);
     setLoading(true);
     try {
       const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
@@ -111,6 +115,24 @@ export default function VendorLogin() {
     }
   };
 
+  const handlePasswordReset = async () => {
+    if (!email.trim()) {
+      setError('Enter your email to receive a reset link.');
+      return;
+    }
+    setError(null);
+    setResetMessage(null);
+    setLoading(true);
+    try {
+      await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/login/vendor` });
+      setResetMessage('Reset link sent. Check your email.');
+    } catch (err: any) {
+      setError(err.message || 'Failed to send reset email');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-sky-50 flex flex-col items-center justify-center px-4 py-10">
       
@@ -132,7 +154,30 @@ export default function VendorLogin() {
               </div>
             )}
             <Input className="h-11" placeholder="Business Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-            <Input className="h-11" placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <div className="relative">
+              <Input
+                className="h-11 pr-12"
+                placeholder="Password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                className="absolute inset-y-0 right-3 text-muted-foreground text-xs flex items-center gap-1"
+                onClick={() => setShowPassword(v => !v)}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                <span>{showPassword ? 'Hide' : 'Show'}</span>
+              </button>
+            </div>
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span></span>
+              <button type="button" onClick={handlePasswordReset} className="text-primary hover:underline">Forgot password?</button>
+            </div>
+            {resetMessage && <div className="text-[11px] text-emerald-700">{resetMessage}</div>}
             <Button className="w-full h-11 bg-emerald-600 hover:bg-emerald-700" type="submit" disabled={loading || customerBlocked}>
               {loading ? 'Signing in...' : customerBlocked ? 'Login disabled for customer session' : 'Login as Vendor'}
             </Button>

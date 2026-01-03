@@ -36,32 +36,80 @@ export default function Index() {
   const [vendorsError, setVendorsError] = useState<string|null>(null);
   const [customCategories, setCustomCategories] = useState<string[]>([]);
   const { toast } = useToast();
+  const [vendorRatings, setVendorRatings] = useState<Record<string, { avg: number; count: number }>>({});
+  const [salesCounts, setSalesCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       setLoading(true); setError(null);
-      const { data, error } = await supabase
-        .from('products')
-        .select('id,name,price,stock,main_image_url,description,created_at,vendor_id,size_options,vendors(store_name,address)')
-        .order('created_at', { ascending: false })
-        .limit(60);
+      const [{ data, error }, { data: ratingRows, error: rErr }, { data: salesRows, error: sErr }] = await Promise.all([
+        supabase
+          .from('products')
+          .select('id,name,price,stock,main_image_url,description,created_at,vendor_id,size_options,vendors(store_name,address)')
+          .order('created_at', { ascending: false })
+          .limit(60),
+        supabase
+          .from('order_ratings')
+          .select('vendor_id,rating')
+          .limit(2000),
+        supabase
+          .from('order_items')
+          .select('product_id,quantity')
+          .limit(5000)
+      ]);
       if (!cancelled) {
-        if (error) setError(error.message); else {
-          setProducts((data||[]).map((p:any)=>({
-            id: p.id,
-            name: p.name,
-            price: p.price,
-            rating: 4.9,
-            business: p.vendors?.store_name || 'Vendor',
-            vendorId: p.vendor_id,
-            location: p.vendors?.address || 'Tangub',
-            imageUrl: p.main_image_url || undefined,
-            description: p.description,
-            stock: p.stock,
-            sizeOptions: p.size_options || [],
-            created_at: p.created_at
-          })));
+        if (error) setError(error.message); else if (rErr) setError(rErr.message); else if (sErr) setError(sErr.message); else {
+          const ratingsMap: Record<string, { avg: number; count: number }> = (() => {
+            if (!ratingRows) return {};
+            const sums: Record<string, { sum: number; count: number }> = {};
+            (ratingRows as any[]).forEach(r => {
+              const vId = r.vendor_id ? String(r.vendor_id) : null;
+              const val = Number(r.rating);
+              if (!vId || !Number.isFinite(val)) return;
+              if (!sums[vId]) sums[vId] = { sum: 0, count: 0 };
+              sums[vId].sum += val;
+              sums[vId].count += 1;
+            });
+            const normalized: Record<string, { avg: number; count: number }> = {};
+            Object.entries(sums).forEach(([k,v]) => {
+              normalized[k] = { avg: Math.round((v.sum / v.count) * 10) / 10, count: v.count };
+            });
+            return normalized;
+          })();
+          setVendorRatings(ratingsMap);
+
+          const salesMap: Record<string, number> = (() => {
+            if (!salesRows) return {};
+            const counts: Record<string, number> = {};
+            (salesRows as any[]).forEach(row => {
+              const pid = row.product_id;
+              const qty = Number(row.quantity) || 0;
+              if (!pid) return;
+              counts[pid] = (counts[pid] || 0) + qty;
+            });
+            return counts;
+          })();
+          setSalesCounts(salesMap);
+
+          setProducts((data||[]).map((p:any)=>{
+            const vendorRating = p.vendor_id ? ratingsMap[String(p.vendor_id)] : undefined;
+            return {
+              id: p.id,
+              name: p.name,
+              price: p.price,
+              rating: vendorRating?.avg ?? 0,
+              business: p.vendors?.store_name || 'Vendor',
+              vendorId: p.vendor_id,
+              location: p.vendors?.address || 'Tangub',
+              imageUrl: p.main_image_url || undefined,
+              description: p.description,
+              stock: p.stock,
+              sizeOptions: p.size_options || [],
+              created_at: p.created_at,
+              soldCount: salesMap[p.id] || 0,
+            };
+          }));
         }
         setLoading(false);
       }
@@ -120,7 +168,13 @@ export default function Index() {
     return () => { cancelled = true; };
   }, []);
 
-  const popularProducts = products.slice(0, 12);
+  const popularProducts = [...products]
+    .sort((a, b) => {
+      const soldDiff = (b.soldCount || 0) - (a.soldCount || 0);
+      if (soldDiff !== 0) return soldDiff;
+      return (b.rating || 0) - (a.rating || 0);
+    })
+    .slice(0, 12);
   const featuredProducts = products.slice(0, 9);
   const featuredVendors = vendors;
   const displayCategories = [...baseCategories, ...customCategories.map(name => ({ name, icon: Tag }))];

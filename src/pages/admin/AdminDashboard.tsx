@@ -189,6 +189,15 @@ export default function AdminDashboard() {
       if (error) throw error; return id;
     },
     onSuccess: () => {
+  const unarchiveMutation = useMutation({
+    mutationFn: async (archiveId: string) => {
+      const client = adminClient ?? supabase;
+      const { error } = await client.from('archives').delete().eq('id', archiveId);
+      if (error) throw error;
+      return archiveId;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin','archives'] }),
+  });
       qc.invalidateQueries({ queryKey: ['admin','vendors'] });
       qc.invalidateQueries({ queryKey: ['admin','products'] });
     },
@@ -763,6 +772,14 @@ export default function AdminDashboard() {
                           </div>
                           <div className="text-[11px] text-muted-foreground">Archived {a.created_at ? formatDistanceToNow(new Date(a.created_at), { addSuffix: true }) : ''}</div>
                         </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => unarchiveMutation.mutate(a.id)}
+                          disabled={unarchiveMutation.isLoading}
+                        >
+                          {unarchiveMutation.isLoading ? 'Working...' : 'Unarchive'}
+                        </Button>
                       </div>
                       <div className="mt-3 grid gap-2 sm:grid-cols-2">
                         {displayed.length === 0 && (

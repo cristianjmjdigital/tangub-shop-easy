@@ -17,6 +17,8 @@ interface ProductCardProps {
   description?: string;
   vendorId?: string;
   storePath?: string;
+  stock?: number | null;
+  soldCount?: number;
   onAdd?: () => void;
   adding?: boolean;
   sizeOptions?: string[];
@@ -37,6 +39,8 @@ const ProductCard = ({
   description,
   vendorId,
   storePath,
+  stock,
+  soldCount,
   onAdd,
   adding,
   sizeOptions,
@@ -46,6 +50,7 @@ const ProductCard = ({
   const src = imageUrl || image || "/placeholder.svg";
   const storeHref = storePath || (vendorId ? `/business/${vendorId}` : undefined);
   const reviewsHref = vendorId ? `/business/${vendorId}/reviews` : (storeHref ? `${storeHref}/reviews` : '/ratings');
+  const isOutOfStock = typeof stock === 'number' && stock <= 0;
   return (
     <Card className="overflow-hidden hover:shadow-elegant transition-all duration-300 group">
       {storeHref ? (
@@ -158,15 +163,21 @@ const ProductCard = ({
             </span>
           )}
         </div>
+        {typeof soldCount === 'number' && (
+          <div className="text-xs text-muted-foreground">Sold: {soldCount}</div>
+        )}
+        {typeof stock === 'number' && (
+          <div className="text-xs text-muted-foreground">Stock: {stock <= 0 ? 'Out of stock' : stock}</div>
+        )}
         {onAdd && (
           <Button
             className="mt-4 w-full"
             variant="default"
             size="sm"
-            disabled={adding || (sizeOptions && sizeOptions.length > 0 && !selectedSize)}
+            disabled={adding || isOutOfStock || (sizeOptions && sizeOptions.length > 0 && !selectedSize)}
             onClick={onAdd}
           >
-            {adding ? 'Adding...' : 'Add to Cart'}
+            {adding ? 'Adding...' : isOutOfStock ? 'Out of Stock' : 'Add to Cart'}
           </Button>
         )}
       </CardHeader>

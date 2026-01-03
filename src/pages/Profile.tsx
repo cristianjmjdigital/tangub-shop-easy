@@ -241,7 +241,7 @@ const Profile = () => {
       const payload = {
         full_name: userInfo.name.trim(),
         email: userInfo.email.trim(),
-        phone: userInfo.phone.trim(),
+        phone: userInfo.phone.trim() || null,
         barangay: userInfo.address.replace(/,\s*Tangub City$/i, '').trim() || null,
       };
       const { error } = await supabase
@@ -522,7 +522,7 @@ const Profile = () => {
                           />
                         </div>
                         <div>
-                          <Label htmlFor="phone">Phone Number</Label>
+                          <Label htmlFor="phone">Phone Number (optional)</Label>
                           <Input
                             id="phone"
                             value={userInfo.phone}
@@ -557,8 +557,8 @@ const Profile = () => {
                           <p className="text-lg">{userInfo.email}</p>
                         </div>
                         <div>
-                          <Label className="text-sm font-medium text-muted-foreground">Phone</Label>
-                          <p className="text-lg">{userInfo.phone}</p>
+                          <Label className="text-sm font-medium text-muted-foreground">Phone (optional)</Label>
+                          <p className="text-lg">{userInfo.phone || 'Not provided'}</p>
                         </div>
                       </div>
                       <div>

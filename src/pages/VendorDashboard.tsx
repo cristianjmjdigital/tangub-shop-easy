@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +19,7 @@ import { DashboardShell } from "@/components/layout/DashboardShell";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar, PieChart, Pie, Cell } from "recharts";
 
 interface VendorRecord { id: string; store_name: string; address: string | null; created_at?: string; owner_user_id?: string; contact_phone?: string | null; accepting_orders?: boolean; base_delivery_fee?: number | null; logo_url?: string | null; hero_image_url?: string | null; description?: string | null }
-interface ProductRecord { id: string; name: string; price: number; stock: number; description?: string | null; main_image_url?: string | null; category?: string | null; address?: string | null; size_options?: string[] | null }
+interface ProductRecord { id: string; name: string; price: number; stock: number; description?: string | null; main_image_url?: string | null; category?: string | null; address?: string | null; size_options?: string[] | null; updated_at?: string | null }
 
 export default function VendorDashboard() {
   const { profile, signOut } = useAuth();
@@ -38,6 +38,8 @@ export default function VendorDashboard() {
   const [editCategoryMode, setEditCategoryMode] = useState<string>('');
   const [editingFile, setEditingFile] = useState<File | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [stockFilter, setStockFilter] = useState<'all' | 'out' | 'low' | 'in'>('all');
+  const lowThreshold = 10;
   const [vendorOrders, setVendorOrders] = useState<any[]>([]);
   const [vendorOrderItems, setVendorOrderItems] = useState<any[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
@@ -178,7 +180,7 @@ export default function VendorDashboard() {
       if (vendorData?.id) {
         const { data: productRows } = await supabase
           .from('products')
-          .select('id,name,price,stock,description,main_image_url,category,address,size_options')
+          .select('id,name,price,stock,description,main_image_url,category,address,size_options,updated_at')
           .eq('vendor_id', vendorData.id)
           .order('created_at', { ascending: false });
         setProducts(((productRows as ProductRecord[]) || []).map(p => ({ ...p, size_options: p.size_options || [] })));
@@ -204,6 +206,26 @@ export default function VendorDashboard() {
     run();
     return () => { cancelled = true; };
   }, [profile?.id]);
+
+  const filteredProducts = useMemo(() => {
+    return products.filter(p => {
+      if (stockFilter === 'out') return (p.stock ?? 0) <= 0;
+      if (stockFilter === 'low') return (p.stock ?? 0) > 0 && (p.stock ?? 0) < lowThreshold;
+      if (stockFilter === 'in') return (p.stock ?? 0) >= lowThreshold;
+      return true;
+    });
+  }, [products, stockFilter]);
+
+  const lowStockToastRef = useRef(false);
+  useEffect(() => {
+    if (!products.length || lowStockToastRef.current) return;
+    const lows = products.filter(p => (p.stock ?? 0) > 0 && (p.stock ?? 0) < lowThreshold);
+    const outs = products.filter(p => (p.stock ?? 0) <= 0);
+    if (lows.length || outs.length) {
+      toast({ title: 'Inventory alert', description: `${outs.length} out of stock, ${lows.length} low stock items.` });
+      lowStockToastRef.current = true;
+    }
+  }, [products, toast]);
 
   // Realtime subscription for orders when vendor is known
   useEffect(() => {
@@ -520,15 +542,28 @@ export default function VendorDashboard() {
           </TabsContent>
           <TabsContent value="products">
             <div className="max-w-5xl mx-auto space-y-5">
-              <div className="flex justify-between items-center mb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
                 <h2 className="text-sm font-medium text-muted-foreground">Total Products: {products.length}</h2>
-                <Button size="sm" variant="outline" onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-1" /> Add Product</Button>
+                <div className="flex items-center gap-2">
+                  <Select value={stockFilter} onValueChange={(v)=>setStockFilter(v as any)}>
+                    <SelectTrigger className="w-40">
+                      <SelectValue placeholder="Stock filter" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="out">Out of Stock</SelectItem>
+                      <SelectItem value="low">Low Stock (&lt; {lowThreshold})</SelectItem>
+                      <SelectItem value="in">In Stock</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button size="sm" variant="outline" onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-1" /> Add Product</Button>
+                </div>
               </div>
               <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-                {products.map(p => {
+                {filteredProducts.map(p => {
                   const statusBadge = p.stock === 0 ? (
                     <Badge variant="destructive">Out of Stock</Badge>
-                  ) : p.stock < 10 ? (
+                  ) : p.stock < lowThreshold ? (
                     <Badge className="bg-amber-500 hover:bg-amber-500">Low Stock</Badge>
                   ) : (
                     <Badge className="bg-green-600 hover:bg-green-600">In Stock</Badge>
@@ -551,8 +586,9 @@ export default function VendorDashboard() {
                         </div>
                         <div className="flex items-center justify-between text-sm">
                           <span className="font-semibold">₱{Number(p.price).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</span>
-                          <span className={`text-xs px-2 py-1 rounded-full border ${p.stock === 0 ? 'text-destructive border-destructive/40' : p.stock < 10 ? 'text-amber-600 border-amber-400/50' : 'text-muted-foreground border-border'}`}>{p.stock} in stock</span>
+                          <span className={`text-xs px-2 py-1 rounded-full border ${p.stock === 0 ? 'text-destructive border-destructive/40' : p.stock < lowThreshold ? 'text-amber-600 border-amber-400/50' : 'text-muted-foreground border-border'}`}>{p.stock} in stock</span>
                         </div>
+                        <div className="text-[11px] text-muted-foreground">Updated: {p.updated_at ? new Date(p.updated_at).toLocaleString() : '-'}</div>
                         <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <Button size="sm" variant="secondary" className="h-7 px-2" onClick={() => { setEditingProduct(p); setEditOpen(true); }}><Edit className="h-3.5 w-3.5 mr-1" /> Edit</Button>
                           <Button size="sm" variant="outline" className="h-7 px-2 text-destructive border-destructive/40" onClick={async () => {

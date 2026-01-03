@@ -111,8 +111,31 @@ export function useCart(options: UseCartOptions = {}) {
         setCart(current);
       }
 
+      const { data: productRow, error: productErr } = await supabase
+        .from('products')
+        .select('id,name,stock,size_options')
+        .eq('id', productId)
+        .single();
+      if (productErr || !productRow) throw productErr || new Error('Product not found');
+
+      const availableStock = Number(productRow.stock ?? 0);
+      const sizeOptions: string[] = Array.isArray(productRow.size_options) ? (productRow.size_options as string[]) : [];
+      if (sizeOptions.length && !size) {
+        throw new Error('Select a size to add this item.');
+      }
+      if (size && sizeOptions.length && !sizeOptions.includes(size)) {
+        throw new Error('Selected size is not available for this product.');
+      }
+      if (!Number.isFinite(availableStock) || availableStock <= 0) {
+        throw new Error('Product is out of stock.');
+      }
+
       // Upsert or increment existing item
       const existing = items.find(i => i.product_id === productId && (i.size || null) === (size || null));
+      const desiredQty = (existing?.quantity || 0) + quantity;
+      if (desiredQty > availableStock) {
+        throw new Error(`Only ${availableStock} in stock for this selection.`);
+      }
       if (existing) {
         const { data, error: updErr } = await supabase
           .from('cart_items')
@@ -131,7 +154,7 @@ export function useCart(options: UseCartOptions = {}) {
         if (insErr) throw insErr;
         setItems(prev => [...prev, data as any]);
       }
-      toast({ title: 'Added to cart', description: productName ? `${productName} x${quantity}` : undefined });
+      toast({ title: 'Added to cart', description: productName ? `${productName || productRow.name} x${quantity}` : undefined });
     } catch (e: any) {
       console.error('addItem error', e);
       toast({ title: 'Error', description: e.message ?? 'Failed to add item', variant: 'destructive' });
@@ -143,12 +166,24 @@ export function useCart(options: UseCartOptions = {}) {
   const updateQuantity = useCallback(async (itemId: string, quantity: number) => {
     if (quantity < 1) return removeItem(itemId);
     try {
+      const target = items.find(i => i.id === itemId);
+      const availableStock = Number(target?.product?.stock);
+      if (Number.isFinite(availableStock)) {
+        if (availableStock <= 0) {
+          toast({ title: 'Out of stock', description: 'This item is no longer available and was removed from your cart.', variant: 'destructive' });
+          return removeItem(itemId);
+        }
+        if (quantity > availableStock) {
+          toast({ title: 'Limited stock', description: `Only ${availableStock} left for this item.` });
+          quantity = availableStock;
+        }
+      }
       setLoading(true);
       const { data, error: updErr } = await supabase
         .from('cart_items')
         .update({ quantity })
         .eq('id', itemId)
-        .select('*, product:products(id,name,price,stock,vendor_id, vendor:vendors(id,store_name,barangay,base_delivery_fee))')
+        .select('*, product:products(id,name,price,stock,vendor_id,size_options, vendor:vendors(id,store_name,barangay,base_delivery_fee))')
         .single();
       if (updErr) throw updErr;
       setItems(prev => prev.map(i => i.id === itemId ? (data as any) : i));

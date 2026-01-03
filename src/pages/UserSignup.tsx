@@ -91,6 +91,8 @@ export default function UserSignup() {
   const [govIdPreview, setGovIdPreview] = useState<string | null>(null);
   const [businessPermitFile, setBusinessPermitFile] = useState<File | null>(null);
   const [businessPermitPreview, setBusinessPermitPreview] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const isVendor = form.role === 'vendor';
   const desiredRole = isVendor ? 'vendor' : 'user';
   const vendorStatus = desiredRole === 'vendor' ? 'pending' : 'approved';
@@ -410,23 +412,55 @@ export default function UserSignup() {
               <Input id="email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="gov-id">Government ID (optional)</Label>
+              <Label htmlFor="gov-id">Valid ID (optional)</Label>
               <Input id="gov-id" type="file" accept="image/*" onChange={(e) => handleGovIdChange(e.target.files)} />
               <p className="text-xs text-muted-foreground">File is only previewed here and not uploaded.</p>
               {govIdPreview && (
                 <div className="border rounded-md p-2 bg-muted/30">
-                  <img src={govIdPreview} alt="Government ID preview" className="w-full rounded" />
+                  <img src={govIdPreview} alt="Valid ID preview" className="w-full rounded" />
                 </div>
               )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    className="pr-12"
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-3 text-muted-foreground text-xs flex items-center gap-1"
+                    onClick={() => setShowPassword(v => !v)}
+                  >
+                    {showPassword ? 'Hide' : 'Show'}
+                  </button>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="confirm">Confirm Password</Label>
-                <Input id="confirm" type="password" value={form.confirm} onChange={(e) => setForm({ ...form, confirm: e.target.value })} />
+                <div className="relative">
+                  <Input
+                    id="confirm"
+                    type={showConfirm ? "text" : "password"}
+                    value={form.confirm}
+                    onChange={(e) => setForm({ ...form, confirm: e.target.value })}
+                    className="pr-12"
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-3 text-muted-foreground text-xs flex items-center gap-1"
+                    onClick={() => setShowConfirm(v => !v)}
+                  >
+                    {showConfirm ? 'Hide' : 'Show'}
+                  </button>
+                </div>
               </div>
             </div>
             <div className="space-y-2">

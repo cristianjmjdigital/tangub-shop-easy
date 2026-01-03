@@ -7,16 +7,20 @@ import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { isArchivedAccount } from "@/context/AuthContext";
 import { ShieldCheck, ArrowLeft, Store } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setResetMessage(null);
     if (!form.email || !form.password) return setError("Missing credentials");
     setLoading(true);
     try {
@@ -43,6 +47,24 @@ export default function AdminLogin() {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Login error";
       setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    if (!form.email.trim()) {
+      setError('Enter your email to receive a reset link.');
+      return;
+    }
+    setError('');
+    setResetMessage(null);
+    setLoading(true);
+    try {
+      await supabase.auth.resetPasswordForEmail(form.email.trim(), { redirectTo: `${window.location.origin}/login/admin` });
+      setResetMessage('Reset link sent. Check your email.');
+    } catch (err: any) {
+      setError(err.message || 'Failed to send reset email');
     } finally {
       setLoading(false);
     }
@@ -88,9 +110,30 @@ export default function AdminLogin() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="admin-pass">Password</Label>
-                <Input id="admin-pass" type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} autoComplete="current-password" />
+                <div className="relative">
+                  <Input
+                    id="admin-pass"
+                    type={showPassword ? "text" : "password"}
+                    value={form.password}
+                    onChange={e=>setForm({...form,password:e.target.value})}
+                    autoComplete="current-password"
+                    className="pr-12"
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-3 text-muted-foreground text-xs flex items-center gap-1"
+                    onClick={() => setShowPassword(v => !v)}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    <span>{showPassword ? 'Hide' : 'Show'}</span>
+                  </button>
+                </div>
               </div>
               {error && <div className="text-xs text-destructive">{error}</div>}
+              {resetMessage && <div className="text-[11px] text-emerald-700">{resetMessage}</div>}
+              <div className="flex justify-end text-xs text-muted-foreground">
+                <button type="button" onClick={handlePasswordReset} className="text-primary hover:underline">Forgot password?</button>
+              </div>
               <div className="space-y-2">
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? "Signing in..." : "Login"}

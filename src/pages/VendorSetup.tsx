@@ -23,6 +23,7 @@ export default function VendorSetup() {
     e.preventDefault();
     if (!profile?.id) { setError('Not authenticated'); return; }
     if (!form.business_name.trim()) { setError('Shop name required'); return; }
+    if (!form.address.trim()) { setError('Complete address required'); return; }
     setError(null);
     setLoading(true);
     try {
@@ -30,7 +31,7 @@ export default function VendorSetup() {
       const payload: any = {
         owner_user_id: profile.id,
         store_name: form.business_name.trim(),
-        address: form.address.trim() || null,
+        address: form.address.trim(),
       };
       if (form.description.trim()) payload.description = form.description.trim();
       // Prevent duplicate vendor row for same user
@@ -113,8 +114,14 @@ export default function VendorSetup() {
               <Textarea id="description" value={form.description} onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="address">Address (optional)</Label>
-              <Textarea id="address" value={form.address} onChange={(e) => setForm(f => ({ ...f, address: e.target.value }))} />
+              <Label htmlFor="address">Complete Address</Label>
+              <Textarea
+                id="address"
+                required
+                placeholder="House/Unit No., Street, Barangay, City"
+                value={form.address}
+                onChange={(e) => setForm(f => ({ ...f, address: e.target.value }))}
+              />
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
             <Button type="submit" className="w-full" disabled={loading}>{loading ? 'Creating vendor...' : 'Create Vendor Account'}</Button>

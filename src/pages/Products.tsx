@@ -46,6 +46,8 @@ interface UIProduct {
   featured?: boolean;
   description?: string;
   sizeOptions?: string[];
+  stock?: number;
+  soldCount?: number;
 }
 
 const Products = () => {
@@ -128,6 +130,8 @@ const Products = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [rawProducts, setRawProducts] = useState<RawProductRow[]>([]);
   const [vendors, setVendors] = useState<Record<string, VendorRow>>({});
+  const [vendorRatings, setVendorRatings] = useState<Record<string, { avg: number; count: number }>>({});
+    const [salesCounts, setSalesCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState("featured");
@@ -137,7 +141,7 @@ const Products = () => {
     const load = async () => {
       setLoading(true); setError(null);
       try {
-        const [{ data: pData, error: pErr }, { data: vRows, error: vErr }] = await Promise.all([
+        const [{ data: pData, error: pErr }, { data: vRows, error: vErr }, { data: ratingRows, error: rErr }, { data: salesRows, error: sErr }] = await Promise.all([
           supabase
             .from('products')
             .select('id,name,price,stock,vendor_id,main_image_url,image_url,description,created_at,category,size_options')
@@ -145,15 +149,51 @@ const Products = () => {
           supabase
             .from('vendors')
             .select('id,store_name,address,barangay')
-            .limit(500)
+            .limit(500),
+          supabase
+            .from('order_ratings')
+            .select('vendor_id,rating')
+            .limit(2000),
+          supabase
+            .from('order_items')
+            .select('product_id,quantity')
+            .limit(5000)
         ]);
         if (pErr) throw pErr;
         if (vErr) throw vErr;
+        if (rErr) throw rErr;
+        if (sErr) throw sErr;
         setRawProducts((pData || []) as RawProductRow[]);
         if (vRows) {
           const map: Record<string, VendorRow> = {};
           vRows.forEach(v => { map[v.id] = v as VendorRow; });
           setVendors(map);
+        }
+        if (ratingRows) {
+          const sums: Record<string, { sum: number; count: number }> = {};
+          (ratingRows as any[]).forEach((r) => {
+            const vId = r.vendor_id ? String(r.vendor_id) : null;
+            const val = Number(r.rating);
+            if (!vId || !Number.isFinite(val)) return;
+            if (!sums[vId]) sums[vId] = { sum: 0, count: 0 };
+            sums[vId].sum += val;
+            sums[vId].count += 1;
+          });
+          const normalized: Record<string, { avg: number; count: number }> = {};
+          Object.entries(sums).forEach(([k, v]) => {
+            normalized[k] = { avg: Math.round((v.sum / v.count) * 10) / 10, count: v.count };
+          });
+          setVendorRatings(normalized);
+        }
+        if (salesRows) {
+          const counts: Record<string, number> = {};
+          (salesRows as any[]).forEach((row) => {
+            const pid = row.product_id;
+            const qty = Number(row.quantity) || 0;
+            if (!pid) return;
+            counts[pid] = (counts[pid] || 0) + qty;
+          });
+          setSalesCounts(counts);
         }
       } catch (err: any) {
         setError(err.message || 'Failed to load products');
@@ -174,12 +214,15 @@ const Products = () => {
       const location = p.location || vendor?.barangay || vendor?.address || 'Unknown';
       const description = (p as any).description || 'Detailed product information is provided by the vendor.';
       const sizeOptions = (p as any).size_options || [];
+      const stock = typeof p.stock === 'number' ? p.stock : 0;
+      const ratingInfo = vendorId ? vendorRatings[vendorId] : undefined;
+      const soldCount = salesCounts[p.id] || 0;
       return {
         id: p.id,
         name: p.name,
         price: typeof p.price === 'number' ? p.price : 0,
-        rating: 0,
-        reviews: 0,
+        rating: ratingInfo?.avg ?? 0,
+        reviews: ratingInfo?.count ?? 0,
         image: (p as any).main_image_url || (p as any).image_url || '/placeholder.svg',
         business: vendor?.store_name || 'Unknown Vendor',
         vendorId,
@@ -189,9 +232,11 @@ const Products = () => {
         featured: false,
         description,
         sizeOptions,
+        stock,
+        soldCount,
       };
     });
-  }, [rawProducts, vendors]);
+  }, [rawProducts, vendors, vendorRatings, salesCounts]);
 
   const categories = useMemo(() => {
     const set = new Set<string>(DEFAULT_CATEGORIES);
@@ -232,6 +277,10 @@ const Products = () => {
 
   const addToCart = async (product: UIProduct) => {
     try {
+      if (typeof product.stock === 'number' && product.stock <= 0) {
+        toast({ title: 'Out of stock', description: 'This item is currently unavailable.', variant: 'destructive' });
+        return;
+      }
       if (product.sizeOptions && product.sizeOptions.length) {
         const chosen = selectedSizes[product.id];
         if (!chosen) {
@@ -258,6 +307,7 @@ const Products = () => {
     if (q) {
       list = list.filter(p =>
         p.name.toLowerCase().includes(q) ||
+        p.category.toLowerCase().includes(q) ||
         p.business.toLowerCase().includes(q) ||
         p.location.toLowerCase().includes(q)
       );
@@ -406,7 +456,7 @@ const Products = () => {
                 <Input
                   value={searchTerm}
                   onChange={(e) => handleSearchChange(e.target.value)}
-                  placeholder="Search products or shops..."
+                  placeholder="Search products, shops, or categories..."
                   className="pl-10"
                 />
               </div>
@@ -501,6 +551,12 @@ const Products = () => {
                         product.business
                       )}
                     </div>
+
+                    <div className="flex items-center text-xs text-muted-foreground gap-3">
+                      <span>Stock: {product.stock ?? 0}</span>
+                      <span>Sold: {product.soldCount ?? 0}</span>
+                      {product.category && <span>Category: {product.category}</span>}
+                    </div>
                     
                     <div className="flex items-center mb-1">
                       <div className="flex items-center">
@@ -559,10 +615,11 @@ const Products = () => {
                     )}
                     <Button 
                       className="w-full text-base py-2"
+                      disabled={typeof product.stock === 'number' && product.stock <= 0}
                       onClick={() => addToCart(product)}
                     >
                       <ShoppingCart className="h-4 w-4 mr-2" />
-                      Add to Cart
+                      {typeof product.stock === 'number' && product.stock <= 0 ? 'Out of Stock' : 'Add to Cart'}
                     </Button>
                   </CardFooter>
                 </Card>
