@@ -163,6 +163,16 @@ export default function AdminDashboard() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin','users'] }),
   });
 
+  const unarchiveMutation = useMutation({
+    mutationFn: async (archiveId: string) => {
+      const client = adminClient ?? supabase;
+      const { error } = await client.from('archives').delete().eq('id', archiveId);
+      if (error) throw error;
+      return archiveId;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin','archives'] }),
+  });
+
   // Mutations: VENDORS
   const createVendor = useMutation({
     mutationFn: async (payload: Partial<VendorRow>) => {
@@ -189,15 +199,6 @@ export default function AdminDashboard() {
       if (error) throw error; return id;
     },
     onSuccess: () => {
-  const unarchiveMutation = useMutation({
-    mutationFn: async (archiveId: string) => {
-      const client = adminClient ?? supabase;
-      const { error } = await client.from('archives').delete().eq('id', archiveId);
-      if (error) throw error;
-      return archiveId;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin','archives'] }),
-  });
       qc.invalidateQueries({ queryKey: ['admin','vendors'] });
       qc.invalidateQueries({ queryKey: ['admin','products'] });
     },
