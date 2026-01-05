@@ -19,14 +19,32 @@ export default function AdminLogin() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const email = form.email.trim().toLowerCase();
+    const password = form.password.trim();
     setError("");
     setResetMessage(null);
-    if (!form.email || !form.password) return setError("Missing credentials");
+    if (!email || !password) {
+      setError("Missing credentials");
+      return;
+    }
     setLoading(true);
     try {
-      const { data, error: signErr } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
-      if (signErr) throw signErr;
-      const user = data.user;
+      const { data, error: signErr } = await supabase.auth.signInWithPassword({ email, password });
+      let user = data.user;
+
+      // Supabase can return a 400 with pending session data if email confirmation is required.
+      if (signErr) {
+        const msg = signErr.message.toLowerCase();
+        if (msg.includes('confirm')) {
+          const { data: sess } = await supabase.auth.getSession();
+          user = sess.session?.user || user;
+          if (!user) throw signErr;
+        } else if (msg.includes('invalid login credentials')) {
+          throw new Error('Invalid email or password.');
+        } else {
+          throw signErr;
+        }
+      }
       if (!user) throw new Error("Login failed");
 
       const archived = await isArchivedAccount(user.id, user.email);
