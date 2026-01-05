@@ -412,7 +412,7 @@ export default function UserSignup() {
               <Input id="email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="gov-id">Valid ID (optional)</Label>
+              <Label htmlFor="gov-id">Valid ID</Label>
               <Input id="gov-id" type="file" accept="image/*" onChange={(e) => handleGovIdChange(e.target.files)} />
               <p className="text-xs text-muted-foreground">File is only previewed here and not uploaded.</p>
               {govIdPreview && (
