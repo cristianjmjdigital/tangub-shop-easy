@@ -1,11 +1,11 @@
-import { useEffect, useState, useMemo, type ComponentType } from "react";
+import { useEffect, useState, useMemo, type ComponentType, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Users, Store, Package, ShoppingCart, BarChart2, LogOut, Wallet, Plus, Pencil, Trash2, Download, Eye } from "lucide-react";
+import { Search, Users, Store, Package, ShoppingCart, BarChart2, LogOut, Wallet, Plus, Pencil, Trash2, Download, Eye, KeyRound } from "lucide-react";
 import { supabase, supabaseAdmin } from "@/lib/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -46,13 +46,13 @@ interface VendorRow { id: string; store_name: string; address: string | null; ow
 interface ProductRow { id: string; name: string; price: number; vendor_id: string }
 interface OrderRow { id: string | number; total: number; status: string | null; created_at?: string; user_id?: string | number | null }
 interface ArchiveRow { id: string; entity_type: string; entity_id: string; payload: any; created_at?: string }
-type TabKey = "dashboard"|"users"|"vendors"|"products"|"orders"|"reports"|"archives";
+type TabKey = "dashboard"|"users"|"vendors"|"products"|"orders"|"reports"|"archives"|"settings";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const adminTabKey = 'admin-dashboard-tab';
-  const allowedTabs: Array<TabKey> = ["dashboard","users","vendors","products","orders","reports","archives"];
+  const allowedTabs: Array<TabKey> = ["dashboard","users","vendors","products","orders","reports","archives","settings"];
   const [tab, setTab] = useState<TabKey>(() => {
     const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(adminTabKey) : null;
     return allowedTabs.includes(stored as any) ? stored as any : "dashboard";
@@ -65,7 +65,15 @@ export default function AdminDashboard() {
     orders: '',
     reports: '',
     archives: '',
+    settings: '',
   });
+  const [authEmail, setAuthEmail] = useState('');
+  const [pwCurrent, setPwCurrent] = useState('');
+  const [pwNew, setPwNew] = useState('');
+  const [pwConfirm, setPwConfirm] = useState('');
+  const [pwLoading, setPwLoading] = useState(false);
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwMessage, setPwMessage] = useState<string | null>(null);
   const setFilterFor = (key: TabKey, value: string) => setFilters(prev => ({ ...prev, [key]: value }));
 
   useEffect(() => {
@@ -74,6 +82,12 @@ export default function AdminDashboard() {
     }
   }, [tab]);
 
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user?.email) setAuthEmail(data.user.email);
+    }).catch(() => {});
+  }, []);
+
   // Gate (still insecure placeholder) – keep localStorage role check
   useEffect(() => {
     if (localStorage.getItem("role") !== "admin") { navigate("/admin/login"); }
@@ -81,6 +95,40 @@ export default function AdminDashboard() {
 
   const adminClient = supabaseAdmin || supabase;
   const adminClientNote = !supabaseAdmin ? 'Service role key missing; admin actions rely on anon key and may be blocked by RLS.' : null;
+
+  const handlePasswordChange = async (e: FormEvent) => {
+    e.preventDefault();
+    setPwError(null);
+    setPwMessage(null);
+    if (pwNew.length < 8) {
+      setPwError('New password must be at least 8 characters.');
+      return;
+    }
+    if (pwNew !== pwConfirm) {
+      setPwError('New passwords do not match.');
+      return;
+    }
+    setPwLoading(true);
+    try {
+      const email = authEmail || (await supabase.auth.getUser()).data.user?.email;
+      if (!email) throw new Error('No authenticated admin user found.');
+
+      const { error: reauthErr } = await supabase.auth.signInWithPassword({ email, password: pwCurrent });
+      if (reauthErr) throw new Error('Current password is incorrect.');
+
+      const { error: updateErr } = await supabase.auth.updateUser({ password: pwNew });
+      if (updateErr) throw updateErr;
+
+      setPwMessage('Password updated successfully.');
+      setPwCurrent('');
+      setPwNew('');
+      setPwConfirm('');
+    } catch (err: any) {
+      setPwError(err.message || 'Failed to update password.');
+    } finally {
+      setPwLoading(false);
+    }
+  };
 
   const usersQuery = useQuery({
     queryKey: ['admin','users'],
@@ -496,6 +544,7 @@ export default function AdminDashboard() {
           <TabsTrigger value="orders" className={tabTriggerClass}>Orders</TabsTrigger>
           <TabsTrigger value="reports" className={tabTriggerClass}>Reports</TabsTrigger>
           <TabsTrigger value="archives" className={tabTriggerClass}>Archives</TabsTrigger>
+          <TabsTrigger value="settings" className={tabTriggerClass}>Settings</TabsTrigger>
         </TabsList>
         <TabsContent value="dashboard">
               <SectionCard title="Overview" description="Quick glance at trends.">
@@ -535,6 +584,41 @@ export default function AdminDashboard() {
                         <ChartLegend content={<ChartLegendContent nameKey="status" />} />
                       </PieChart>
                     </ChartContainer>
+                  <TabsContent value="settings">
+                    <SectionCard title="Account" description="Update your admin password.">
+                      <form onSubmit={handlePasswordChange} className="max-w-xl space-y-4">
+                        {pwError && <div className="text-sm text-destructive">{pwError}</div>}
+                        {pwMessage && <div className="text-sm text-emerald-700">{pwMessage}</div>}
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="space-y-1">
+                            <div className="text-sm font-medium">Current password</div>
+                            <Input type="password" autoComplete="current-password" value={pwCurrent} onChange={(e)=>setPwCurrent(e.target.value)} required />
+                          </div>
+                          <div className="space-y-1">
+                            <div className="text-sm font-medium">New password</div>
+                            <Input type="password" autoComplete="new-password" value={pwNew} onChange={(e)=>setPwNew(e.target.value)} required />
+                          </div>
+                          <div className="space-y-1">
+                            <div className="text-sm font-medium">Confirm new password</div>
+                            <Input type="password" autoComplete="new-password" value={pwConfirm} onChange={(e)=>setPwConfirm(e.target.value)} required />
+                          </div>
+                          <div className="space-y-1">
+                            <div className="text-sm font-medium">Signed-in email</div>
+                            <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground flex items-center gap-2">
+                              <KeyRound className="h-4 w-4" />
+                              <span>{authEmail || 'Detecting...'}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <Button type="submit" disabled={pwLoading}>
+                            {pwLoading ? 'Updating...' : 'Update password'}
+                          </Button>
+                          <div className="text-xs text-muted-foreground">Re-enter your current password to confirm the change.</div>
+                        </div>
+                      </form>
+                    </SectionCard>
+                  </TabsContent>
                   </Card>
                 </div>
                 <div className="grid md:grid-cols-2 gap-4 mt-4">
