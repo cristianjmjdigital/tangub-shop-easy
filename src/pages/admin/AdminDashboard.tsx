@@ -297,6 +297,41 @@ export default function AdminDashboard() {
   const ordersData = ordersQuery.data || [];
   const archivesData = archivesQuery.data || [];
 
+  const usersById = useMemo(() => {
+    const map = new Map<string, UserRow>();
+    usersData.forEach(u => { if (u.id) map.set(String(u.id), u); });
+    return map;
+  }, [usersData]);
+
+  const ordersReport = useMemo(() => ordersData.map(o => ({
+    'Order ID': o.id,
+    'Status': o.status || '',
+    'Total Amount': Number((o as any).total_amount ?? o.total ?? 0),
+    'Created At': o.created_at || '',
+  })), [ordersData]);
+
+  const vendorsReport = useMemo(() => vendorsData.map(v => {
+    const owner = v.owner_user_id ? usersById.get(String(v.owner_user_id)) : undefined;
+    return {
+      'Vendor ID': v.id,
+      'Store Name': v.store_name,
+      'Address': v.address || '',
+      'Owner Name': owner?.full_name || '',
+      'Owner Email': owner?.email || '',
+      'Vendor Status': owner?.vendor_status || '',
+    };
+  }), [vendorsData, usersById]);
+
+  const customersReport = useMemo(() => usersData
+    .filter(u => (u.role || '').toLowerCase() !== 'admin')
+    .map(u => ({
+      'Full Name': u.full_name,
+      'Email': u.email,
+      'Role': u.role,
+      'Barangay': u.barangay || '',
+      'Vendor Status': u.vendor_status || '',
+    })), [usersData]);
+
   const customerSuggestions = useMemo(() => {
     const seen = new Set<string>();
     const out: { label: string; value: string; type: string }[] = [];
@@ -792,11 +827,11 @@ export default function AdminDashboard() {
             </SectionCard>
           </TabsContent>
           <TabsContent value="reports">
-            <SectionCard title="Reports" description="High level insights.">
+            <SectionCard title="Reports" description="Platform-wide exports (all stores). User IDs removed for privacy.">
               <div className="flex flex-wrap gap-2 mb-3">
-                <Button size="sm" variant="outline" onClick={()=>downloadCSV('orders-report.csv', ordersData)}><Download className="h-4 w-4 mr-1" /> Orders CSV</Button>
-                <Button size="sm" variant="outline" onClick={()=>downloadCSV('vendors-report.csv', vendorsData)}><Download className="h-4 w-4 mr-1" /> Vendors CSV</Button>
-                <Button size="sm" variant="outline" onClick={()=>downloadCSV('customers-report.csv', usersData.filter(u=>u.role!=='admin'))}><Download className="h-4 w-4 mr-1" /> Customers CSV</Button>
+                <Button size="sm" variant="outline" onClick={()=>downloadCSV('orders-report.csv', ordersReport)}><Download className="h-4 w-4 mr-1" /> Orders (all stores) CSV</Button>
+                <Button size="sm" variant="outline" onClick={()=>downloadCSV('vendors-report.csv', vendorsReport)}><Download className="h-4 w-4 mr-1" /> Vendors CSV</Button>
+                <Button size="sm" variant="outline" onClick={()=>downloadCSV('customers-report.csv', customersReport)}><Download className="h-4 w-4 mr-1" /> Customers CSV</Button>
               </div>
               <div className="grid md:grid-cols-2 gap-4">
                 <Card className="relative overflow-hidden border border-border/70 bg-gradient-to-br from-white via-slate-50 to-slate-100/80 p-4 shadow-md dark:from-slate-900/70 dark:via-slate-900/60 dark:to-slate-900/55">
