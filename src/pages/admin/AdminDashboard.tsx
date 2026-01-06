@@ -774,7 +774,6 @@ export default function AdminDashboard() {
                       <div className="text-xs">Business: <span className="font-medium">{owned?.store_name || 'Not set'}</span></div>
                       <div className="flex gap-2 mt-1 flex-wrap">
                         <ViewUserButton user={u} />
-                        <EditUserButton user={u} onSave={(changes)=>updateUser.mutate({ id: u.id, ...changes })} />
                         <DeleteButton label="Archive" onConfirm={()=>deleteUser.mutate(u.id)} />
                       </div>
                     </Card>
@@ -1129,7 +1128,7 @@ function ViewUserButton({ user }: { user: UserRow }) {
         <Button size="sm" variant="outline" className="h-7 px-2"><Eye className="h-3.5 w-3.5 mr-1" /> Details</Button>
       </DialogTrigger>
       <DialogContent>
-        <DialogHeader><DialogTitle>Customer Details</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Informations</DialogTitle></DialogHeader>
         <div className="text-sm space-y-1">
           <div><span className="text-muted-foreground">Name:</span> {user.full_name || '—'}</div>
           <div><span className="text-muted-foreground">Email:</span> {user.email}</div>
