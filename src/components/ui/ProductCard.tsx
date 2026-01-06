@@ -72,9 +72,6 @@ const ProductCard = ({
               -{discount}%
             </Badge>
           )}
-          <Badge className="absolute top-2 left-2 bg-primary/90 text-primary-foreground backdrop-blur-sm max-w-[70%] truncate">
-            Visit store
-          </Badge>
         </Link>
       ) : (
         <div className="relative">

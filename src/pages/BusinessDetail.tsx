@@ -5,9 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import ProductCard from '@/components/ui/ProductCard';
 import { ArrowLeft, Store, MapPin } from 'lucide-react';
+import { useCart } from '@/hooks/use-cart';
+import { useToast } from '@/hooks/use-toast';
 
 interface VendorInfo { id: string; store_name: string; description?: string | null; address?: string | null; logo_url?: string | null; created_at?: string }
-interface ProductRow { id: string; name: string; price: number; main_image_url?: string | null; description?: string | null; stock?: number | null; created_at?: string }
+interface ProductRow { id: string; name: string; price: number; main_image_url?: string | null; description?: string | null; stock?: number | null; created_at?: string; size_options?: string[] | null }
 
 export default function BusinessDetail() {
   const { id } = useParams<{ id: string }>();
@@ -15,6 +17,10 @@ export default function BusinessDetail() {
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { addItem, loading: cartLoading } = useCart({ vendorId: id ?? null });
+  const [addingId, setAddingId] = useState<string | null>(null);
+  const [selectedSizes, setSelectedSizes] = useState<Record<string, string>>({});
+  const { toast } = useToast();
 
   useEffect(() => {
     let cancelled = false;
@@ -30,7 +36,7 @@ export default function BusinessDetail() {
       if (!cancelled) setVendor(v as VendorInfo);
       const { data: pRows, error: pErr } = await supabase
         .from('products')
-        .select('id,name,price,main_image_url,description,stock,created_at')
+        .select('id,name,price,main_image_url,description,stock,created_at,size_options')
         .eq('vendor_id', id)
         .order('created_at', { ascending: false });
       if (!cancelled) {
@@ -41,6 +47,30 @@ export default function BusinessDetail() {
     load();
     return () => { cancelled = true; };
   }, [id]);
+
+  const handleAddToCart = async (product: ProductRow) => {
+    const sizeOptions = product.size_options || [];
+    const selectedSize = selectedSizes[product.id];
+
+    if (typeof product.stock === 'number' && product.stock <= 0) {
+      toast({ title: 'Out of stock', description: 'This item is currently unavailable.', variant: 'destructive' });
+      return;
+    }
+
+    if (sizeOptions.length > 0 && !selectedSize) {
+      toast({ title: 'Choose a size', description: 'Select a size before adding to cart.', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      setAddingId(product.id);
+      await addItem(product.id, 1, product.name, selectedSize);
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Failed to add to cart', variant: 'destructive' });
+    } finally {
+      setAddingId((current) => (current === product.id ? null : current));
+    }
+  };
 
   if (!id) return <div className="container mx-auto px-4 py-12">Missing vendor id.</div>;
 
@@ -120,6 +150,11 @@ export default function BusinessDetail() {
               description={p.description || 'Detailed description provided below.'}
               stock={p.stock || 0}
               created_at={p.created_at}
+              sizeOptions={p.size_options || []}
+              selectedSize={selectedSizes[p.id]}
+              onSelectSize={(size) => setSelectedSizes(prev => ({ ...prev, [p.id]: size }))}
+              onAdd={() => handleAddToCart(p)}
+              adding={addingId === p.id || cartLoading}
             />
           ))}
         </div>
