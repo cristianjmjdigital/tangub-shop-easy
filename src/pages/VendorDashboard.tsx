@@ -19,7 +19,7 @@ import { DashboardShell } from "@/components/layout/DashboardShell";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar, PieChart, Pie, Cell } from "recharts";
 
 interface VendorRecord { id: string; store_name: string; address: string | null; created_at?: string; owner_user_id?: string; contact_phone?: string | null; accepting_orders?: boolean; base_delivery_fee?: number | null; logo_url?: string | null; hero_image_url?: string | null; description?: string | null }
-interface ProductRecord { id: string; name: string; price: number; stock: number; description?: string | null; main_image_url?: string | null; category?: string | null; address?: string | null; size_options?: string[] | null; updated_at?: string | null }
+interface ProductRecord { id: string; name: string; price: number; stock: number; description?: string | null; main_image_url?: string | null; category?: string | null; address?: string | null; size_options?: string[] | null; updated_at?: string | null; created_at?: string | null }
 
 export default function VendorDashboard() {
   const { profile, signOut } = useAuth();
@@ -170,21 +170,51 @@ export default function VendorDashboard() {
     if (background) setRefreshing(true); else setLoading(true);
     setError(null);
     try {
-      const { data: vendorData, error: vendorError } = await supabase
-        .from('vendors')
-        .select('id,store_name,address,created_at,owner_user_id,contact_phone,accepting_orders,base_delivery_fee,logo_url,hero_image_url,description')
-        .eq('owner_user_id', profile.id)
-        .maybeSingle();
-      if (vendorError) throw vendorError;
-      setVendor(vendorData as VendorRecord);
-      if (vendorData?.id) {
+      const vendorSelect = 'id,store_name,name,address,owner_user_id,logo_url,created_at';
+
+      // Resolve the numeric/uuid user id from the users table to avoid casting issues
+      const userIds: string[] = [];
+      if (profile.id) userIds.push(profile.id);
+      if (profile.auth_user_id) {
+        const { data: userRows } = await supabase
+          .from('users')
+          .select('id')
+          .eq('auth_user_id', profile.auth_user_id);
+        (userRows || []).forEach((u: any) => { if (u?.id && !userIds.includes(String(u.id))) userIds.push(String(u.id)); });
+      }
+
+      let resolvedVendor: VendorRecord | null = null;
+      let vendorError: any = null;
+      if (userIds.length) {
+        const { data, error } = await supabase
+          .from('vendors')
+          .select(vendorSelect)
+          .in('owner_user_id', userIds)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        resolvedVendor = data as VendorRecord | null;
+        vendorError = error;
+      }
+
+      if (vendorError && !resolvedVendor) throw vendorError;
+
+      setVendor(resolvedVendor);
+      if (resolvedVendor?.id) {
         const { data: productRows } = await supabase
           .from('products')
-          .select('id,name,price,stock,description,main_image_url,category,address,size_options,updated_at')
-          .eq('vendor_id', vendorData.id)
+          .select('id,name,price,stock,description,main_image_url,created_at')
+          .eq('vendor_id', resolvedVendor.id)
           .order('created_at', { ascending: false });
-        setProducts(((productRows as ProductRecord[]) || []).map(p => ({ ...p, size_options: p.size_options || [] })));
-        await loadVendorOrders(vendorData.id);
+        setProducts(((productRows as ProductRecord[]) || []).map(p => ({
+          ...p,
+          size_options: (p as any).size_options || [],
+          category: (p as any).category || null,
+          address: (p as any).address || null,
+          updated_at: (p as any).updated_at || (p as any).created_at || null,
+          created_at: (p as any).created_at || null
+        })));
+        await loadVendorOrders(String(resolvedVendor.id));
       } else {
         setProducts([]);
         setVendorOrders([]);
@@ -588,6 +618,7 @@ export default function VendorDashboard() {
                           <span className="font-semibold">₱{Number(p.price).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</span>
                           <span className={`text-xs px-2 py-1 rounded-full border ${p.stock === 0 ? 'text-destructive border-destructive/40' : p.stock < lowThreshold ? 'text-amber-600 border-amber-400/50' : 'text-muted-foreground border-border'}`}>{p.stock} in stock</span>
                         </div>
+                        <div className="text-[11px] text-muted-foreground">Added: {p.created_at ? new Date(p.created_at).toLocaleString() : '-'}</div>
                         <div className="text-[11px] text-muted-foreground">Updated: {p.updated_at ? new Date(p.updated_at).toLocaleString() : '-'}</div>
                         <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <Button size="sm" variant="secondary" className="h-7 px-2" onClick={() => { setEditingProduct(p); setEditOpen(true); }}><Edit className="h-3.5 w-3.5 mr-1" /> Edit</Button>
@@ -943,32 +974,25 @@ export default function VendorDashboard() {
                 const uploaded = await uploadProductImage(newProductFile, String(vendor.id));
                 if (uploaded) imageUrl = uploaded;
               }
-              const resolvedAddress = vendorAddress || newProduct.address.trim();
-              if (!resolvedAddress) {
-                toast({ title: 'Address required', description: 'Add a business address to save this product.', variant: 'destructive' });
-                setCreating(false);
-                return;
-              }
+              // Address column not present in current schema; skip enforcing it
               const finalCategory = newProduct.category.trim();
               if (newCategoryIsCustom && !finalCategory) {
                 toast({ title: 'Custom category required', description: 'Enter a category name or pick an existing one.', variant: 'destructive' });
                 setCreating(false);
                 return;
               }
+              const insertPayload: any = {
+                vendor_id: vendor.id,
+                name: newProduct.name.trim(),
+                price: isNaN(priceNum) ? 0 : priceNum,
+                stock: isNaN(stockNum) ? 0 : stockNum,
+                description: newProduct.description.trim() ? newProduct.description.trim() : null,
+                main_image_url: imageUrl
+              };
               const { data: inserted, error: insertErr } = await supabase
                 .from('products')
-                .insert({
-                  vendor_id: vendor.id,
-                  name: newProduct.name.trim(),
-                  price: isNaN(priceNum) ? 0 : priceNum,
-                  stock: isNaN(stockNum) ? 0 : stockNum,
-                  description: newProduct.description.trim() ? newProduct.description.trim() : null,
-                  main_image_url: imageUrl,
-                  category: finalCategory || null,
-                  address: resolvedAddress,
-                  size_options: finalCategory === 'Fashion' ? newProduct.size_options : []
-                })
-                .select('id,name,price,stock,description,main_image_url,category,address,size_options')
+                .insert(insertPayload)
+                .select('id,name,price,stock,description,main_image_url,created_at')
                 .single();
               if (!insertErr && inserted) {
                 setProducts(prev => [{ ...(inserted as any), size_options: (inserted as any).size_options || [] }, ...prev]);
@@ -1103,32 +1127,25 @@ export default function VendorDashboard() {
               const uploaded = await uploadProductImage(editingFile, String(vendor.id));
               if (uploaded) imageUrl = uploaded;
             }
-            const resolvedAddress = vendorAddress || editingProduct.address?.trim() || '';
-            if (!resolvedAddress) {
-              toast({ title: 'Address required', description: 'Add a business address to save this product.', variant: 'destructive' });
-              setSavingEdit(false);
-              return;
-            }
+            // Address column not present in current schema; skip enforcing it
             const finalCategory = (editingProduct.category || '').trim();
             if (editCategoryIsCustom && !finalCategory) {
               toast({ title: 'Custom category required', description: 'Enter a category name or pick an existing one.', variant: 'destructive' });
               setSavingEdit(false);
               return;
             }
+            const updatePayload: any = {
+              name: editingProduct.name.trim(),
+              price: editingProduct.price,
+              stock: editingProduct.stock,
+              description: editingProduct.description?.trim() || null,
+              main_image_url: imageUrl
+            };
             const { error: updErr, data } = await supabase
               .from('products')
-              .update({ 
-                name: editingProduct.name.trim(), 
-                price: editingProduct.price, 
-                stock: editingProduct.stock, 
-                description: editingProduct.description?.trim() || null, 
-                main_image_url: imageUrl,
-                category: finalCategory || null,
-                address: resolvedAddress,
-                size_options: finalCategory === 'Fashion' ? (editingProduct.size_options || []) : []
-              })
+              .update(updatePayload)
               .eq('id', editingProduct.id)
-              .select('id,name,price,stock,description,main_image_url,category,address,size_options')
+              .select('id,name,price,stock,description,main_image_url,created_at')
               .single();
             if (!updErr && data) {
               setProducts(prev => prev.map(p => p.id === data.id ? ({ ...(data as any), size_options: (data as any).size_options || [] }) : p));
