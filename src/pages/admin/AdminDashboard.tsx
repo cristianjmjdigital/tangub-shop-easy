@@ -329,7 +329,6 @@ export default function AdminDashboard() {
       'Email': u.email,
       'Role': u.role,
       'Barangay': u.barangay || '',
-      'Vendor Status': u.vendor_status || '',
     })), [usersData]);
 
   const customerSuggestions = useMemo(() => {
@@ -817,10 +816,7 @@ export default function AdminDashboard() {
                     </div>
                     <div className="text-xs text-muted-foreground">Placed {o.created_at ? formatDistanceToNow(new Date(o.created_at), { addSuffix: true }) : ''} • Total: ₱{Number(o.total||0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</div>
                     <div className="pt-1"><StatusTimeline status={o.status || 'pending'} /></div>
-                    <div className="flex gap-2 mt-1">
-                      <Button size="sm" variant="outline" className="h-7 px-2">Details</Button>
-                      <Button size="sm" variant="secondary" className="h-7 px-2">Advance</Button>
-                    </div>
+                    
                   </Card>
                 ))}
               </div>

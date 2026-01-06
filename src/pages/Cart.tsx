@@ -154,7 +154,7 @@ const Cart = () => {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {items.map((item) => (
-                    <div key={item.id} className="flex items-center space-x-4 p-4 border rounded-lg">
+                    <div key={item.id} className="flex items-center space-x-4 p-4 border rounded-lg flex-wrap">
                       <div className="w-16 h-16 bg-muted rounded-lg flex items-center justify-center">
                         <span className="text-xs text-center">{item.name}</span>
                       </div>
