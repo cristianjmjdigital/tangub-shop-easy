@@ -260,39 +260,44 @@ export default function Index() {
       <section className="px-6 py-2">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-lg">Popular Now</h3>
-            <Link to="/products" className="text-primary text-sm">See All</Link>
+        <h3 className="font-semibold text-lg">Top Rated Products</h3>
+        <Link to="/products" className="text-primary text-sm">See All</Link>
           </div>
           {error && <div className="text-sm text-red-600">{error}</div>}
           {loading && <div className="flex gap-4 pb-1">{Array.from({length:5}).map((_,i)=>(<div key={i} className="min-w-[260px] h-72 bg-muted rounded-xl animate-pulse" />))}</div>}
-          {!loading && !error && (
-            <div className="flex gap-4 overflow-x-auto no-scrollbar pb-1">
-              {popularProducts.map(p => (
-                <div key={p.id} className="min-w-[260px]">
-                  <ProductCard
-                    {...p}
-                    description={p.description || 'View store for full product details.'}
-                    vendorId={p.vendorId}
-                    storePath={p.vendorId ? `/business/${p.vendorId}` : undefined}
-                    sizeOptions={p.sizeOptions}
-                    selectedSize={selectedSizes[p.id]}
-                    onSelectSize={(size) => setSelectedSizes(prev => ({ ...prev, [p.id]: size }))}
-                    onAdd={async () => {
-                      if (p.sizeOptions && p.sizeOptions.length > 0 && !selectedSizes[p.id]) {
-                        toast({ title: 'Choose a size', description: 'Please select a size before adding to cart.' });
-                        return;
-                      }
-                      setAddingId(p.id);
-                      await addItem(p.id, 1, p.name, selectedSizes[p.id]);
-                      setAddingId(id => (id === p.id ? null : id));
-                    }}
-                    adding={addingId === p.id || cartLoading}
-                  />
-                </div>
-              ))}
-              {popularProducts.length === 0 && <div className="text-xs text-muted-foreground">No products available.</div>}
-            </div>
-          )}
+          {!loading && !error && (() => {
+        const topRatedProducts = [...products]
+          .sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.soldCount || 0) - (a.soldCount || 0))
+          .slice(0, 12);
+        return (
+          <div className="flex gap-4 overflow-x-auto no-scrollbar pb-1">
+            {topRatedProducts.map(p => (
+          <div key={p.id} className="min-w-[260px]">
+            <ProductCard
+              {...p}
+              description={p.description || 'View store for full product details.'}
+              vendorId={p.vendorId}
+              storePath={p.vendorId ? `/business/${p.vendorId}` : undefined}
+              sizeOptions={p.sizeOptions}
+              selectedSize={selectedSizes[p.id]}
+              onSelectSize={(size) => setSelectedSizes(prev => ({ ...prev, [p.id]: size }))}
+              onAdd={async () => {
+            if (p.sizeOptions && p.sizeOptions.length > 0 && !selectedSizes[p.id]) {
+              toast({ title: 'Choose a size', description: 'Please select a size before adding to cart.' });
+              return;
+            }
+            setAddingId(p.id);
+            await addItem(p.id, 1, p.name, selectedSizes[p.id]);
+            setAddingId(id => (id === p.id ? null : id));
+              }}
+              adding={addingId === p.id || cartLoading}
+            />
+          </div>
+            ))}
+            {topRatedProducts.length === 0 && <div className="text-xs text-muted-foreground">No products available.</div>}
+          </div>
+        );
+          })()}
         </div>
       </section>
 

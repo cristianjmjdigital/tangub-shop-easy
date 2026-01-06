@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/context/AuthContext";
 
@@ -71,8 +71,10 @@ const BARANGAYS = [
 
 export default function UserSignup() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { refreshProfile } = useAuth();
   const { toast } = useToast();
+  const initialRole = ((searchParams.get('role') || '').toLowerCase() === 'vendor') ? 'vendor' : 'user';
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
@@ -83,7 +85,7 @@ export default function UserSignup() {
     phone: "",
     city: "Tangub City",
     barangay: "Aquino",
-    role: "user" // user | vendor
+    role: initialRole // user | vendor
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +99,7 @@ export default function UserSignup() {
   const desiredRole = isVendor ? 'vendor' : 'user';
   const vendorStatus = desiredRole === 'vendor' ? 'pending' : 'approved';
   const normalizePhoneInput = (raw: string) => raw.replace(/\D/g, '').slice(0, 11);
+  const backLoginHref = form.role === 'vendor' ? '/login/vendor' : '/login/user';
   // Debug panel removed after stabilization
 
   const uploadDoc = async (file: File | null, keyPrefix: string, userId: string) => {
@@ -533,7 +536,7 @@ export default function UserSignup() {
             {/* Debug panel removed */}
             <Button className="w-full" type="submit" disabled={submitting}>{submitting ? 'Creating account...' : 'Sign Up'}</Button>
             <Button variant="outline" className="w-full" asChild>
-              <Link to="/login/user">Back to Login</Link>
+              <Link to={backLoginHref}>Back to Login</Link>
             </Button>
           </form>
         </CardContent>

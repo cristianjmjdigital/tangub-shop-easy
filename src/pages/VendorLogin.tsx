@@ -181,7 +181,7 @@ export default function VendorLogin() {
             <Button className="w-full h-11 bg-emerald-600 hover:bg-emerald-700" type="submit" disabled={loading || customerBlocked}>
               {loading ? 'Signing in...' : customerBlocked ? 'Login disabled for customer session' : 'Login as Vendor'}
             </Button>
-            <div className="text-center text-xs text-muted-foreground">Need an account? <Link to="/signup/user" className="text-primary font-medium">Sign up</Link></div>
+            <div className="text-center text-xs text-muted-foreground">Need an account? <Link to="/signup/user?role=vendor" className="text-primary font-medium">Sign up</Link></div>
             <Button variant="outline" className="w-full" asChild>
               <Link to="/">Back</Link>
             </Button>
