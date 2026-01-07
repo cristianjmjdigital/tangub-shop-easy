@@ -145,7 +145,7 @@ const Cart = () => {
                 <CardHeader className="pb-4">
                   <div className="flex items-center">
                     <Store className="h-5 w-5 mr-2 text-primary" />
-                    <CardTitle className="text-lg">{businessName}</CardTitle>
+                    <CardTitle className="text-lg">{items[0]?.business || businessName}</CardTitle>
                     <Badge variant="outline" className="ml-2">
                       <MapPin className="h-3 w-3 mr-1" />
                       {items[0].businessLocation}

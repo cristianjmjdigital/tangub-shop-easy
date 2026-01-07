@@ -327,7 +327,6 @@ export default function AdminDashboard() {
     .map(u => ({
       'Full Name': u.full_name,
       'Email': u.email,
-      'Role': u.role,
       'Barangay': u.barangay || '',
     })), [usersData]);
 
