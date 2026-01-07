@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, ShoppingCart, Settings, Store, DollarSign, Edit, Trash2, RefreshCw, CheckCircle2, Hourglass, XCircle, MessageSquare, Send, X, Package, LogOut } from "lucide-react";
+import { Plus, ShoppingCart, Settings, Store, DollarSign, Edit, Trash2, RefreshCw, CheckCircle2, Hourglass, XCircle, MessageSquare, Send, X, Package, LogOut, FileDown } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -65,8 +65,8 @@ export default function VendorDashboard() {
   const [msgText, setMsgText] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
   const vendorTabKey = 'vendor-dashboard-tab';
-  const allowedVendorTabs: Array<"overview" | "products" | "orders" | "settings"> = ["overview","products","orders","settings"];
-  const [tab, setTab] = useState<"overview" | "products" | "orders" | "settings">(() => {
+  const allowedVendorTabs: Array<"overview" | "products" | "orders" | "reports" | "settings"> = ["overview","products","orders","reports","settings"];
+  const [tab, setTab] = useState<"overview" | "products" | "orders" | "reports" | "settings">(() => {
     const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(vendorTabKey) : null;
     return allowedVendorTabs.includes(stored as any) ? stored as any : "overview";
   });
@@ -372,6 +372,39 @@ export default function VendorDashboard() {
     setMetrics({ salesToday, ordersToday, totalSales, totalOrders });
   }, [vendorOrders]);
 
+  const downloadCsv = useCallback((filename: string, headers: string[], rows: Array<Array<string | number | null | undefined>>) => {
+    const csv = [headers.join(',')]
+      .concat(rows.map(r => r.map(v => {
+        const s = v == null ? '' : String(v);
+        return '"' + s.replace(/"/g, '""') + '"';
+      }).join(',')))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, []);
+
+  const downloadOrdersReport = useCallback(() => {
+    const headers = ['Order ID', 'Created At', 'Status', 'Customer', 'Item Count', 'Total Quantity', 'Total Amount'];
+    const rows = vendorOrders.map(o => {
+      const its = vendorOrderItems.filter(i => i.order_id === o.id);
+      const totalQty = its.reduce((s: number, i: any) => s + Number(i.quantity || 0), 0);
+      const customer = userLabel(o.user_id, o.user);
+      return [o.id, o.created_at, o.status, customer, its.length, totalQty, o.total];
+    });
+    downloadCsv('vendor-orders.csv', headers, rows);
+  }, [vendorOrders, vendorOrderItems, userLabel, downloadCsv]);
+
+  const downloadProductsReport = useCallback(() => {
+    const headers = ['Product ID', 'Name', 'Category', 'Price', 'Stock', 'Updated At'];
+    const rows = products.map(p => [p.id, p.name, (p as any).category || '', p.price, p.stock, (p as any).updated_at || p.created_at || '']);
+    downloadCsv('vendor-products.csv', headers, rows);
+  }, [products, downloadCsv]);
+
   const [updatingOrderIds, setUpdatingOrderIds] = useState<string[]>([]);
   // Map internal keys -> DB enum labels (as defined in Postgres).
   // DB accepts lowercase values per check constraint; labels are handled in UI
@@ -505,6 +538,7 @@ export default function VendorDashboard() {
     { key: "overview", label: "Overview", icon: Store },
     { key: "products", label: "Products", icon: Package },
     { key: "orders", label: "Orders", icon: ShoppingCart },
+    { key: "reports", label: "Reports", icon: FileDown },
     { key: "settings", label: "Settings", icon: Settings },
     { key: "messages", label: "Messages", icon: MessageSquare },
   ];
@@ -556,6 +590,7 @@ export default function VendorDashboard() {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="products">Products</TabsTrigger>
             <TabsTrigger value="orders">Orders</TabsTrigger>
+            <TabsTrigger value="reports">Reports</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
           <TabsContent value="overview">
@@ -902,6 +937,40 @@ export default function VendorDashboard() {
                         </div>
                       );
                     })}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+          <TabsContent value="reports">
+            <div className="max-w-5xl mx-auto">
+              <Card>
+                <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between py-4">
+                  <CardTitle className="text-base flex items-center gap-2"><FileDown className="h-4 w-4" /> Reports</CardTitle>
+                  <div className="text-xs text-muted-foreground">Download CSV exports for your records.</div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="border rounded-md p-3 bg-muted/30 flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-semibold">Orders Report</div>
+                        <Badge variant="secondary" className="text-[11px]">CSV</Badge>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">Exports all vendor orders with status, totals, and customer label.</p>
+                      <Button size="sm" className="w-fit" onClick={downloadOrdersReport} disabled={!vendorOrders.length}>
+                        <FileDown className="h-4 w-4 mr-2" /> Download Orders
+                      </Button>
+                    </div>
+                    <div className="border rounded-md p-3 bg-muted/30 flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-semibold">Products Report</div>
+                        <Badge variant="secondary" className="text-[11px]">CSV</Badge>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">Exports your product list with price, stock, and category.</p>
+                      <Button size="sm" className="w-fit" onClick={downloadProductsReport} disabled={!products.length}>
+                        <FileDown className="h-4 w-4 mr-2" /> Download Products
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

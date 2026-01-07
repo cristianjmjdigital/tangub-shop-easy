@@ -681,41 +681,6 @@ export default function AdminDashboard() {
                     </ChartContainer>
                   </Card>
                 </div>
-                <div className="grid md:grid-cols-2 gap-4 mt-4">
-                  <Card className="relative overflow-hidden border border-border/70 bg-gradient-to-br from-white via-slate-50 to-slate-100/80 p-4 shadow-md dark:from-slate-900/70 dark:via-slate-900/60 dark:to-slate-900/55">
-                    <h3 className="font-semibold mb-2">Top Customers (by orders)</h3>
-                    <div className="space-y-2 text-sm">
-                      {ordersByUser.map((row, idx) => (
-                        <div key={row.userId + idx} className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground w-5 text-right">{idx+1}.</span>
-                            <span className="font-medium truncate max-w-[180px]">{row.name}</span>
-                          </div>
-                          <div className="text-xs text-muted-foreground">{row.count} orders • ₱{row.total.toLocaleString()}</div>
-                        </div>
-                      ))}
-                      {ordersByUser.length === 0 && <div className="text-xs text-muted-foreground">No orders yet.</div>}
-                    </div>
-                  </Card>
-                  <Card className="relative overflow-hidden border border-border/70 bg-gradient-to-br from-white via-slate-50 to-slate-100/80 p-4 shadow-md dark:from-slate-900/70 dark:via-slate-900/60 dark:to-slate-900/55">
-                    <h3 className="font-semibold mb-2">Recent Orders</h3>
-                    <div className="text-xs text-muted-foreground mb-2">Latest order IDs and totals</div>
-                    <div className="space-y-2">
-                      {ordersData.slice(0,10).map((o)=> (
-                        <div key={String(o.id)} className="flex items-center justify-between gap-3 text-sm">
-                          <div>
-                            <div className="font-medium">Order #{o.id}</div>
-                            <div className="text-xs text-muted-foreground">₱{(o.total||0).toLocaleString()}</div>
-                          </div>
-                          <Button size="sm" variant="outline" onClick={()=>setTab('orders')} className="whitespace-nowrap">
-                            View Order #{o.id}
-                          </Button>
-                        </div>
-                      ))}
-                      {ordersData.length === 0 && <div className="text-xs text-muted-foreground">No recent orders yet.</div>}
-                    </div>
-                  </Card>
-                </div>
               </SectionCard>
             </TabsContent>
           <TabsContent value="users">
@@ -747,7 +712,6 @@ export default function AdminDashboard() {
                     )}
                     <div className="flex gap-2 mt-1">
                       <ViewUserButton user={u} />
-                      <EditUserButton user={u} onSave={(changes)=>updateUser.mutate({ id: u.id, ...changes })} />
                       <DeleteButton label="Archive" onConfirm={()=>deleteUser.mutate(u.id)} />
                     </div>
                   </Card>
