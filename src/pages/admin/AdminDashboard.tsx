@@ -735,6 +735,12 @@ export default function AdminDashboard() {
                       <div className="text-xs text-muted-foreground">{u.email}</div>
                       <div className="text-xs">Barangay: <span className="font-medium">{u.barangay || '—'}</span></div>
                       <div className="text-xs">Business: <span className="font-medium">{owned?.store_name || 'Not set'}</span></div>
+                      {u.vendor_status !== 'approved' && (
+                        <div className="flex gap-2 mt-1 flex-wrap">
+                          <Button size="sm" variant="secondary" className="h-7 px-2" onClick={()=>updateUser.mutate({ id: u.id, vendor_status: 'approved' })}>Approve</Button>
+                          <Button size="sm" variant="outline" className="h-7 px-2" onClick={()=>updateUser.mutate({ id: u.id, vendor_status: 'rejected' })}>Reject</Button>
+                        </div>
+                      )}
                       <div className="flex gap-2 mt-1 flex-wrap">
                         <ViewUserButton user={u} />
                         <DeleteButton label="Archive" onConfirm={()=>deleteUser.mutate(u.id)} />
