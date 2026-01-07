@@ -44,6 +44,31 @@ export function useCart(options: UseCartOptions = {}) {
   const [items, setItems] = useState<CartItemRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  // Adjust product stock. Negative delta reserves stock, positive delta returns stock.
+  const adjustProductStock = useCallback(async (productId: string, delta: number) => {
+    if (!delta) return;
+    if (delta < 0) {
+      const qty = Math.abs(delta);
+      const { error: decErr } = await supabase.rpc('decrement_product_stock', { p_id: productId, p_qty: qty });
+      if (decErr) throw decErr;
+      return;
+    }
+
+    // Restock by adding back the quantity (best-effort, minimal race protection)
+    const { data: productRow, error: fetchErr } = await supabase
+      .from('products')
+      .select('stock')
+      .eq('id', productId)
+      .single();
+    if (fetchErr) throw fetchErr;
+    const current = Number(productRow?.stock ?? 0);
+    const { error: incErr } = await supabase
+      .from('products')
+      .update({ stock: current + delta })
+      .eq('id', productId);
+    if (incErr) throw incErr;
+  }, []);
+
   const loadCart = useCallback(async () => {
   if (!authUser) return;
     setLoading(true); setError(null);
@@ -133,9 +158,13 @@ export function useCart(options: UseCartOptions = {}) {
       // Upsert or increment existing item
       const existing = items.find(i => i.product_id === productId && (i.size || null) === (size || null));
       const desiredQty = (existing?.quantity || 0) + quantity;
-      if (desiredQty > availableStock) {
+      const delta = desiredQty - (existing?.quantity || 0);
+      if (delta > availableStock) {
         throw new Error(`Only ${availableStock} in stock for this selection.`);
       }
+
+      // Reserve stock immediately so UI reflects remaining inventory
+      await adjustProductStock(productId, -delta);
       if (existing) {
         const { data, error: updErr } = await supabase
           .from('cart_items')
@@ -161,23 +190,55 @@ export function useCart(options: UseCartOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [authUser, profile?.id, cart, items, vendorId, toast]);
+  }, [authUser, profile?.id, cart, items, vendorId, toast, adjustProductStock]);
+
+  const removeItem = useCallback(async (itemId: string) => {
+    try {
+      const target = items.find(i => i.id === itemId);
+      if (target) {
+        await adjustProductStock(target.product_id, target.quantity); // return reserved stock
+      }
+
+      setLoading(true);
+      const { error: delErr } = await supabase
+        .from('cart_items')
+        .delete()
+        .eq('id', itemId);
+      if (delErr) throw delErr;
+      setItems(prev => prev.filter(i => i.id !== itemId));
+      toast({ title: 'Item removed' });
+    } catch (e: any) {
+      console.error('removeItem error', e);
+      toast({ title: 'Error', description: e.message ?? 'Failed to remove item', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast, items, adjustProductStock]);
 
   const updateQuantity = useCallback(async (itemId: string, quantity: number) => {
     if (quantity < 1) return removeItem(itemId);
     try {
       const target = items.find(i => i.id === itemId);
-      const availableStock = Number(target?.product?.stock);
-      if (Number.isFinite(availableStock)) {
-        if (availableStock <= 0) {
-          toast({ title: 'Out of stock', description: 'This item is no longer available and was removed from your cart.', variant: 'destructive' });
-          return removeItem(itemId);
-        }
-        if (quantity > availableStock) {
-          toast({ title: 'Limited stock', description: `Only ${availableStock} left for this item.` });
-          quantity = availableStock;
-        }
+      if (!target) throw new Error('Cart item not found');
+
+      // Get the freshest stock for the product
+      const { data: productRow, error: productErr } = await supabase
+        .from('products')
+        .select('stock')
+        .eq('id', target.product_id)
+        .single();
+      if (productErr) throw productErr;
+
+      const availableStock = Number(productRow?.stock ?? 0);
+      const delta = quantity - target.quantity; // positive when adding, negative when reducing
+      if (delta > 0 && delta > availableStock) {
+        toast({ title: 'Limited stock', description: `Only ${availableStock} left for this item.` });
+        return;
       }
+
+      // Adjust product stock to reflect the new quantity
+      await adjustProductStock(target.product_id, -delta);
+
       setLoading(true);
       const { data, error: updErr } = await supabase
         .from('cart_items')
@@ -193,29 +254,19 @@ export function useCart(options: UseCartOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, removeItem, items, adjustProductStock]);
 
-  const removeItem = useCallback(async (itemId: string) => {
-    try {
-      setLoading(true);
-      const { error: delErr } = await supabase
-        .from('cart_items')
-        .delete()
-        .eq('id', itemId);
-      if (delErr) throw delErr;
-      setItems(prev => prev.filter(i => i.id !== itemId));
-      toast({ title: 'Item removed' });
-    } catch (e: any) {
-      console.error('removeItem error', e);
-      toast({ title: 'Error', description: e.message ?? 'Failed to remove item', variant: 'destructive' });
-    } finally {
-      setLoading(false);
-    }
-  }, [toast]);
-
-  const clearCart = useCallback(async () => {
+  const clearCart = useCallback(async (options: { restock?: boolean } = {}) => {
+    const { restock = true } = options;
     if (!cart) return;
     try {
+      // Restock everything currently in the cart (best-effort; failures do not block delete)
+      if (restock) {
+        for (const it of items) {
+          try { await adjustProductStock(it.product_id, it.quantity); } catch (e) { console.error('restock on clear failed', e); }
+        }
+      }
+
       setLoading(true);
       const { error: delErr } = await supabase
         .from('cart_items')
@@ -229,7 +280,7 @@ export function useCart(options: UseCartOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [cart, toast]);
+  }, [cart, toast, items, adjustProductStock]);
 
   const subtotal = useMemo(() => items.reduce((sum, i) => sum + (i.product?.price ?? 0) * i.quantity, 0), [items]);
 
@@ -390,21 +441,10 @@ export function useCart(options: UseCartOptions = {}) {
         const { error: oiErr } = await supabase.from('order_items').insert(orderItemsPayload);
         if (oiErr) throw oiErr;
 
-        // Decrement stock (best-effort)
-        for (const it of groupItems) {
-          if (typeof it.product?.stock === 'number') {
-            try {
-              const { error: rpcDecErr } = await supabase.rpc('decrement_product_stock', { p_id: it.product_id, p_qty: it.quantity });
-              if (rpcDecErr) throw rpcDecErr;
-            } catch (_) {
-              await supabase.from('products').update({ stock: (it.product!.stock as number) - it.quantity }).eq('id', it.product_id);
-            }
-          }
-        }
         createdOrders.push(order);
       }
 
-      await clearCart();
+      await clearCart({ restock: false });
       toast({ title: 'Order placed', description: `${createdOrders.length} order(s) created.` });
       return { orders: createdOrders };
     } catch (e: any) {

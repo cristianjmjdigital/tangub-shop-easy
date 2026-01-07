@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,6 +42,8 @@ export default function VendorDashboard() {
   const lowThreshold = 10;
   const [vendorOrders, setVendorOrders] = useState<any[]>([]);
   const [vendorOrderItems, setVendorOrderItems] = useState<any[]>([]);
+  const [orderRatings, setOrderRatings] = useState<Record<string, { rating: number; review?: string }>>({});
+  const [customerProfiles, setCustomerProfiles] = useState<Record<string, { name: string; email?: string; username?: string }>>({});
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState<string | null>(null);
   const [metrics, setMetrics] = useState({ salesToday: 0, ordersToday: 0, totalSales: 0, totalOrders: 0 });
@@ -101,6 +103,40 @@ export default function VendorDashboard() {
     return Array.from(map.entries()).map(([status, value]) => ({ status, value }));
   }, [vendorOrders]);
 
+  const userLabel = useCallback((userId?: string | number | null, userObj?: any) => {
+    const key = userId ? String(userId) : '';
+    return userObj?.full_name
+      || userObj?.email
+      || (key && (customerProfiles[key]?.name || customerProfiles[key]?.username || customerProfiles[key]?.email))
+      || 'Customer';
+  }, [customerProfiles]);
+
+  const topCustomers = useMemo(() => {
+    const map: Record<string, { orders: number; total: number; user?: any }> = {};
+    vendorOrders.forEach(o => {
+      const key = o.user_id ? String(o.user_id) : '';
+      if (!key) return;
+      if (!map[key]) map[key] = { orders: 0, total: 0, user: o.user };
+      map[key].orders += 1;
+      map[key].total += Number(o.total || 0);
+      if (o.user) map[key].user = o.user;
+    });
+    return Object.entries(map)
+      .map(([userId, stats]) => ({
+        userId,
+        ...stats,
+        label: userLabel(userId, stats.user)
+      }))
+      .sort((a, b) => b.orders === a.orders ? b.total - a.total : b.orders - a.orders)
+      .slice(0, 5);
+  }, [vendorOrders, customerProfiles, userLabel]);
+
+  const recentOrders = useMemo(() => {
+    return [...vendorOrders]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 5);
+  }, [vendorOrders]);
+
   // Block pending/rejected vendors from using dashboard
   useEffect(() => {
     if (!profile) return;
@@ -142,20 +178,34 @@ export default function VendorDashboard() {
     try {
       const { data: rows, error } = await supabase
         .from('orders')
-        .select('*')
+        .select('*, user:users(id, full_name, email)')
         .eq('vendor_id', vendorId)
         .order('created_at', { ascending: false });
       if (error) throw error;
       setVendorOrders(rows || []);
       if (rows?.length) {
         const ids = rows.map(r => r.id);
-        const { data: itemRows } = await supabase
-          .from('order_items')
-          .select('*, product:products(name)')
-          .in('order_id', ids);
+        const [{ data: itemRows }, { data: ratingRows }] = await Promise.all([
+          supabase
+            .from('order_items')
+            .select('*, product:products(name)')
+            .in('order_id', ids),
+          supabase
+            .from('order_ratings')
+            .select('order_id,rating,review')
+            .in('order_id', ids),
+        ]);
         setVendorOrderItems(itemRows || []);
+        setOrderRatings(() => {
+          const map: Record<string, { rating: number; review?: string }> = {};
+          (ratingRows || []).forEach((r: any) => {
+            map[String(r.order_id)] = { rating: Number(r.rating) || 0, review: r.review };
+          });
+          return map;
+        });
       } else {
         setVendorOrderItems([]);
+        setOrderRatings({});
       }
     } catch (e: any) {
       setOrdersError(e.message || 'Failed to load orders');
@@ -273,6 +323,37 @@ export default function VendorDashboard() {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [vendor?.id]);
+
+  // Pull customer profile info for labeling customers in overview cards (best-effort)
+  useEffect(() => {
+    const ids = Array.from(new Set((vendorOrders || []).map(o => o.user_id).filter(Boolean))).map(String);
+    const missing = ids.filter(id => !customerProfiles[id]);
+    if (!missing.length) return;
+    let cancelled = false;
+    const fetchProfiles = async () => {
+      const { data: userRows, error } = await supabase
+        .from('users')
+        .select('id, full_name, email')
+        .in('id', missing);
+
+      if (cancelled) return;
+      if (error) return;
+
+      setCustomerProfiles(prev => {
+        const next = { ...prev } as Record<string, { name: string; email?: string; username?: string }>;
+        (userRows || []).forEach((row: any) => {
+          const key = String(row.id);
+          next[key] = {
+            name: next[key]?.name || row.full_name || row.email || 'Customer',
+            email: next[key]?.email || row.email,
+          };
+        });
+        return next;
+      });
+    };
+    fetchProfiles();
+    return () => { cancelled = true; };
+  }, [vendorOrders, customerProfiles]);
 
   // Recompute metrics whenever orders list changes
   useEffect(() => {
@@ -566,6 +647,71 @@ export default function VendorDashboard() {
                       </CardContent>
                     </Card>
                   </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                    <Card className="border-none shadow-none bg-muted/40">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">Top Customers</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {!topCustomers.length && (
+                          <div className="text-xs text-muted-foreground">No customer history yet.</div>
+                        )}
+                        {!!topCustomers.length && (
+                          <div className="space-y-2">
+                            {topCustomers.map(c => (
+                              <div key={c.userId} className="flex items-center justify-between rounded-lg border bg-background/70 px-3 py-2">
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-semibold">{c.label}</span>
+                                  <span className="text-[11px] text-muted-foreground">Orders: {c.orders}</span>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-sm font-semibold">₱{c.total.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+                                  <div className="text-[11px] text-muted-foreground">Lifetime spend</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                    <Card className="border-none shadow-none bg-muted/40">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">Recent Orders</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {!recentOrders.length && (
+                          <div className="text-xs text-muted-foreground">No orders yet.</div>
+                        )}
+                        {!!recentOrders.length && (
+                          <div className="space-y-3">
+                            {recentOrders.map(o => {
+                              const label = userLabel(o.user_id, o.user);
+                              const ratingRow = orderRatings[String(o.id)];
+                              return (
+                                <div key={o.id} className="rounded-lg border bg-background/70 px-3 py-2 space-y-1">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-sm font-semibold">Order #{o.id}</span>
+                                    {vendorStatusBadge(o.status)}
+                                  </div>
+                                  <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                                    <span>{label}</span>
+                                    <span>{new Date(o.created_at).toLocaleString()}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between text-xs">
+                                    <span>Total</span>
+                                    <span className="font-semibold">₱{Number(o.total || 0).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</span>
+                                  </div>
+                                  {ratingRow && (
+                                    <div className="text-[10px] text-amber-600 font-semibold">Rating: {ratingRow.rating}/5</div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -656,16 +802,22 @@ export default function VendorDashboard() {
                       const its = vendorOrderItems.filter(i => i.order_id === o.id);
                       const totalQty = its.reduce((s,i)=>s+i.quantity,0);
                       const normalized = normalizeStatus(o.status || '');
+                      const ratingRow = orderRatings[String(o.id)];
                       return (
                         <div key={o.id} className="border rounded-md p-3 space-y-3 bg-muted/20">
-                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-start justify-between gap-3">
                             <div className="space-y-1">
-                              <div className="text-xs font-medium">Order #{o.id}</div>
+                              <div className="text-xs font-semibold">
+                              Order #{o.id}: {o.user?.full_name || userLabel(o.user_id, o.user)}
+                              </div>
                               <div className="text-[10px] text-muted-foreground">{new Date(o.created_at).toLocaleString()}</div>
                               <div className="text-[10px] text-muted-foreground">Items: {its.length} • Qty: {totalQty}</div>
+                              {ratingRow && (
+                              <div className="text-[10px] text-amber-600 font-semibold">Rating: {ratingRow.rating}/5</div>
+                              )}
                             </div>
                             {vendorStatusBadge(o.status)}
-                          </div>
+                            </div>
                           <div className="space-y-2 text-xs">
                             {its.map(it => (
                               <div key={it.id} className="flex justify-between">

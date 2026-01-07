@@ -609,11 +609,6 @@ const Messages = () => {
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <Button variant="outline" size="sm" className="h-8 px-2 text-xs hidden lg:inline-flex">
-                          Details
-                        </Button>
-                      </div>
                     </div>
                   </CardHeader>
                   <CardContent className="flex-1 p-0">
