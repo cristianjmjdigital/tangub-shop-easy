@@ -32,6 +32,7 @@ interface CheckoutOptions {
   deliveryFee?: number;
   deliveryFeeByVendor?: Record<string, number>;
   deliveryMethod?: 'delivery' | 'pickup';
+  selectedItemIds?: string[];
 }
 
 export function useCart(options: UseCartOptions = {}) {
@@ -295,6 +296,15 @@ export function useCart(options: UseCartOptions = {}) {
       return { orders: [] };
     }
 
+    const selectedIds = Array.isArray(options.selectedItemIds)
+      ? options.selectedItemIds.filter((id): id is string => Boolean(id))
+      : [];
+    const targetItems = selectedIds.length ? items.filter(i => selectedIds.includes(i.id)) : items;
+    if (!targetItems.length) {
+      toast({ title: 'No items selected', description: 'Choose at least one item to checkout.', variant: 'destructive' });
+      return { orders: [] };
+    }
+
     const snapshotItems = [...items];
     const snapshotCart = cart;
     const userRowId = profile?.id || authUser.id;
@@ -303,11 +313,12 @@ export function useCart(options: UseCartOptions = {}) {
       : 0;
     const vendorIds = Array.from(
       new Set(
-        items
+        targetItems
           .map(it => it.product?.vendor_id)
           .filter((v): v is string | number => Boolean(v))
       )
     );
+    const selectionCoversAll = targetItems.length === items.length;
     const deliveryFeeByVendor = options.deliveryFeeByVendor || null;
     const deliveryFeePerOrder = vendorIds.length > 0
       ? normalizedDeliveryFee / vendorIds.length
@@ -331,7 +342,7 @@ export function useCart(options: UseCartOptions = {}) {
 
       // Preferred: server-side finalize (also clears cart_items) when single-vendor cart
       const primaryVendorId = currentCart?.vendor_id ?? vendorIds[0] ?? null;
-      if (vendorIds.length <= 1) {
+      if (vendorIds.length <= 1 && selectionCoversAll) {
         const { data: orderId, error: rpcErr } = await supabase.rpc('finalize_checkout_bigint', {
           p_user_id: userRowId,
           p_vendor_id: primaryVendorId,
@@ -405,14 +416,14 @@ export function useCart(options: UseCartOptions = {}) {
 
       // Fallback to client-side flow per vendor grouping
       const groups: Record<string, CartItemRow[]> = {};
-      for (const it of items) {
+      for (const it of targetItems) {
         const vId = it.product?.vendor_id || 'unknown';
         if (!groups[vId]) groups[vId] = [];
         groups[vId].push(it);
       }
 
       const createdOrders: any[] = [];
-      setItems([]);
+      const processedCartItemIds: string[] = [];
 
       for (const [vendorId, groupItems] of Object.entries(groups)) {
         if (vendorId === 'unknown') continue;
@@ -450,9 +461,17 @@ export function useCart(options: UseCartOptions = {}) {
         if (oiErr) throw oiErr;
 
         createdOrders.push(order);
+        processedCartItemIds.push(...groupItems.map(it => it.id));
       }
 
-      await clearCart({ restock: false });
+      if (processedCartItemIds.length) {
+        await supabase
+          .from('cart_items')
+          .delete()
+          .in('id', processedCartItemIds);
+        setItems(prev => prev.filter(i => !processedCartItemIds.includes(i.id)));
+      }
+
       toast({ title: 'Order placed', description: `${createdOrders.length} order(s) created.` });
       return { orders: createdOrders };
     } catch (e: any) {
@@ -466,7 +485,7 @@ export function useCart(options: UseCartOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [authUser, items, clearCart, toast, cart, profile?.id, loadCart]);
+  }, [authUser, items, toast, cart, profile?.id, loadCart]);
 
   return {
     loading,

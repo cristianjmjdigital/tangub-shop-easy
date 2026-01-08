@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 import { 
   Minus, 
   Plus, 
@@ -24,14 +25,15 @@ import { useAuth } from "@/context/AuthContext";
 const Cart = () => {
   const { toast } = useToast();
   const [deliveryMethod, setDeliveryMethod] = useState("pickup");
-  const [paymentMethod] = useState("cash");
-  const { items, updateQuantity, removeItem, subtotal, loading, checkout } = useCart();
+  const { items, updateQuantity, removeItem, loading, checkout } = useCart();
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
 
   const cartItems = items.map(i => {
     const vendor = i.product?.vendor || {};
     const vendorId = i.product?.vendor_id || vendor?.id || 'unknown';
+    const productImage = i.product?.main_image_url || i.product?.image_url || (Array.isArray((i.product as any)?.images) ? (i.product as any).images[0] : undefined) || '/placeholder.svg';
     return {
       id: i.id,
       name: i.product?.name || 'Product',
@@ -42,29 +44,60 @@ const Cart = () => {
       businessLocation: vendor.barangay || 'Location',
       vendorId,
       baseDeliveryFee: Number(vendor.base_delivery_fee ?? 0) || 0,
-      image: i.product?.image_url || '/placeholder.svg',
+      image: productImage,
       maxQuantity: i.product?.stock || 99,
     };
   });
 
-  const deliveryFeeMap = useMemo(() => {
+  useEffect(() => {
+    const nextIds = items.map((item) => item.id);
+    setSelectedItemIds((prev) => {
+      if (!prev.length) return nextIds;
+      const nextSet = new Set(nextIds);
+      const preserved = prev.filter((id) => nextSet.has(id));
+      const newOnes = nextIds.filter((id) => !prev.includes(id));
+      return [...preserved, ...newOnes];
+    });
+  }, [items]);
+
+  const selectedIdSet = useMemo(() => new Set(selectedItemIds), [selectedItemIds]);
+  const selectedCartItems = useMemo(() => cartItems.filter((item) => selectedIdSet.has(item.id)), [cartItems, selectedIdSet]);
+  const allSelected = cartItems.length > 0 && selectedCartItems.length === cartItems.length;
+  const selectAllState = allSelected ? true : selectedCartItems.length > 0 ? 'indeterminate' : false;
+
+  const toggleSelectAll = (checked: boolean) => {
+    setSelectedItemIds(checked ? cartItems.map((item) => item.id) : []);
+  };
+
+  const toggleItemSelection = (itemId: string, checked: boolean) => {
+    setSelectedItemIds((prev) => {
+      if (checked) {
+        if (prev.includes(itemId)) return prev;
+        return [...prev, itemId];
+      }
+      return prev.filter((id) => id !== itemId);
+    });
+  };
+
+  const selectedDeliveryFeeMap = useMemo(() => {
     if (deliveryMethod !== "delivery") return {} as Record<string, number>;
     const map: Record<string, number> = {};
-    cartItems.forEach(item => {
+    selectedCartItems.forEach(item => {
       const key = String(item.vendorId || 'unknown');
       if (!map[key]) map[key] = 0;
-      // Use the vendor's base delivery fee; if multiple items same vendor, do not double count
       map[key] = Math.max(map[key], item.baseDeliveryFee);
     });
     return map;
-  }, [cartItems, deliveryMethod]);
+  }, [selectedCartItems, deliveryMethod]);
 
   const deliveryFee = useMemo(() => {
     if (deliveryMethod !== "delivery") return 0;
-    return Object.values(deliveryFeeMap).reduce((sum, fee) => sum + (Number.isFinite(fee) ? Number(fee) : 0), 0);
-  }, [deliveryMethod, deliveryFeeMap]);
+    return Object.values(selectedDeliveryFeeMap).reduce((sum, fee) => sum + (Number.isFinite(fee) ? Number(fee) : 0), 0);
+  }, [deliveryMethod, selectedDeliveryFeeMap]);
 
-  const total = subtotal + deliveryFee;
+  const selectedSubtotal = useMemo(() => selectedCartItems.reduce((sum, item) => sum + item.price * item.quantity, 0), [selectedCartItems]);
+
+  const total = selectedSubtotal + deliveryFee;
 
   const businessGroups = useMemo(() => cartItems.reduce((groups, item) => {
     const key = String(item.vendorId || item.business);
@@ -74,11 +107,11 @@ const Cart = () => {
   }, {} as Record<string, typeof cartItems>), [cartItems]);
 
   const placeOrder = async () => {
-    if (cartItems.length === 0) {
-      toast({ title: "Cart is empty", description: "Please add items to your cart before placing an order.", variant: "destructive" });
+    if (!selectedCartItems.length) {
+      toast({ title: "No items selected", description: "Choose at least one item before checking out.", variant: "destructive" });
       return;
     }
-    const { orders } = await checkout({ deliveryFee, deliveryFeeByVendor: deliveryFeeMap, deliveryMethod });
+    const { orders } = await checkout({ deliveryFee, deliveryFeeByVendor: selectedDeliveryFeeMap, deliveryMethod, selectedItemIds });
     if (orders.length) {
       navigate('/order/confirmation', { state: { orderIds: orders.map((o:any)=>o.id), summary: orders.map((o:any)=>({ id: o.id, total: o.total, total_amount: o.total_amount })) } });
     }
@@ -140,6 +173,24 @@ const Cart = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Cart Items */}
           <div className="lg:col-span-2 space-y-6">
+            <div className="flex items-center justify-between rounded-lg border border-dashed border-muted px-4 py-3" aria-live="polite">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Checkbox
+                  id="select-all"
+                  checked={selectAllState}
+                  onCheckedChange={(checked) => toggleSelectAll(checked === true)}
+                  aria-label="Select all items"
+                />
+                <Label htmlFor="select-all" className="cursor-pointer">
+                  Select all ({selectedCartItems.length}/{cartItems.length})
+                </Label>
+              </div>
+              {selectedCartItems.length > 0 && selectedCartItems.length !== cartItems.length && (
+                <Button variant="ghost" size="sm" onClick={() => toggleSelectAll(false)}>
+                  Clear selection
+                </Button>
+              )}
+            </div>
             {Object.entries(businessGroups).map(([businessName, items]) => (
               <Card key={businessName}>
                 <CardHeader className="pb-4">
@@ -154,21 +205,29 @@ const Cart = () => {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {items.map((item) => (
-                    <div key={item.id} className="flex items-center space-x-4 p-4 border rounded-lg flex-wrap">
-                        <div className="w-16 h-16 bg-muted rounded-lg flex items-center justify-center overflow-hidden">
+                    <div key={item.id} className="flex flex-wrap items-center gap-4 p-4 border rounded-lg">
+                      <Checkbox
+                        checked={selectedIdSet.has(item.id)}
+                        onCheckedChange={(checked) => toggleItemSelection(item.id, checked === true)}
+                        aria-label={`Select ${item.name}`}
+                        className="shrink-0"
+                      />
+                      <div className="w-16 h-16 bg-muted rounded-lg flex items-center justify-center overflow-hidden">
                         <img
-                          src={(item as any).main_image_url || "/placeholder.svg"}
+                          src={item.image || "/placeholder.svg"}
                           alt={item.name}
                           className="w-full h-full object-cover"
                           onError={(e) => {
-                          e.currentTarget.src = "/placeholder.svg";
+                            e.currentTarget.src = "/placeholder.svg";
                           }}
                         />
-                        </div>
-                      
-                      <div className="flex-1">
+                      </div>
+
+                      <div className="flex-1 min-w-[150px]">
                         <h3 className="font-medium">{item.name}</h3>
-                        <p className="text-primary font-semibold">₱{item.price.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</p>
+                        <p className="text-primary font-semibold">
+                          ₱{item.price.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}
+                        </p>
                         {item.size && <p className="text-xs text-muted-foreground">Size: {item.size}</p>}
                       </div>
 
@@ -193,7 +252,9 @@ const Cart = () => {
                       </div>
 
                       <div className="text-right">
-                        <p className="font-semibold">₱{(item.price * item.quantity).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</p>
+                        <p className="font-semibold">
+                          ₱{(item.price * item.quantity).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}
+                        </p>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -284,8 +345,10 @@ const Cart = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex justify-between">
-                  <span>Subtotal ({cartItems.length} items)</span>
-                  <span>₱{subtotal.toLocaleString()}</span>
+                  <span>Subtotal ({selectedCartItems.length} selected)</span>
+                  <span>
+                    ₱{selectedSubtotal.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}
+                  </span>
                 </div>
                 
                 <div className="flex justify-between">
@@ -297,7 +360,9 @@ const Cart = () => {
                 
                 <div className="flex justify-between text-lg font-bold">
                   <span>Total</span>
-                  <span className="text-primary">₱{total.toLocaleString()}</span>
+                  <span className="text-primary">
+                    ₱{total.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}
+                  </span>
                 </div>
 
                 <div className="flex items-center text-sm text-muted-foreground mt-4">
@@ -314,6 +379,7 @@ const Cart = () => {
                   className="w-full mt-6" 
                   size="lg"
                   onClick={placeOrder}
+                  disabled={!selectedCartItems.length || loading}
                 >
                   Place Order
                 </Button>
