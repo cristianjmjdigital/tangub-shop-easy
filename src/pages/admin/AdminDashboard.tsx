@@ -894,11 +894,6 @@ export default function AdminDashboard() {
                       </div>
                     ))}
                     </div>
-                    {entries.length > displayed.length && (
-                    <div className="mt-2 text-[11px] text-muted-foreground">
-                      +{entries.length - displayed.length} more fields
-                    </div>
-                    )}
                   </Card>
                   );
                 })}
