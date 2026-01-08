@@ -42,9 +42,8 @@ export default function Login() {
             </div>
           ))}
         </div>
-        <p className="text-xs text-muted-foreground">
-          Need help? Contact support via the in-app chat after logging in.
-        </p>
+        
+      <div className="mt-8 text-xs text-muted-foreground"><Link to="/admin/login">Admin Login</Link></div>
       </div>
     </div>
   );
