@@ -1007,7 +1007,7 @@ function DeleteButton({ label, onConfirm }: { label?: string; onConfirm: ()=>voi
         <p className="text-sm text-muted-foreground">Are you sure you want to archive this item?</p>
         <DialogFooter>
           <Button variant="outline" onClick={()=>setOpen(false)}>Cancel</Button>
-          <Button variant="destructive" onClick={()=>{ onConfirm(); setOpen(false); }}>Delete</Button>
+          <Button variant="destructive" onClick={()=>{ onConfirm(); setOpen(false); }}>Archive Now</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
