@@ -4,7 +4,7 @@ import { MapPin, Star, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 
-interface ProductCardProps {
+export interface ProductCardProps {
   name: string;
   price: number;
   originalPrice?: number;
@@ -27,7 +27,7 @@ interface ProductCardProps {
   onBuyNow?: () => void;
 }
 
-const ProductCard = ({
+export default function ProductCard({
   name,
   price,
   originalPrice,
@@ -48,7 +48,7 @@ const ProductCard = ({
   selectedSize,
   onSelectSize,
   onBuyNow
-}: ProductCardProps) => {
+}: ProductCardProps) {
   const src = imageUrl || image || "/placeholder.svg";
   const storeHref = storePath || (vendorId ? `/business/${vendorId}` : undefined);
   const reviewsHref = vendorId ? `/business/${vendorId}/reviews` : (storeHref ? `${storeHref}/reviews` : '/ratings');
@@ -193,6 +193,4 @@ const ProductCard = ({
       </CardHeader>
     </Card>
   );
-};
-
-export default ProductCard;
+}

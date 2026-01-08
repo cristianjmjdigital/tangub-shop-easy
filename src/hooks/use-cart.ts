@@ -98,7 +98,7 @@ export function useCart(options: UseCartOptions = {}) {
       if (current) {
         const { data: itemRows, error: itemsErr } = await supabase
           .from('cart_items')
-          .select('*, product:products(id,name,price,stock,vendor_id,size_options, vendor:vendors(id,store_name,barangay,base_delivery_fee))')
+          .select('*, product:products(id,name,price,stock,main_image_url,vendor_id,size_options, vendor:vendors(id,store_name,barangay,base_delivery_fee))')
           .eq('cart_id', current.id);
         if (itemsErr) throw itemsErr;
         setItems(itemRows as any);
@@ -170,7 +170,7 @@ export function useCart(options: UseCartOptions = {}) {
           .from('cart_items')
           .update({ quantity: existing.quantity + quantity })
           .eq('id', existing.id)
-          .select('*, product:products(id,name,price,stock,vendor_id,size_options, vendor:vendors(id,store_name,barangay,base_delivery_fee))')
+          .select('*, product:products(id,name,price,stock,main_image_url,vendor_id,size_options, vendor:vendors(id,store_name,barangay,base_delivery_fee))')
           .single();
         if (updErr) throw updErr;
         setItems(prev => prev.map(i => i.id === existing.id ? (data as any) : i));
@@ -178,7 +178,7 @@ export function useCart(options: UseCartOptions = {}) {
         const { data, error: insErr } = await supabase
           .from('cart_items')
           .insert({ cart_id: current.id, product_id: productId, quantity, size: size || null })
-          .select('*, product:products(id,name,price,stock,vendor_id,size_options, vendor:vendors(id,store_name,barangay,base_delivery_fee))')
+          .select('*, product:products(id,name,price,stock,main_image_url,vendor_id,size_options, vendor:vendors(id,store_name,barangay,base_delivery_fee))')
           .single();
         if (insErr) throw insErr;
         setItems(prev => [...prev, data as any]);
@@ -244,7 +244,7 @@ export function useCart(options: UseCartOptions = {}) {
         .from('cart_items')
         .update({ quantity })
         .eq('id', itemId)
-        .select('*, product:products(id,name,price,stock,vendor_id,size_options, vendor:vendors(id,store_name,barangay,base_delivery_fee))')
+        .select('*, product:products(id,name,price,stock,main_image_url,vendor_id,size_options, vendor:vendors(id,store_name,barangay,base_delivery_fee))')
         .single();
       if (updErr) throw updErr;
       setItems(prev => prev.map(i => i.id === itemId ? (data as any) : i));
@@ -359,32 +359,40 @@ export function useCart(options: UseCartOptions = {}) {
           }
           const fee = feeForVendor(primaryVendorId);
           const updatedTotal = baseTotal + fee;
+          const existingTotal = Number(existing?.total ?? 0);
+          const existingTotalAmount = Number(existing?.total_amount ?? 0);
+          const totalsMismatch = !existing || existingTotal !== updatedTotal || existingTotalAmount !== baseTotal;
+          const needsDeliveryMethodUpdate = Boolean(options.deliveryMethod && existing?.delivery_method !== options.deliveryMethod);
+          const shouldUpdate = totalsMismatch || needsDeliveryMethodUpdate;
+          const basePayload: Record<string, any> = {
+            total: updatedTotal,
+            total_amount: baseTotal,
+          };
+          if (options.deliveryMethod) {
+            basePayload.delivery_method = options.deliveryMethod;
+          }
 
-          if (fee > 0) {
+          if (shouldUpdate) {
             try {
               const { data: updated } = await supabase
                 .from('orders')
-                .update({ total: updatedTotal, total_amount: baseTotal, delivery_method: options.deliveryMethod })
+                .update(basePayload)
                 .eq('id', orderId)
                 .select('*')
                 .maybeSingle();
-              orderRecord = updated || { ...existing, id: orderId, total: updatedTotal, total_amount: baseTotal };
+              orderRecord = updated || { ...existing, id: orderId, total: updatedTotal, total_amount: baseTotal, delivery_method: options.deliveryMethod ?? existing?.delivery_method };
             } catch (_) {
-              // fallback without delivery_method column
+              const fallbackPayload = { total: updatedTotal, total_amount: baseTotal };
               const { data: updated } = await supabase
                 .from('orders')
-                .update({ total: updatedTotal, total_amount: baseTotal })
+                .update(fallbackPayload)
                 .eq('id', orderId)
                 .select('*')
                 .maybeSingle();
-              orderRecord = updated || { ...existing, id: orderId, total: updatedTotal, total_amount: baseTotal };
+              orderRecord = updated || { ...existing, id: orderId, total: updatedTotal, total_amount: baseTotal, delivery_method: existing?.delivery_method };
             }
           } else {
-            // Still persist delivery_method if provided
-            if (options.deliveryMethod) {
-              try { await supabase.from('orders').update({ delivery_method: options.deliveryMethod }).eq('id', orderId); } catch (_) {}
-            }
-            orderRecord = existing || { id: orderId, total: baseTotal, total_amount: baseTotal };
+            orderRecord = existing || { id: orderId, total: updatedTotal, total_amount: baseTotal, delivery_method: options.deliveryMethod };
           }
 
           // Best effort refetch cart to update UI
