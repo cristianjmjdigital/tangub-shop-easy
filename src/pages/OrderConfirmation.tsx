@@ -90,10 +90,9 @@ export default function OrderConfirmation() {
                   return (
                     <div key={o.id} className="flex items-center justify-between border rounded-md p-3 text-sm">
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline">#{o.id}</Badge>
                         <span>Order</span>
+                        <Badge variant="outline">#{o.id}</Badge>
                       </div>
-                      <span className="font-semibold">₱{totalNumber.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</span>
                     </div>
                   );
                 })}
