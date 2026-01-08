@@ -175,7 +175,7 @@ export default function UserLogin() {
             </Button>
             <div className="text-center text-sm text-muted-foreground">Don't have an account? <Link to="/signup/user" className="text-primary font-medium">Sign up</Link></div>
             <Button variant="outline" className="w-full" asChild>
-              <Link to="/">Back</Link>
+              <Link to="/login">Back</Link>
             </Button>
           </form>
         </CardContent>

@@ -9,6 +9,7 @@ import BottomNav from "./components/layout/BottomNav";
 import SplashScreen from "./components/layout/SplashScreen";
 import Index from "./pages/Index";
 import Access from "./pages/Access";
+import Login from "./pages/Login";
 import UserLogin from "./pages/UserLogin";
 import UserSignup from "./pages/UserSignup";
 import VendorLogin from "./pages/VendorLogin";
@@ -76,6 +77,7 @@ function AppShell() {
         <Routes>
                   <Route path="/" element={<LoggedOutRoute><Access /></LoggedOutRoute>} />
                   <Route path="/home" element={<Index />} />
+                  <Route path="/login" element={<LoggedOutRoute><Login /></LoggedOutRoute>} />
                   <Route path="/login/user" element={<LoggedOutRoute><UserLogin /></LoggedOutRoute>} />
                   <Route path="/signup/user" element={<LoggedOutRoute><UserSignup /></LoggedOutRoute>} />
                   <Route path="/login/vendor" element={<LoggedOutRoute><VendorLogin /></LoggedOutRoute>} />

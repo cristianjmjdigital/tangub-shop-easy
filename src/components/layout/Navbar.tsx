@@ -207,14 +207,9 @@ const Navbar = () => {
               </div>
             )}
             {!loading && !loggedIn && (
-              <div className="flex gap-2">
-                <Link to="/login/user">
-                  <Button variant="secondary" size="sm">Customer Login</Button>
+                <Link to="/login">
+                <Button variant="secondary" size="sm">Login Now</Button>
                 </Link>
-                <Link to="/login/vendor">
-                  <Button variant="outline" size="sm" className="border-white/40 text-white hover:bg-white/10">Vendor</Button>
-                </Link>
-              </div>
             )}
             {!loading && loggedIn && (
               <div className="flex gap-2 items-center">
@@ -278,11 +273,8 @@ const Navbar = () => {
                   <div className="flex items-center justify-between pt-2">
                     {!loading && !loggedIn && (
                       <div className="w-full flex flex-col gap-2">
-                        <Link to="/login/user" className="w-full" onClick={() => setDrawerOpen(false)}>
-                          <Button variant="secondary" className="w-full">Customer Login</Button>
-                        </Link>
-                        <Link to="/login/vendor" className="w-full" onClick={() => setDrawerOpen(false)}>
-                          <Button variant="outline" className="w-full">Vendor Login</Button>
+                        <Link to="/login">
+                        <Button variant="secondary" size="sm">Login Now</Button>
                         </Link>
                       </div>
                     )}

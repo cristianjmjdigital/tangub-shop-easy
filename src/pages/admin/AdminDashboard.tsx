@@ -1002,9 +1002,9 @@ function DeleteButton({ label, onConfirm }: { label?: string; onConfirm: ()=>voi
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Confirm delete</DialogTitle>
+          <DialogTitle>Confirm archive</DialogTitle>
         </DialogHeader>
-        <p className="text-sm text-muted-foreground">This action cannot be undone.</p>
+        <p className="text-sm text-muted-foreground">Are you sure you want to archive this item?</p>
         <DialogFooter>
           <Button variant="outline" onClick={()=>setOpen(false)}>Cancel</Button>
           <Button variant="destructive" onClick={()=>{ onConfirm(); setOpen(false); }}>Delete</Button>

@@ -183,7 +183,7 @@ export default function VendorLogin() {
             </Button>
             <div className="text-center text-xs text-muted-foreground">Need an account? <Link to="/signup/user?role=vendor" className="text-primary font-medium">Sign up</Link></div>
             <Button variant="outline" className="w-full" asChild>
-              <Link to="/">Back</Link>
+              <Link to="/login">Back</Link>
             </Button>
           </form>
         </CardContent>

@@ -389,19 +389,19 @@ export default function VendorDashboard() {
   }, []);
 
   const downloadOrdersReport = useCallback(() => {
-    const headers = ['Order ID', 'Created At', 'Status', 'Customer', 'Item Count', 'Total Quantity', 'Total Amount'];
+    const headers = ['Order ID', 'Created At', 'Status', 'Customer', 'Total Quantity', 'Total Amount'];
     const rows = vendorOrders.map(o => {
       const its = vendorOrderItems.filter(i => i.order_id === o.id);
       const totalQty = its.reduce((s: number, i: any) => s + Number(i.quantity || 0), 0);
       const customer = userLabel(o.user_id, o.user);
-      return [o.id, o.created_at, o.status, customer, its.length, totalQty, o.total];
+      return [o.id, o.created_at, o.status, customer, totalQty, o.total];
     });
     downloadCsv('vendor-orders.csv', headers, rows);
   }, [vendorOrders, vendorOrderItems, userLabel, downloadCsv]);
 
   const downloadProductsReport = useCallback(() => {
-    const headers = ['Product ID', 'Name', 'Category', 'Price', 'Stock', 'Updated At'];
-    const rows = products.map(p => [p.id, p.name, (p as any).category || '', p.price, p.stock, (p as any).updated_at || p.created_at || '']);
+    const headers = ['Product ID', 'Name', 'Price', 'Stock', 'Updated At'];
+    const rows = products.map(p => [p.id, p.name, p.price, p.stock, (p as any).updated_at || p.created_at || '']);
     downloadCsv('vendor-products.csv', headers, rows);
   }, [products, downloadCsv]);
 
