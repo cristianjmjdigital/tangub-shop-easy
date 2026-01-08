@@ -24,6 +24,7 @@ interface ProductCardProps {
   sizeOptions?: string[];
   selectedSize?: string;
   onSelectSize?: (size: string) => void;
+  onBuyNow?: () => void;
 }
 
 const ProductCard = ({
@@ -45,7 +46,8 @@ const ProductCard = ({
   adding,
   sizeOptions,
   selectedSize,
-  onSelectSize
+  onSelectSize,
+  onBuyNow
 }: ProductCardProps) => {
   const src = imageUrl || image || "/placeholder.svg";
   const storeHref = storePath || (vendorId ? `/business/${vendorId}` : undefined);
@@ -175,6 +177,17 @@ const ProductCard = ({
             onClick={onAdd}
           >
             {adding ? 'Adding...' : isOutOfStock ? 'Out of Stock' : 'Add to Cart'}
+          </Button>
+        )}
+        {onBuyNow && (
+          <Button
+            className="mt-2 w-full"
+            variant="secondary"
+            size="sm"
+            disabled={adding || isOutOfStock || (sizeOptions && sizeOptions.length > 0 && !selectedSize)}
+            onClick={onBuyNow}
+          >
+            {adding ? 'Processing...' : 'Buy Now'}
           </Button>
         )}
       </CardHeader>

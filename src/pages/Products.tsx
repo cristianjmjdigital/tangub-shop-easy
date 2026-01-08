@@ -10,7 +10,7 @@ import { Star, MapPin, ShoppingCart, Filter, Heart, Search } from "lucide-react"
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import { useCart } from "@/hooks/use-cart";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 interface RawProductRow {
   id: string;
@@ -53,6 +53,7 @@ interface UIProduct {
 const Products = () => {
   const { toast } = useToast();
   const { addItem } = useCart();
+  const navigate = useNavigate();
   const [selectedSizes, setSelectedSizes] = useState<Record<string, string>>({});
   const DEFAULT_CATEGORIES = [
     "Electronics",
@@ -279,21 +280,28 @@ const Products = () => {
     try {
       if (typeof product.stock === 'number' && product.stock <= 0) {
         toast({ title: 'Out of stock', description: 'This item is currently unavailable.', variant: 'destructive' });
-        return;
+        return false;
       }
       if (product.sizeOptions && product.sizeOptions.length) {
         const chosen = selectedSizes[product.id];
         if (!chosen) {
           toast({ title: 'Choose a size', description: 'Select a size before adding to cart.', variant: 'destructive' });
-          return;
+          return false;
         }
         await addItem(product.id, 1, product.name, chosen);
-        return;
+        return true;
       }
       await addItem(product.id, 1, product.name);
+      return true;
     } catch (e: any) {
       toast({ title: 'Error', description: e.message || 'Failed to add to cart', variant: 'destructive' });
+      return false;
     }
+  };
+
+  const buyNow = async (product: UIProduct) => {
+    const success = await addToCart(product);
+    if (success) navigate('/cart');
   };
 
   const filteredProducts = useMemo(() => {
@@ -379,7 +387,9 @@ const Products = () => {
               <div className="py-16 text-center text-muted-foreground">Loading products...</div>
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {!loading && !error && filteredProducts.map((product) => (
+              {!loading && !error && filteredProducts.map((product) => {
+                const isOutOfStock = typeof product.stock === 'number' && product.stock <= 0;
+                return (
                 <Card key={product.id} className="overflow-hidden hover:shadow-elegant transition-all duration-300 group">
                   {product.storePath ? (
                     <Link
@@ -524,15 +534,24 @@ const Products = () => {
                     )}
                     <Button 
                       className="w-full text-base py-2"
-                      disabled={typeof product.stock === 'number' && product.stock <= 0}
+                      disabled={isOutOfStock}
                       onClick={() => addToCart(product)}
                     >
                       <ShoppingCart className="h-4 w-4 mr-2" />
-                      {typeof product.stock === 'number' && product.stock <= 0 ? 'Out of Stock' : 'Add to Cart'}
+                      {isOutOfStock ? 'Out of Stock' : 'Add to Cart'}
+                    </Button>
+                    <Button 
+                      variant="secondary"
+                      className="w-full text-base py-2"
+                      disabled={isOutOfStock}
+                      onClick={() => buyNow(product)}
+                    >
+                      {isOutOfStock ? 'Unavailable' : 'Buy Now'}
                     </Button>
                   </CardFooter>
                 </Card>
-              ))}
+                );
+              })}
             </div>
             {!loading && !error && filteredProducts.length === 0 && (
               <div className="text-center py-12">

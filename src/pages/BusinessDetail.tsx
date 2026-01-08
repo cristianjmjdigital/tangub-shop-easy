@@ -1,4 +1,4 @@
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ interface ProductRow { id: string; name: string; price: number; main_image_url?:
 
 export default function BusinessDetail() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [vendor, setVendor] = useState<VendorInfo | null>(null);
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,22 +55,29 @@ export default function BusinessDetail() {
 
     if (typeof product.stock === 'number' && product.stock <= 0) {
       toast({ title: 'Out of stock', description: 'This item is currently unavailable.', variant: 'destructive' });
-      return;
+      return false;
     }
 
     if (sizeOptions.length > 0 && !selectedSize) {
       toast({ title: 'Choose a size', description: 'Select a size before adding to cart.', variant: 'destructive' });
-      return;
+      return false;
     }
 
     try {
       setAddingId(product.id);
       await addItem(product.id, 1, product.name, selectedSize);
+      return true;
     } catch (e: any) {
       toast({ title: 'Error', description: e?.message || 'Failed to add to cart', variant: 'destructive' });
+      return false;
     } finally {
       setAddingId((current) => (current === product.id ? null : current));
     }
+  };
+
+  const handleBuyNow = async (product: ProductRow) => {
+    const success = await handleAddToCart(product);
+    if (success) navigate('/cart');
   };
 
   if (!id) return <div className="container mx-auto px-4 py-12">Missing vendor id.</div>;
@@ -154,6 +162,7 @@ export default function BusinessDetail() {
               selectedSize={selectedSizes[p.id]}
               onSelectSize={(size) => setSelectedSizes(prev => ({ ...prev, [p.id]: size }))}
               onAdd={() => handleAddToCart(p)}
+              onBuyNow={() => handleBuyNow(p)}
               adding={addingId === p.id || cartLoading}
             />
           ))}

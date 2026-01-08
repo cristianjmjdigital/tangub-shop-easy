@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import ProductCard from '@/components/ui/ProductCard';
 import { ArrowRight, Shirt, Utensils, Home as HomeIcon, Gift, Smartphone, Heart, Building2, Tag } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { useCart } from '@/hooks/use-cart';
 import { useToast } from '@/hooks/use-toast';
@@ -38,6 +38,7 @@ export default function Index() {
   const { toast } = useToast();
   const [vendorRatings, setVendorRatings] = useState<Record<string, { avg: number; count: number }>>({});
   const [salesCounts, setSalesCounts] = useState<Record<string, number>>({});
+  const navigate = useNavigate();
 
   useEffect(() => {
     let cancelled = false;
@@ -179,6 +180,33 @@ export default function Index() {
   const featuredVendors = vendors;
   const displayCategories = [...baseCategories, ...customCategories.map(name => ({ name, icon: Tag }))];
 
+  const handleAddToCart = async (product: any) => {
+    if (typeof product.stock === 'number' && product.stock <= 0) {
+      toast({ title: 'Out of stock', description: 'This item is currently unavailable.', variant: 'destructive' });
+      return false;
+    }
+    if (product.sizeOptions && product.sizeOptions.length > 0 && !selectedSizes[product.id]) {
+      toast({ title: 'Choose a size', description: 'Please select a size before adding to cart.' });
+      return false;
+    }
+    setAddingId(product.id);
+    try {
+      const size = product.sizeOptions && product.sizeOptions.length > 0 ? selectedSizes[product.id] : undefined;
+      await addItem(product.id, 1, product.name, size);
+      return true;
+    } catch (error: any) {
+      toast({ title: 'Error', description: error?.message || 'Failed to add to cart', variant: 'destructive' });
+      return false;
+    } finally {
+      setAddingId((id) => (id === product.id ? null : id));
+    }
+  };
+
+  const handleBuyNow = async (product: any) => {
+    const success = await handleAddToCart(product);
+    if (success) navigate('/cart');
+  };
+
   const handleScanClick = async () => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -281,15 +309,8 @@ export default function Index() {
               sizeOptions={p.sizeOptions}
               selectedSize={selectedSizes[p.id]}
               onSelectSize={(size) => setSelectedSizes(prev => ({ ...prev, [p.id]: size }))}
-              onAdd={async () => {
-            if (p.sizeOptions && p.sizeOptions.length > 0 && !selectedSizes[p.id]) {
-              toast({ title: 'Choose a size', description: 'Please select a size before adding to cart.' });
-              return;
-            }
-            setAddingId(p.id);
-            await addItem(p.id, 1, p.name, selectedSizes[p.id]);
-            setAddingId(id => (id === p.id ? null : id));
-              }}
+              onAdd={() => handleAddToCart(p)}
+              onBuyNow={() => handleBuyNow(p)}
               adding={addingId === p.id || cartLoading}
             />
           </div>
