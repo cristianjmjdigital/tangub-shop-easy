@@ -390,14 +390,22 @@ export default function VendorDashboard() {
     setMetrics({ salesToday, ordersToday, totalSales, totalOrders });
   }, [vendorOrders]);
 
-  const downloadCsv = useCallback((filename: string, headers: string[], rows: Array<Array<string | number | null | undefined>>) => {
-    const csv = [headers.join(',')]
-      .concat(rows.map(r => r.map(v => {
-        const s = v == null ? '' : String(v);
-        return '"' + s.replace(/"/g, '""') + '"';
-      }).join(',')))
-      .join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const downloadStyledReport = useCallback((filename: string, title: string, headers: string[], rows: Array<Array<string | number | null | undefined>>) => {
+    if (!rows.length) return;
+    const escapeHtml = (val: unknown) => String(val ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const headRow = headers.map(h => `<th style="padding:8px 10px;border:1px solid #e5e7eb;background:#111827;color:#f9fafb;text-align:left;">${escapeHtml(h)}</th>`).join('');
+    const bodyRows = rows.map(r => `<tr>${r.map(cell => `<td style="padding:7px 10px;border:1px solid #e5e7eb;">${escapeHtml(cell)}</td>`).join('')}</tr>`).join('');
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /><style>
+      body{font-family:Arial,Helvetica,sans-serif;background:#f8fafc;color:#0f172a;}
+      h2{margin-bottom:12px;}
+      table{border-collapse:collapse;width:100%;background:#fff;box-shadow:0 10px 30px rgba(15,23,42,0.08);border-radius:10px;overflow:hidden;}
+      thead tr th:first-child{border-top-left-radius:10px;} thead tr th:last-child{border-top-right-radius:10px;}
+      tbody tr:nth-child(even){background:#f8fafc;}
+    </style></head><body>
+      <h2>${escapeHtml(title)}</h2>
+      <table><thead><tr>${headRow}</tr></thead><tbody>${bodyRows}</tbody></table>
+    </body></html>`;
+    const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -414,14 +422,14 @@ export default function VendorDashboard() {
       const customer = userLabel(o.user_id, o.user);
       return [o.id, o.created_at, o.status, customer, totalQty, o.total];
     });
-    downloadCsv('vendor-orders.csv', headers, rows);
-  }, [vendorOrders, vendorOrderItems, userLabel, downloadCsv]);
+    downloadStyledReport('vendor-orders.xls', 'Orders', headers, rows);
+  }, [vendorOrders, vendorOrderItems, userLabel, downloadStyledReport]);
 
   const downloadProductsReport = useCallback(() => {
     const headers = ['Product ID', 'Name', 'Price', 'Stock', 'Updated At'];
     const rows = products.map(p => [p.id, p.name, p.price, p.stock, (p as any).updated_at || p.created_at || '']);
-    downloadCsv('vendor-products.csv', headers, rows);
-  }, [products, downloadCsv]);
+    downloadStyledReport('vendor-products.xls', 'Products', headers, rows);
+  }, [products, downloadStyledReport]);
 
   const [updatingOrderIds, setUpdatingOrderIds] = useState<string[]>([]);
   // Map internal keys -> DB enum labels (as defined in Postgres).

@@ -817,9 +817,30 @@ export default function AdminDashboard() {
           <TabsContent value="reports">
             <SectionCard title="Reports" description="Platform-wide exports (all stores). User IDs removed for privacy.">
               <div className="flex flex-wrap gap-2 mb-3">
-                <Button size="sm" variant="outline" onClick={()=>downloadCSV('orders-report.csv', ordersReport)}><Download className="h-4 w-4 mr-1" /> Orders (all stores) CSV</Button>
-                <Button size="sm" variant="outline" onClick={()=>downloadCSV('vendors-report.csv', vendorsReport)}><Download className="h-4 w-4 mr-1" /> Vendors CSV</Button>
-                <Button size="sm" variant="outline" onClick={()=>downloadCSV('customers-report.csv', customersReport)}><Download className="h-4 w-4 mr-1" /> Customers CSV</Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={()=>downloadStyledReport('orders-report.xls', 'Orders (All Stores)', Object.keys(ordersReport[0] || {}), ordersReport.map(o => Object.values(o)))}
+                  disabled={!ordersReport.length}
+                >
+                  <Download className="h-4 w-4 mr-1" /> Orders (styled)
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={()=>downloadStyledReport('vendors-report.xls', 'Vendors', Object.keys(vendorsReport[0] || {}), vendorsReport.map(o => Object.values(o)))}
+                  disabled={!vendorsReport.length}
+                >
+                  <Download className="h-4 w-4 mr-1" /> Vendors (styled)
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={()=>downloadStyledReport('customers-report.xls', 'Customers', Object.keys(customersReport[0] || {}), customersReport.map(o => Object.values(o)))}
+                  disabled={!customersReport.length}
+                >
+                  <Download className="h-4 w-4 mr-1" /> Customers (styled)
+                </Button>
               </div>
               <div className="grid md:grid-cols-2 gap-4">
                 <Card className="relative overflow-hidden border border-border/70 bg-gradient-to-br from-white via-slate-50 to-slate-100/80 p-4 shadow-md dark:from-slate-900/70 dark:via-slate-900/60 dark:to-slate-900/55">
@@ -961,11 +982,22 @@ function MetricCard({ icon: Icon, label, value, tone = 'sky' }: { icon: Componen
   );
 }
 
-function downloadCSV(filename: string, rows: any[]) {
-  if (!rows || rows.length === 0) return;
-  const headers = Object.keys(rows[0]);
-  const csv = [headers.join(',')].concat(rows.map(r => headers.map(h => JSON.stringify(r[h] ?? '')).join(','))).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+function downloadStyledReport(filename: string, title: string, headers: string[], rows: Array<Array<string | number>>) {
+  if (!rows.length) return;
+  const escapeHtml = (val: unknown) => String(val ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const headRow = headers.map(h => `<th style="padding:8px 10px;border:1px solid #e5e7eb;background:#111827;color:#f9fafb;text-align:left;">${escapeHtml(h)}</th>`).join('');
+  const bodyRows = rows.map(r => `<tr>${r.map(cell => `<td style="padding:7px 10px;border:1px solid #e5e7eb;">${escapeHtml(cell)}</td>`).join('')}</tr>`).join('');
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /><style>
+    body{font-family:Arial,Helvetica,sans-serif;background:#f8fafc;color:#0f172a;}
+    h2{margin-bottom:12px;}
+    table{border-collapse:collapse;width:100%;background:#fff;box-shadow:0 10px 30px rgba(15,23,42,0.08);border-radius:10px;overflow:hidden;}
+    thead tr th:first-child{border-top-left-radius:10px;} thead tr th:last-child{border-top-right-radius:10px;}
+    tbody tr:nth-child(even){background:#f8fafc;}
+  </style></head><body>
+    <h2>${escapeHtml(title)}</h2>
+    <table><thead><tr>${headRow}</tr></thead><tbody>${bodyRows}</tbody></table>
+  </body></html>`;
+  const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
