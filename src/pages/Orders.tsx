@@ -24,10 +24,48 @@ export default function Orders() {
   const { isSupported: pushCapable, ensureSubscription, syncIfGranted, status: pushStatus, lastError: pushError } = usePushSubscription(profile?.id);
   const [notifDismissed, setNotifDismissed] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [items, setItems] = useState<OrderItemRow[]>([]);
   const [vendors, setVendors] = useState<Record<string, VendorRow>>({});
   const [error, setError] = useState<string | null>(null);
+
+  const canCancel = (status?: string) => {
+    const norm = (status || '').toLowerCase();
+    return norm === 'pending' || norm === 'new' || norm === 'created';
+  };
+
+  const cancelOrder = async (orderId: string) => {
+    if (!profile?.id) return;
+    const current = orders.find(o => o.id === orderId);
+    if (!current || !canCancel(current.status)) {
+      toast({ title: 'Cannot cancel', description: 'Only pending orders can be cancelled.', variant: 'destructive' });
+      return;
+    }
+    const confirmed = window.confirm('Cancel this order? This cannot be undone.');
+    if (!confirmed) return;
+    setCancellingId(orderId);
+    try {
+      const { data, error: updErr } = await supabase
+        .from('orders')
+        .update({ status: 'cancelled' })
+        .eq('user_id', profile.id)
+        .eq('id', orderId)
+        .in('status', ['pending', 'new', 'created'])
+        .select('id,status')
+        .maybeSingle();
+
+      if (updErr) throw updErr;
+      if (!data) throw new Error('Order was not updated. It may have already been processed.');
+
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'cancelled' } : o));
+      toast({ title: 'Order cancelled', description: `Order #${orderId} has been cancelled.` });
+    } catch (e: any) {
+      toast({ title: 'Cancel failed', description: e.message || 'Please try again.', variant: 'destructive' });
+    } finally {
+      setCancellingId(null);
+    }
+  };
 
   const load = async () => {
   if (!profile?.id) return;
@@ -129,6 +167,8 @@ export default function Orders() {
       case 'new':
       case 'created':
         return <Badge variant="secondary" className={base}>New</Badge>;
+      case 'pending':
+        return <Badge variant="outline" className={base}>Pending</Badge>;
       case 'preparing':
         return <Badge className={base + ' bg-amber-500 hover:bg-amber-500'}>Preparing</Badge>;
       case 'completed':
@@ -186,7 +226,19 @@ export default function Orders() {
               <CardHeader className='p-4 flex flex-col gap-1'>
                 <div className='flex items-center justify-between'>
                   <CardTitle className='text-base'>Order #{g.order.id}</CardTitle>
-                  {statusBadge(g.order.status)}
+                  <div className='flex items-center gap-2'>
+                    {canCancel(g.order.status) && (
+                      <Button
+                        variant='destructive'
+                        size='sm'
+                        onClick={() => cancelOrder(g.order.id)}
+                        disabled={cancellingId === g.order.id || loading}
+                      >
+                        {cancellingId === g.order.id ? 'Cancelling...' : 'Cancel order'}
+                      </Button>
+                    )}
+                    {statusBadge(g.order.status)}
+                  </div>
                 </div>
                 <div className='text-xs text-muted-foreground'>Vendor: {g.vendor?.store_name || g.order.vendor_id}</div>
                 <div className='text-xs text-muted-foreground'>Placed {formatDistanceToNow(new Date(g.order.created_at), { addSuffix: true })}</div>
