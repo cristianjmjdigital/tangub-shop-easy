@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, ShoppingCart, Settings, Store, DollarSign, Edit, Trash2, RefreshCw, CheckCircle2, Hourglass, XCircle, MessageSquare, Send, X, Package, LogOut, FileDown } from "lucide-react";
+import { Plus, ShoppingCart, Settings, Store, DollarSign, Edit, Trash2, RefreshCw, CheckCircle2, Hourglass, XCircle, MessageSquare, Send, X, Package, LogOut, FileDown, Search } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -38,6 +38,8 @@ export default function VendorDashboard() {
   const [editCategoryMode, setEditCategoryMode] = useState<string>('');
   const [editingFile, setEditingFile] = useState<File | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [editStockDelta, setEditStockDelta] = useState<string>('');
+  const [productSearch, setProductSearch] = useState('');
   const [stockFilter, setStockFilter] = useState<'all' | 'out' | 'low' | 'in'>('all');
   const lowThreshold = 10;
   const [vendorOrders, setVendorOrders] = useState<any[]>([]);
@@ -288,6 +290,7 @@ export default function VendorDashboard() {
   }, [profile?.id]);
 
   const filteredProducts = useMemo(() => {
+    const term = productSearch.trim().toLowerCase();
     const priority = (p: ProductRecord) => {
       const stock = p.stock ?? 0;
       if (stock <= 0) return 0; // out of stock first
@@ -297,6 +300,11 @@ export default function VendorDashboard() {
 
     return products
       .filter(p => {
+        const matchesSearch = !term
+          || p.name.toLowerCase().includes(term)
+          || (p.description || '').toLowerCase().includes(term)
+          || (p.category || '').toLowerCase().includes(term);
+        if (!matchesSearch) return false;
         if (stockFilter === 'out') return (p.stock ?? 0) <= 0;
         if (stockFilter === 'low') return (p.stock ?? 0) > 0 && (p.stock ?? 0) < lowThreshold;
         if (stockFilter === 'in') return (p.stock ?? 0) >= lowThreshold;
@@ -312,7 +320,7 @@ export default function VendorDashboard() {
         const bDate = new Date((b as any).updated_at || b.created_at || 0).getTime();
         return bDate - aDate;
       });
-  }, [products, stockFilter, lowThreshold]);
+  }, [products, stockFilter, lowThreshold, productSearch]);
 
   const lowStockToastRef = useRef(false);
   useEffect(() => {
@@ -546,18 +554,21 @@ export default function VendorDashboard() {
   useEffect(() => {
     if (!editOpen) {
       setEditCategoryMode('');
+      setEditStockDelta('');
     }
   }, [editOpen]);
 
   useEffect(() => {
     if (!editingProduct) {
       setEditCategoryMode('');
+      setEditStockDelta('');
       return;
     }
     const derived = CATEGORY_OPTIONS.includes(editingProduct.category || '')
       ? (editingProduct.category || '')
       : ((editingProduct.category || '') ? CUSTOM_CATEGORY_VALUE : '');
     setEditCategoryMode(derived);
+    setEditStockDelta('');
   }, [editingProduct, CATEGORY_OPTIONS]);
 
   const navItems = [
@@ -781,7 +792,17 @@ export default function VendorDashboard() {
             <div className="max-w-5xl mx-auto space-y-5">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
                 <h2 className="text-sm font-medium text-muted-foreground">Total Products: {products.length}</h2>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+                  <div className="relative w-full sm:w-56">
+                    <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      type="search"
+                      placeholder="Search products"
+                      className="pl-8"
+                      value={productSearch}
+                      onChange={(e)=>setProductSearch(e.target.value)}
+                    />
+                  </div>
                   <Select value={stockFilter} onValueChange={(v)=>setStockFilter(v as any)}>
                     <SelectTrigger className="w-40">
                       <SelectValue placeholder="Stock filter" />
@@ -1272,8 +1293,16 @@ export default function VendorDashboard() {
                 <Input id="edit-price" type="number" value={editingProduct.price} onChange={e => setEditingProduct(prev => prev ? { ...prev, price: Number(e.target.value) } : prev)} />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="edit-stock">Stock</Label>
-                <Input id="edit-stock" type="number" value={editingProduct.stock} onChange={e => setEditingProduct(prev => prev ? { ...prev, stock: Number(e.target.value) } : prev)} />
+                <Label htmlFor="edit-stock-add">Stock</Label>
+                <div className="text-[11px] text-muted-foreground">Current: {editingProduct.stock ?? 0} remaining</div>
+                <Input
+                  id="edit-stock-add"
+                  type="text"
+                  placeholder="Add units"
+                  value={editStockDelta}
+                  onChange={e => setEditStockDelta(e.target.value)}
+                />
+                <div className="text-[11px] text-muted-foreground">New total: {(editingProduct.stock ?? 0) + (Number.isFinite(Number(editStockDelta)) ? Number(editStockDelta) : 0)}</div>
               </div>
             </div>
             <div className="space-y-1">
@@ -1381,10 +1410,12 @@ export default function VendorDashboard() {
               setSavingEdit(false);
               return;
             }
+            const delta = Number(editStockDelta);
+            const nextStock = (editingProduct.stock ?? 0) + (Number.isFinite(delta) ? delta : 0);
             const updatePayload: any = {
               name: editingProduct.name.trim(),
               price: editingProduct.price,
-              stock: editingProduct.stock,
+              stock: nextStock,
               description: editingProduct.description?.trim() || null,
               main_image_url: imageUrl
             };
@@ -1399,6 +1430,7 @@ export default function VendorDashboard() {
               setEditOpen(false);
             }
               setEditingFile(null);
+            setEditStockDelta('');
             setSavingEdit(false);
           }}>Save Changes</Button>
         </DialogFooter>

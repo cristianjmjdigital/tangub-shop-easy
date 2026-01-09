@@ -532,6 +532,10 @@ export default function UserSignup() {
                 </Select>
               </div>
             </div>
+              <div className="space-y-2">
+                <Label htmlFor="full_address">Purok & Street</Label>
+                <Input id="full_address" value={form.full_address} onChange={(e) => setForm({ ...form, full_address: e.target.value })} />
+              </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
             {/* Debug panel removed */}
             <Button className="w-full" type="submit" disabled={submitting}>{submitting ? 'Creating account...' : 'Sign Up'}</Button>
