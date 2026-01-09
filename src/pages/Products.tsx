@@ -503,7 +503,7 @@ const Products = () => {
                         <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                         <span className="ml-1 text-sm font-medium">{product.rating.toFixed(1)}</span>
                       </div>
-                      <span className="text-sm text-muted-foreground ml-2">({product.reviews})</span>
+                      <span className="text-sm text-muted-foreground ml-2">({product.reviews} ratings)</span>
                     </div>
 
                     <div className="flex items-center mb-2">
