@@ -161,6 +161,21 @@ export default function AdminDashboard() {
     retry: 0,
   });
 
+  const archivedIds = useMemo(() => {
+    const user = new Set<string>();
+    const vendor = new Set<string>();
+    const product = new Set<string>();
+    (archivesQuery.data || []).forEach(a => {
+      const t = String(a.entity_type || '').toLowerCase();
+      const id = String(a.entity_id || '');
+      if (!id) return;
+      if (t === 'user' || t === 'users' || t === 'customer' || t === 'customers') user.add(id);
+      if (t === 'vendor' || t === 'vendors') vendor.add(id);
+      if (t === 'product' || t === 'products') product.add(id);
+    });
+    return { user, vendor, product };
+  }, [archivesQuery.data]);
+
   const ordersQuery = useQuery({
     queryKey: ['admin','orders'],
     queryFn: async () => {
@@ -192,9 +207,9 @@ export default function AdminDashboard() {
   });
   const archiveRecord = async (entity_type: string, entity_id: string, payload: any) => {
     try {
-      await (adminClient ?? supabase)
-        .from('archives')
-        .insert({ entity_type, entity_id, payload });
+      const client = adminClient ?? supabase;
+      await client.from('archives').delete().eq('entity_type', entity_type).eq('entity_id', entity_id);
+      await client.from('archives').insert({ entity_type, entity_id, payload });
     } catch (e) {
       console.warn('Archive insert failed', e);
     }
@@ -205,10 +220,12 @@ export default function AdminDashboard() {
       const client = adminClient ?? supabase;
       const { data: row } = await client.from('users').select('*').eq('id', id).single();
       if (row) await archiveRecord('user', String(id), row);
-      const { error } = await client.from('users').delete().eq('id', id);
-      if (error) throw error; return id;
+      return id;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin','users'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin','users'] });
+      qc.invalidateQueries({ queryKey: ['admin','archives'] });
+    },
   });
 
   const unarchiveMutation = useMutation({
@@ -218,7 +235,12 @@ export default function AdminDashboard() {
       if (error) throw error;
       return archiveId;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin','archives'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin','archives'] });
+      qc.invalidateQueries({ queryKey: ['admin','users'] });
+      qc.invalidateQueries({ queryKey: ['admin','vendors'] });
+      qc.invalidateQueries({ queryKey: ['admin','products'] });
+    },
   });
 
   // Mutations: VENDORS
@@ -243,12 +265,12 @@ export default function AdminDashboard() {
       const client = adminClient ?? supabase;
       const { data: row } = await client.from('vendors').select('*').eq('id', id).single();
       if (row) await archiveRecord('vendor', String(id), row);
-      const { error } = await client.from('vendors').delete().eq('id', id);
-      if (error) throw error; return id;
+      return id;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin','vendors'] });
       qc.invalidateQueries({ queryKey: ['admin','products'] });
+      qc.invalidateQueries({ queryKey: ['admin','archives'] });
     },
   });
 
@@ -274,10 +296,12 @@ export default function AdminDashboard() {
       const client = adminClient ?? supabase;
       const { data: row } = await client.from('products').select('*').eq('id', id).single();
       if (row) await archiveRecord('product', String(id), row);
-      const { error } = await client.from('products').delete().eq('id', id);
-      if (error) throw error; return id;
+      return id;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin','products'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin','products'] });
+      qc.invalidateQueries({ queryKey: ['admin','archives'] });
+    },
   });
 
   const loading = usersQuery.isLoading || vendorsQuery.isLoading || productsQuery.isLoading || ordersQuery.isLoading;
@@ -291,9 +315,9 @@ export default function AdminDashboard() {
     return 'Error loading data';
   }, [usersQuery.error, vendorsQuery.error, productsQuery.error, ordersQuery.error]);
 
-  const usersData = usersQuery.data || [];
-  const vendorsData = vendorsQuery.data || [];
-  const productsData = productsQuery.data || [];
+  const usersData = (usersQuery.data || []).filter(u => !archivedIds.user.has(String(u.id)));
+  const vendorsData = (vendorsQuery.data || []).filter(v => !archivedIds.vendor.has(String(v.id)));
+  const productsData = (productsQuery.data || []).filter(p => !archivedIds.product.has(String(p.id)));
   const ordersData = ordersQuery.data || [];
   const archivesData = archivesQuery.data || [];
 
@@ -1111,7 +1135,7 @@ function ViewUserButton({ user }: { user: UserRow }) {
       <DialogTrigger asChild>
         <Button size="sm" variant="outline" className="h-7 px-2"><Eye className="h-3.5 w-3.5 mr-1" /> Details</Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="w-[90%] rounded-lg">
         <DialogHeader><DialogTitle>Informations</DialogTitle></DialogHeader>
         <div className="text-sm space-y-1">
           <div><span className="text-muted-foreground">Name:</span> {user.full_name || '—'}</div>
@@ -1119,7 +1143,6 @@ function ViewUserButton({ user }: { user: UserRow }) {
           <div><span className="text-muted-foreground">Role:</span> {user.role}</div>
           <div><span className="text-muted-foreground">Status:</span> {user.vendor_status || 'n/a'}</div>
           <div><span className="text-muted-foreground">Barangay:</span> {user.barangay || '—'}</div>
-          <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 p-2 rounded">Verification documents are not stored; upload pipeline required.</div>
         </div>
       </DialogContent>
     </Dialog>
