@@ -288,13 +288,31 @@ export default function VendorDashboard() {
   }, [profile?.id]);
 
   const filteredProducts = useMemo(() => {
-    return products.filter(p => {
-      if (stockFilter === 'out') return (p.stock ?? 0) <= 0;
-      if (stockFilter === 'low') return (p.stock ?? 0) > 0 && (p.stock ?? 0) < lowThreshold;
-      if (stockFilter === 'in') return (p.stock ?? 0) >= lowThreshold;
-      return true;
-    });
-  }, [products, stockFilter]);
+    const priority = (p: ProductRecord) => {
+      const stock = p.stock ?? 0;
+      if (stock <= 0) return 0; // out of stock first
+      if (stock < lowThreshold) return 1; // then low stock
+      return 2; // then the rest
+    };
+
+    return products
+      .filter(p => {
+        if (stockFilter === 'out') return (p.stock ?? 0) <= 0;
+        if (stockFilter === 'low') return (p.stock ?? 0) > 0 && (p.stock ?? 0) < lowThreshold;
+        if (stockFilter === 'in') return (p.stock ?? 0) >= lowThreshold;
+        return true;
+      })
+      .slice()
+      .sort((a, b) => {
+        const pa = priority(a);
+        const pb = priority(b);
+        if (pa !== pb) return pa - pb;
+        // Secondary: recently updated/created first
+        const aDate = new Date((a as any).updated_at || a.created_at || 0).getTime();
+        const bDate = new Date((b as any).updated_at || b.created_at || 0).getTime();
+        return bDate - aDate;
+      });
+  }, [products, stockFilter, lowThreshold]);
 
   const lowStockToastRef = useRef(false);
   useEffect(() => {

@@ -320,12 +320,33 @@ const Products = () => {
         p.location.toLowerCase().includes(q)
       );
     }
+
+    const popularityScore = (p: UIProduct) => {
+      const sales = Number(p.soldCount || 0);
+      const ratings = Number(p.rating || 0) * 10;
+      const reviews = Number(p.reviews || 0);
+      return sales * 2 + ratings + reviews;
+    };
+
     switch (sortKey) {
-      case 'price-low': list = [...list].sort((a,b)=>a.price-b.price); break;
-      case 'price-high': list = [...list].sort((a,b)=>b.price-a.price); break;
-      case 'newest': list = [...list]; /* could sort by created_at when available */ break;
-      case 'rating': list = [...list].sort((a,b)=>b.rating-a.rating); break;
-      default: break; // featured logic not yet implemented
+      case 'price-low':
+        list = [...list].sort((a,b)=>a.price-b.price);
+        break;
+      case 'price-high':
+        list = [...list].sort((a,b)=>b.price-a.price);
+        break;
+      case 'newest':
+        list = [...list]; /* could sort by created_at when available */
+        break;
+      case 'rating':
+        list = [...list].sort((a,b)=>b.rating-a.rating || popularityScore(b)-popularityScore(a));
+        break;
+      default:
+        // When searching, rank by popularity so results stay relevant (sales > rating > reviews)
+        if (q) {
+          list = [...list].sort((a,b)=>popularityScore(b)-popularityScore(a));
+        }
+        break;
     }
     return list;
   }, [uiProducts, selectedCategory, selectedLocation, priceRange, sortKey, searchTerm]);
