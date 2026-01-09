@@ -38,7 +38,7 @@ export default function VendorDashboard() {
   const [editCategoryMode, setEditCategoryMode] = useState<string>('');
   const [editingFile, setEditingFile] = useState<File | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
-  const [editStockDelta, setEditStockDelta] = useState<string>('');
+  const [stockDeltaInput, setStockDeltaInput] = useState<string>('');
   const [productSearch, setProductSearch] = useState('');
   const [stockFilter, setStockFilter] = useState<'all' | 'out' | 'low' | 'in'>('all');
   const lowThreshold = 10;
@@ -159,7 +159,7 @@ export default function VendorDashboard() {
   }, [profile, toast, signOut, navigate]);
 
     const PRODUCT_BUCKET = import.meta.env.VITE_PRODUCT_BUCKET || 'product-images';
-    const CATEGORY_OPTIONS = ['Fashion','Food & Drinks','Home & Living','Gifts & Crafts','Electronics','Health & Beauty'];
+    const CATEGORY_OPTIONS = useMemo<string[]>(() => ['Fashion','Food & Drinks','Home & Living','Gifts & Crafts','Electronics','Health & Beauty'], []);
     const CUSTOM_CATEGORY_VALUE = '__custom__';
 
     const uploadProductImage = async (file: File, vendorId: string) => {
@@ -554,21 +554,21 @@ export default function VendorDashboard() {
   useEffect(() => {
     if (!editOpen) {
       setEditCategoryMode('');
-      setEditStockDelta('');
+      setStockDeltaInput('');
     }
   }, [editOpen]);
 
   useEffect(() => {
     if (!editingProduct) {
       setEditCategoryMode('');
-      setEditStockDelta('');
+      setStockDeltaInput('');
       return;
     }
     const derived = CATEGORY_OPTIONS.includes(editingProduct.category || '')
       ? (editingProduct.category || '')
       : ((editingProduct.category || '') ? CUSTOM_CATEGORY_VALUE : '');
     setEditCategoryMode(derived);
-    setEditStockDelta('');
+    setStockDeltaInput('');
   }, [editingProduct, CATEGORY_OPTIONS]);
 
   const navItems = [
@@ -1293,16 +1293,15 @@ export default function VendorDashboard() {
                 <Input id="edit-price" type="number" value={editingProduct.price} onChange={e => setEditingProduct(prev => prev ? { ...prev, price: Number(e.target.value) } : prev)} />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="edit-stock-add">Stock</Label>
-                <div className="text-[11px] text-muted-foreground">Current: {editingProduct.stock ?? 0} remaining</div>
+                <Label htmlFor="edit-stock-delta">Stock</Label>
+                <div className="text-[11px] text-muted-foreground">Current: {editingProduct.stock ?? 0}</div>
                 <Input
-                  id="edit-stock-add"
-                  type="text"
-                  placeholder="Add units"
-                  value={editStockDelta}
-                  onChange={e => setEditStockDelta(e.target.value)}
+                  id="edit-stock-delta"
+                  type="number"
+                  value={stockDeltaInput}
+                  placeholder="Add units (e.g. 5)"
+                  onChange={e => setStockDeltaInput(e.target.value)}
                 />
-                <div className="text-[11px] text-muted-foreground">New total: {(editingProduct.stock ?? 0) + (Number.isFinite(Number(editStockDelta)) ? Number(editStockDelta) : 0)}</div>
               </div>
             </div>
             <div className="space-y-1">
@@ -1410,12 +1409,12 @@ export default function VendorDashboard() {
               setSavingEdit(false);
               return;
             }
-            const delta = Number(editStockDelta);
+            const delta = Number(stockDeltaInput || 0);
             const nextStock = (editingProduct.stock ?? 0) + (Number.isFinite(delta) ? delta : 0);
             const updatePayload: any = {
               name: editingProduct.name.trim(),
               price: editingProduct.price,
-              stock: nextStock,
+              stock: Number.isFinite(nextStock) ? Math.max(0, nextStock) : (editingProduct.stock ?? 0),
               description: editingProduct.description?.trim() || null,
               main_image_url: imageUrl
             };
@@ -1430,7 +1429,7 @@ export default function VendorDashboard() {
               setEditOpen(false);
             }
               setEditingFile(null);
-            setEditStockDelta('');
+            setStockDeltaInput('');
             setSavingEdit(false);
           }}>Save Changes</Button>
         </DialogFooter>
