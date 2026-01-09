@@ -823,7 +823,7 @@ export default function AdminDashboard() {
                   onClick={()=>downloadStyledReport('orders-report.xls', 'Orders (All Stores)', Object.keys(ordersReport[0] || {}), ordersReport.map(o => Object.values(o)))}
                   disabled={!ordersReport.length}
                 >
-                  <Download className="h-4 w-4 mr-1" /> Orders (styled)
+                  <Download className="h-4 w-4 mr-1" /> Orders
                 </Button>
                 <Button
                   size="sm"
@@ -831,7 +831,7 @@ export default function AdminDashboard() {
                   onClick={()=>downloadStyledReport('vendors-report.xls', 'Vendors', Object.keys(vendorsReport[0] || {}), vendorsReport.map(o => Object.values(o)))}
                   disabled={!vendorsReport.length}
                 >
-                  <Download className="h-4 w-4 mr-1" /> Vendors (styled)
+                  <Download className="h-4 w-4 mr-1" /> Vendors
                 </Button>
                 <Button
                   size="sm"
@@ -839,7 +839,7 @@ export default function AdminDashboard() {
                   onClick={()=>downloadStyledReport('customers-report.xls', 'Customers', Object.keys(customersReport[0] || {}), customersReport.map(o => Object.values(o)))}
                   disabled={!customersReport.length}
                 >
-                  <Download className="h-4 w-4 mr-1" /> Customers (styled)
+                  <Download className="h-4 w-4 mr-1" /> Customers
                 </Button>
               </div>
               <div className="grid md:grid-cols-2 gap-4">
