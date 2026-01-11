@@ -19,7 +19,7 @@ import { DashboardShell } from "@/components/layout/DashboardShell";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar, PieChart, Pie, Cell } from "recharts";
 
 interface VendorRecord { id: string; store_name: string; address: string | null; created_at?: string; owner_user_id?: string; contact_phone?: string | null; accepting_orders?: boolean; base_delivery_fee?: number | null; logo_url?: string | null; hero_image_url?: string | null; description?: string | null }
-interface ProductRecord { id: string; name: string; price: number; stock: number; description?: string | null; main_image_url?: string | null; category?: string | null; address?: string | null; size_options?: string[] | null; updated_at?: string | null; created_at?: string | null }
+interface ProductRecord { id: string; name: string; price: number; stock: number; description?: string | null; main_image_url?: string | null; category?: string | null; address?: string | null; size_options?: string[] | null; size_stock?: Record<string, number> | null; updated_at?: string | null; created_at?: string | null }
 
 export default function VendorDashboard() {
   const { profile, signOut } = useAuth();
@@ -30,7 +30,7 @@ export default function VendorDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [open, setOpen] = useState(false);
-  const [newProduct, setNewProduct] = useState({ name: '', price: '', stock: '', description: '', main_image_url: '', category: '', address: '', size_options: [] as string[] });
+  const [newProduct, setNewProduct] = useState({ name: '', price: '', stock: '', description: '', main_image_url: '', category: '', address: '', size_options: [] as string[], size_stock: {} as Record<string, number> });
   const [newCategoryMode, setNewCategoryMode] = useState<string>('');
   const [newProductFile, setNewProductFile] = useState<File | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -63,6 +63,15 @@ export default function VendorDashboard() {
   });
   const { toast } = useToast();
   const SIZE_OPTIONS = ['XS','S','M','L','XL','XXL'];
+  const sizeStockTotal = (map?: Record<string, number> | null) => Object.values(map || {}).reduce((sum, v) => sum + (Number.isFinite(v) ? Number(v) : 0), 0);
+  const normalizeSizeStock = (options: string[], map: Record<string, number> | null | undefined) => {
+    const next: Record<string, number> = {};
+    options.forEach(opt => {
+      const qty = Number((map || {})[opt] ?? 0);
+      next[opt] = Number.isFinite(qty) ? Math.max(0, qty) : 0;
+    });
+    return next;
+  };
   const [msgOrderId, setMsgOrderId] = useState<string | null>(null);
   const [msgText, setMsgText] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
@@ -79,6 +88,12 @@ export default function VendorDashboard() {
     }
   }, [tab]);
   const vendorAddress = vendor?.address?.trim() || '';
+  const newProductUsesSizes = newProduct.category === 'Fashion' && newProduct.size_options.length > 0;
+  const newProductSizeStock = normalizeSizeStock(newProduct.size_options, newProduct.size_stock);
+  const newProductSizeStockTotal = newProductUsesSizes ? sizeStockTotal(newProductSizeStock) : 0;
+  const editUsesSizes = editingProduct?.category === 'Fashion' && (editingProduct.size_options?.length || 0) > 0;
+  const editingSizeStock = normalizeSizeStock(editingProduct?.size_options || [], editingProduct?.size_stock || {});
+  const editingSizeStockTotal = editUsesSizes ? sizeStockTotal(editingSizeStock) : 0;
 
   const sales7d = useMemo(() => {
     const map = new Map<string, number>();
@@ -255,12 +270,13 @@ export default function VendorDashboard() {
       if (resolvedVendor?.id) {
         const { data: productRows } = await supabase
           .from('products')
-          .select('id,name,price,stock,description,main_image_url,created_at')
+          .select('id,name,price,stock,description,main_image_url,created_at,size_options,size_stock,category')
           .eq('vendor_id', resolvedVendor.id)
           .order('created_at', { ascending: false });
         setProducts(((productRows as ProductRecord[]) || []).map(p => ({
           ...p,
           size_options: (p as any).size_options || [],
+          size_stock: (p as any).size_stock || {},
           category: (p as any).category || null,
           address: (p as any).address || null,
           updated_at: (p as any).updated_at || (p as any).created_at || null,
@@ -1136,8 +1152,17 @@ export default function VendorDashboard() {
                 <Input id="prod-price" type="number" value={newProduct.price} onChange={e => setNewProduct(p => ({ ...p, price: e.target.value }))} />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="prod-stock">Stock</Label>
-                <Input id="prod-stock" type="number" value={newProduct.stock} onChange={e => setNewProduct(p => ({ ...p, stock: e.target.value }))} />
+                <Label htmlFor="prod-stock">Stock {newProductUsesSizes ? '(auto from sizes)' : ''}</Label>
+                <Input
+                  id="prod-stock"
+                  type="number"
+                  value={newProductUsesSizes ? newProductSizeStockTotal : newProduct.stock}
+                  disabled={newProductUsesSizes}
+                  onChange={e => setNewProduct(p => ({ ...p, stock: e.target.value }))}
+                />
+                {newProductUsesSizes && (
+                  <p className="text-[11px] text-muted-foreground">Total stock is derived from the size quantities below.</p>
+                )}
               </div>
             </div>
             <div className="space-y-1">
@@ -1161,10 +1186,10 @@ export default function VendorDashboard() {
                 onValueChange={(val) => {
                   setNewCategoryMode(val);
                   if (val === CUSTOM_CATEGORY_VALUE) {
-                    setNewProduct(p => ({ ...p, category: CATEGORY_OPTIONS.includes(p.category) ? '' : p.category, size_options: [] }));
+                    setNewProduct(p => ({ ...p, category: CATEGORY_OPTIONS.includes(p.category) ? '' : p.category, size_options: [], size_stock: {} }));
                     return;
                   }
-                  setNewProduct(p => ({ ...p, category: val, size_options: val === 'Fashion' ? p.size_options : [] }));
+                  setNewProduct(p => ({ ...p, category: val, size_options: val === 'Fashion' ? p.size_options : [], size_stock: val === 'Fashion' ? p.size_stock : {} }));
                 }}
               >
                 <SelectTrigger id="prod-category">
@@ -1192,25 +1217,48 @@ export default function VendorDashboard() {
             )}
             {newProduct.category === 'Fashion' && (
               <div className="space-y-2">
-                <Label>Sizes</Label>
-                <div className="flex flex-wrap gap-2">
+                <Label>Sizes & Stock</Label>
+                <div className="grid grid-cols-2 gap-3">
                   {SIZE_OPTIONS.map(size => {
                     const selected = newProduct.size_options.includes(size);
+                    const value = selected ? newProductSizeStock[size] ?? 0 : '';
                     return (
-                      <Button
-                        key={size}
-                        type="button"
-                        variant={selected ? 'secondary' : 'outline'}
-                        size="sm"
-                        onClick={() => setNewProduct(p => ({ ...p, size_options: selected ? p.size_options.filter(s => s !== size) : [...p.size_options, size] }))}
-                        className="h-8 px-3"
-                      >
-                        {size}
-                      </Button>
+                      <div key={size} className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant={selected ? 'secondary' : 'outline'}
+                            size="sm"
+                            onClick={() => setNewProduct(p => {
+                              const wasSelected = p.size_options.includes(size);
+                              const nextSizes = wasSelected ? p.size_options.filter(s => s !== size) : [...p.size_options, size];
+                              const nextStock = { ...(p.size_stock || {}) } as Record<string, number>;
+                              if (wasSelected) delete nextStock[size]; else if (!(size in nextStock)) nextStock[size] = 0;
+                              return { ...p, size_options: nextSizes, size_stock: nextStock };
+                            })}
+                            className="h-8 px-3"
+                          >
+                            {size}
+                          </Button>
+                          <Input
+                            type="number"
+                            className="h-8"
+                            value={value}
+                            disabled={!selected}
+                            min={0}
+                            onChange={(e) => {
+                              const qty = Math.max(0, Number(e.target.value) || 0);
+                              setNewProduct(p => ({ ...p, size_stock: { ...(p.size_stock || {}), [size]: qty } }));
+                            }}
+                            placeholder="Qty"
+                          />
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">{selected ? 'Set stock for this size' : 'Enable to set stock'}</p>
+                      </div>
                     );
                   })}
                 </div>
-                <p className="text-[11px] text-muted-foreground">Only for Fashion products. Leave empty to allow one-size.</p>
+                <p className="text-[11px] text-muted-foreground">Only for Fashion products. Leave sizes empty to allow one-size. Total stock: {newProductSizeStockTotal}</p>
               </div>
             )}
             <div className="space-y-1">
@@ -1249,23 +1297,29 @@ export default function VendorDashboard() {
                 setCreating(false);
                 return;
               }
+              const hasSizes = newProductUsesSizes && newProduct.size_options.length > 0;
+              const sizeStockMap = hasSizes ? normalizeSizeStock(newProduct.size_options, newProduct.size_stock) : {};
+              const derivedStock = hasSizes ? sizeStockTotal(sizeStockMap) : (isNaN(stockNum) ? 0 : stockNum);
               const insertPayload: any = {
                 vendor_id: vendor.id,
                 name: newProduct.name.trim(),
                 price: isNaN(priceNum) ? 0 : priceNum,
-                stock: isNaN(stockNum) ? 0 : stockNum,
+                stock: derivedStock,
                 description: newProduct.description.trim() ? newProduct.description.trim() : null,
-                main_image_url: imageUrl
+                main_image_url: imageUrl,
+                size_options: hasSizes ? newProduct.size_options : [],
+                size_stock: hasSizes ? sizeStockMap : null,
+                category: finalCategory || null
               };
               const { data: inserted, error: insertErr } = await supabase
                 .from('products')
                 .insert(insertPayload)
-                .select('id,name,price,stock,description,main_image_url,created_at')
+                .select('id,name,price,stock,description,main_image_url,created_at,size_options,size_stock,category')
                 .single();
               if (!insertErr && inserted) {
-                setProducts(prev => [{ ...(inserted as any), size_options: (inserted as any).size_options || [] }, ...prev]);
+                setProducts(prev => [{ ...(inserted as any), size_options: (inserted as any).size_options || [], size_stock: (inserted as any).size_stock || {} }, ...prev]);
                 setOpen(false);
-                setNewProduct({ name: '', price: '', stock: '', description: '', main_image_url: '', category: '', address: vendorAddress || '', size_options: [] });
+                setNewProduct({ name: '', price: '', stock: '', description: '', main_image_url: '', category: '', address: vendorAddress || '', size_options: [], size_stock: {} });
                 setNewCategoryMode('');
                 setNewProductFile(null);
               }
@@ -1294,14 +1348,16 @@ export default function VendorDashboard() {
               </div>
               <div className="space-y-1">
                 <Label htmlFor="edit-stock-delta">Stock</Label>
-                <div className="text-[11px] text-muted-foreground">Current: {editingProduct.stock ?? 0}</div>
+                <div className="text-[11px] text-muted-foreground">Current: {editUsesSizes ? editingSizeStockTotal : (editingProduct.stock ?? 0)}</div>
                 <Input
                   id="edit-stock-delta"
                   type="number"
                   value={stockDeltaInput}
                   placeholder="Add units (e.g. 5)"
+                  disabled={!!editUsesSizes}
                   onChange={e => setStockDeltaInput(e.target.value)}
                 />
+                {editUsesSizes && <p className="text-[11px] text-muted-foreground">Stock is managed per size below.</p>}
               </div>
             </div>
             <div className="space-y-1">
@@ -1322,9 +1378,9 @@ export default function VendorDashboard() {
                   setEditingProduct(prev => {
                     if (!prev) return prev;
                     if (val === CUSTOM_CATEGORY_VALUE) {
-                      return { ...prev, category: CATEGORY_OPTIONS.includes(prev.category || '') ? '' : (prev.category || ''), size_options: [] };
+                      return { ...prev, category: CATEGORY_OPTIONS.includes(prev.category || '') ? '' : (prev.category || ''), size_options: [], size_stock: {} };
                     }
-                    return { ...prev, category: val, size_options: val === 'Fashion' ? (prev.size_options || []) : [] };
+                    return { ...prev, category: val, size_options: val === 'Fashion' ? (prev.size_options || []) : [], size_stock: val === 'Fashion' ? (prev.size_stock || {}) : {} };
                   });
                 }}
               >
@@ -1357,25 +1413,49 @@ export default function VendorDashboard() {
             </div>
             {editingProduct.category === 'Fashion' && (
               <div className="space-y-2">
-                <Label>Sizes</Label>
-                <div className="flex flex-wrap gap-2">
+                <Label>Sizes & Stock</Label>
+                <div className="grid grid-cols-2 gap-3">
                   {SIZE_OPTIONS.map(size => {
                     const selected = (editingProduct.size_options || []).includes(size);
+                    const value = selected ? editingSizeStock[size] ?? 0 : '';
                     return (
-                      <Button
-                        key={size}
-                        type="button"
-                        variant={selected ? 'secondary' : 'outline'}
-                        size="sm"
-                        onClick={() => setEditingProduct(prev => prev ? { ...prev, size_options: selected ? (prev.size_options || []).filter(s => s !== size) : [ ...(prev.size_options || []), size ] } : prev)}
-                        className="h-8 px-3"
-                      >
-                        {size}
-                      </Button>
+                      <div key={size} className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant={selected ? 'secondary' : 'outline'}
+                            size="sm"
+                            onClick={() => setEditingProduct(prev => {
+                              if (!prev) return prev;
+                              const wasSelected = (prev.size_options || []).includes(size);
+                              const nextSizes = wasSelected ? (prev.size_options || []).filter(s => s !== size) : [ ...(prev.size_options || []), size ];
+                              const nextStock = { ...(prev.size_stock || {}) } as Record<string, number>;
+                              if (wasSelected) delete nextStock[size]; else if (!(size in nextStock)) nextStock[size] = 0;
+                              return { ...prev, size_options: nextSizes, size_stock: nextStock };
+                            })}
+                            className="h-8 px-3"
+                          >
+                            {size}
+                          </Button>
+                          <Input
+                            type="number"
+                            className="h-8"
+                            value={value}
+                            min={0}
+                            disabled={!selected}
+                            onChange={(e) => {
+                              const qty = Math.max(0, Number(e.target.value) || 0);
+                              setEditingProduct(prev => prev ? { ...prev, size_stock: { ...(prev.size_stock || {}), [size]: qty } } : prev);
+                            }}
+                            placeholder="Qty"
+                          />
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">{selected ? 'Set stock for this size' : 'Enable to set stock'}</p>
+                      </div>
                     );
                   })}
                 </div>
-                <p className="text-[11px] text-muted-foreground">Only for Fashion products. Leave empty to allow one-size.</p>
+                <p className="text-[11px] text-muted-foreground">Only for Fashion products. Leave sizes empty to allow one-size. Total stock: {editingSizeStockTotal}</p>
               </div>
             )}
             <div className="space-y-1">
@@ -1409,23 +1489,31 @@ export default function VendorDashboard() {
               setSavingEdit(false);
               return;
             }
+            const hasSizes = !!editUsesSizes && (editingProduct.size_options?.length || 0) > 0;
+            const sizeStockMap = hasSizes ? editingSizeStock : {};
+            const sizeStockTotalValue = hasSizes ? editingSizeStockTotal : 0;
             const delta = Number(stockDeltaInput || 0);
-            const nextStock = (editingProduct.stock ?? 0) + (Number.isFinite(delta) ? delta : 0);
+            const nextStock = hasSizes
+              ? sizeStockTotalValue
+              : (editingProduct.stock ?? 0) + (Number.isFinite(delta) ? delta : 0);
             const updatePayload: any = {
               name: editingProduct.name.trim(),
               price: editingProduct.price,
               stock: Number.isFinite(nextStock) ? Math.max(0, nextStock) : (editingProduct.stock ?? 0),
               description: editingProduct.description?.trim() || null,
-              main_image_url: imageUrl
+              main_image_url: imageUrl,
+              size_options: hasSizes ? (editingProduct.size_options || []) : [],
+              size_stock: hasSizes ? sizeStockMap : null,
+              category: finalCategory || null
             };
             const { error: updErr, data } = await supabase
               .from('products')
               .update(updatePayload)
               .eq('id', editingProduct.id)
-              .select('id,name,price,stock,description,main_image_url,created_at')
+              .select('id,name,price,stock,description,main_image_url,created_at,size_options,size_stock,category')
               .single();
             if (!updErr && data) {
-              setProducts(prev => prev.map(p => p.id === data.id ? ({ ...(data as any), size_options: (data as any).size_options || [] }) : p));
+              setProducts(prev => prev.map(p => p.id === data.id ? ({ ...(data as any), size_options: (data as any).size_options || [], size_stock: (data as any).size_stock || {} }) : p));
               setEditOpen(false);
             }
               setEditingFile(null);

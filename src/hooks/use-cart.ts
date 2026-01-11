@@ -45,29 +45,48 @@ export function useCart(options: UseCartOptions = {}) {
   const [items, setItems] = useState<CartItemRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // Adjust product stock. Negative delta reserves stock, positive delta returns stock.
-  const adjustProductStock = useCallback(async (productId: string, delta: number) => {
+  // Adjust product stock. Negative delta reserves stock, positive delta returns stock. Supports size-level stock when available.
+  const adjustProductStock = useCallback(async (productId: string, delta: number, size?: string | null) => {
     if (!delta) return;
-    if (delta < 0) {
-      const qty = Math.abs(delta);
-      const { error: decErr } = await supabase.rpc('decrement_product_stock', { p_id: productId, p_qty: qty });
-      if (decErr) throw decErr;
-      return;
-    }
 
-    // Restock by adding back the quantity (best-effort, minimal race protection)
     const { data: productRow, error: fetchErr } = await supabase
       .from('products')
-      .select('stock')
+      .select('stock,size_stock')
       .eq('id', productId)
       .single();
     if (fetchErr) throw fetchErr;
-    const current = Number(productRow?.stock ?? 0);
-    const { error: incErr } = await supabase
+
+    const currentStock = Number(productRow?.stock ?? 0);
+    const sizeStockMap: Record<string, number> = (productRow?.size_stock && typeof productRow.size_stock === 'object') ? (productRow.size_stock as Record<string, number>) : {};
+    const hasSizeStock = Object.keys(sizeStockMap).length > 0;
+
+    if (hasSizeStock) {
+      if (!size) throw new Error('Size selection required to adjust stock.');
+      const currentSizeStockRaw = Number(sizeStockMap[size] ?? 0);
+      const currentSizeStock = Number.isFinite(currentSizeStockRaw) ? currentSizeStockRaw : 0;
+      const nextSizeStockRaw = currentSizeStock + delta;
+      const nextSizeStock = Number.isFinite(nextSizeStockRaw) ? nextSizeStockRaw : 0;
+      if (nextSizeStock < 0) throw new Error('Not enough stock for this size.');
+
+      const updatedMap = { ...sizeStockMap, [size]: Math.max(0, nextSizeStock) };
+      const nextTotal = Object.values(updatedMap).reduce((sum, v) => sum + (Number.isFinite(v) ? Number(v) : 0), 0);
+
+      const { error: updErr } = await supabase
+        .from('products')
+        .update({ size_stock: updatedMap, stock: nextTotal })
+        .eq('id', productId);
+      if (updErr) throw updErr;
+      return;
+    }
+
+    const nextStock = currentStock + delta;
+    if (nextStock < 0) throw new Error('Not enough stock for this product.');
+
+    const { error: updErr } = await supabase
       .from('products')
-      .update({ stock: current + delta })
+      .update({ stock: Math.max(0, nextStock) })
       .eq('id', productId);
-    if (incErr) throw incErr;
+    if (updErr) throw updErr;
   }, []);
 
   const loadCart = useCallback(async () => {
@@ -99,7 +118,7 @@ export function useCart(options: UseCartOptions = {}) {
       if (current) {
         const { data: itemRows, error: itemsErr } = await supabase
           .from('cart_items')
-          .select('*, product:products(id,name,price,stock,main_image_url,vendor_id,size_options, vendor:vendors(id,store_name,barangay,base_delivery_fee))')
+          .select('*, product:products(id,name,price,stock,main_image_url,vendor_id,size_options,size_stock, vendor:vendors(id,store_name,barangay,base_delivery_fee))')
           .eq('cart_id', current.id);
         if (itemsErr) throw itemsErr;
         setItems(itemRows as any);
@@ -139,13 +158,16 @@ export function useCart(options: UseCartOptions = {}) {
 
       const { data: productRow, error: productErr } = await supabase
         .from('products')
-        .select('id,name,stock,size_options')
+        .select('id,name,stock,size_options,size_stock')
         .eq('id', productId)
         .single();
       if (productErr || !productRow) throw productErr || new Error('Product not found');
 
-      const availableStock = Number(productRow.stock ?? 0);
       const sizeOptions: string[] = Array.isArray(productRow.size_options) ? (productRow.size_options as string[]) : [];
+      const sizeStockMap: Record<string, number> = (productRow as any).size_stock && typeof (productRow as any).size_stock === 'object' ? (productRow as any).size_stock as Record<string, number> : {};
+      const hasSizeStock = Object.keys(sizeStockMap).length > 0;
+      const selectedSizeStock = size ? Number(sizeStockMap[size] ?? 0) : null;
+      const availableStock = (hasSizeStock && size) ? selectedSizeStock : Number(productRow.stock ?? 0);
       if (sizeOptions.length && !size) {
         throw new Error('Select a size to add this item.');
       }
@@ -165,13 +187,13 @@ export function useCart(options: UseCartOptions = {}) {
       }
 
       // Reserve stock immediately so UI reflects remaining inventory
-      await adjustProductStock(productId, -delta);
+      await adjustProductStock(productId, -delta, size);
       if (existing) {
         const { data, error: updErr } = await supabase
           .from('cart_items')
           .update({ quantity: existing.quantity + quantity })
           .eq('id', existing.id)
-          .select('*, product:products(id,name,price,stock,main_image_url,vendor_id,size_options, vendor:vendors(id,store_name,barangay,base_delivery_fee))')
+          .select('*, product:products(id,name,price,stock,main_image_url,vendor_id,size_options,size_stock, vendor:vendors(id,store_name,barangay,base_delivery_fee))')
           .single();
         if (updErr) throw updErr;
         setItems(prev => prev.map(i => i.id === existing.id ? (data as any) : i));
@@ -179,7 +201,7 @@ export function useCart(options: UseCartOptions = {}) {
         const { data, error: insErr } = await supabase
           .from('cart_items')
           .insert({ cart_id: current.id, product_id: productId, quantity, size: size || null })
-          .select('*, product:products(id,name,price,stock,main_image_url,vendor_id,size_options, vendor:vendors(id,store_name,barangay,base_delivery_fee))')
+          .select('*, product:products(id,name,price,stock,main_image_url,vendor_id,size_options,size_stock, vendor:vendors(id,store_name,barangay,base_delivery_fee))')
           .single();
         if (insErr) throw insErr;
         setItems(prev => [...prev, data as any]);
@@ -197,7 +219,7 @@ export function useCart(options: UseCartOptions = {}) {
     try {
       const target = items.find(i => i.id === itemId);
       if (target) {
-        await adjustProductStock(target.product_id, target.quantity); // return reserved stock
+        await adjustProductStock(target.product_id, target.quantity, target.size); // return reserved stock
       }
 
       setLoading(true);
@@ -225,12 +247,14 @@ export function useCart(options: UseCartOptions = {}) {
       // Get the freshest stock for the product
       const { data: productRow, error: productErr } = await supabase
         .from('products')
-        .select('stock')
+        .select('stock,size_stock')
         .eq('id', target.product_id)
         .single();
       if (productErr) throw productErr;
 
-      const availableStock = Number(productRow?.stock ?? 0);
+      const sizeStockMap: Record<string, number> = productRow?.size_stock && typeof productRow.size_stock === 'object' ? productRow.size_stock as Record<string, number> : {};
+      const hasSizeStock = Object.keys(sizeStockMap).length > 0;
+      const availableStock = hasSizeStock && target.size ? Number(sizeStockMap[target.size] ?? 0) : Number(productRow?.stock ?? 0);
       const delta = quantity - target.quantity; // positive when adding, negative when reducing
       if (delta > 0 && delta > availableStock) {
         toast({ title: 'Limited stock', description: `Only ${availableStock} left for this item.` });
@@ -238,14 +262,14 @@ export function useCart(options: UseCartOptions = {}) {
       }
 
       // Adjust product stock to reflect the new quantity
-      await adjustProductStock(target.product_id, -delta);
+      await adjustProductStock(target.product_id, -delta, target.size);
 
       setLoading(true);
       const { data, error: updErr } = await supabase
         .from('cart_items')
         .update({ quantity })
         .eq('id', itemId)
-        .select('*, product:products(id,name,price,stock,main_image_url,vendor_id,size_options, vendor:vendors(id,store_name,barangay,base_delivery_fee))')
+        .select('*, product:products(id,name,price,stock,main_image_url,vendor_id,size_options,size_stock, vendor:vendors(id,store_name,barangay,base_delivery_fee))')
         .single();
       if (updErr) throw updErr;
       setItems(prev => prev.map(i => i.id === itemId ? (data as any) : i));
@@ -264,7 +288,7 @@ export function useCart(options: UseCartOptions = {}) {
       // Restock everything currently in the cart (best-effort; failures do not block delete)
       if (restock) {
         for (const it of items) {
-          try { await adjustProductStock(it.product_id, it.quantity); } catch (e) { console.error('restock on clear failed', e); }
+          try { await adjustProductStock(it.product_id, it.quantity, it.size); } catch (e) { console.error('restock on clear failed', e); }
         }
       }
 

@@ -9,7 +9,7 @@ import { useCart } from '@/hooks/use-cart';
 import { useToast } from '@/hooks/use-toast';
 
 interface VendorInfo { id: string; store_name: string; description?: string | null; address?: string | null; logo_url?: string | null; created_at?: string }
-interface ProductRow { id: string; name: string; price: number; main_image_url?: string | null; description?: string | null; stock?: number | null; created_at?: string; size_options?: string[] | null }
+interface ProductRow { id: string; name: string; price: number; main_image_url?: string | null; description?: string | null; stock?: number | null; created_at?: string; size_options?: string[] | null; size_stock?: Record<string, number> | null }
 
 export default function BusinessDetail() {
   const { id } = useParams<{ id: string }>();
@@ -37,7 +37,7 @@ export default function BusinessDetail() {
       if (!cancelled) setVendor(v as VendorInfo);
       const { data: pRows, error: pErr } = await supabase
         .from('products')
-        .select('id,name,price,main_image_url,description,stock,created_at,size_options')
+        .select('id,name,price,main_image_url,description,stock,created_at,size_options,size_stock')
         .eq('vendor_id', id)
         .order('created_at', { ascending: false });
       if (!cancelled) {
@@ -52,8 +52,11 @@ export default function BusinessDetail() {
   const handleAddToCart = async (product: ProductRow) => {
     const sizeOptions = product.size_options || [];
     const selectedSize = selectedSizes[product.id];
+    const sizeStockMap = product.size_stock || {};
+    const sizeStockTotal = sizeStockMap && Object.keys(sizeStockMap).length ? Object.values(sizeStockMap).reduce((a, b) => a + (Number.isFinite(b) ? Number(b) : 0), 0) : null;
+    const effectiveStock = typeof product.stock === 'number' ? product.stock : (sizeStockTotal ?? null);
 
-    if (typeof product.stock === 'number' && product.stock <= 0) {
+    if (typeof effectiveStock === 'number' && effectiveStock <= 0) {
       toast({ title: 'Out of stock', description: 'This item is currently unavailable.', variant: 'destructive' });
       return false;
     }
@@ -61,6 +64,14 @@ export default function BusinessDetail() {
     if (sizeOptions.length > 0 && !selectedSize) {
       toast({ title: 'Choose a size', description: 'Select a size before adding to cart.', variant: 'destructive' });
       return false;
+    }
+
+    if (sizeOptions.length > 0 && selectedSize) {
+      const sizeAvailable = Number(sizeStockMap?.[selectedSize] ?? 0);
+      if (Number.isFinite(sizeAvailable) && sizeAvailable <= 0) {
+        toast({ title: 'Out of stock', description: `Size ${selectedSize} is unavailable right now.`, variant: 'destructive' });
+        return false;
+      }
     }
 
     try {
@@ -156,9 +167,10 @@ export default function BusinessDetail() {
               location={vendor.address || 'Tangub'}
               imageUrl={p.main_image_url || undefined}
               description={p.description || 'Detailed description provided below.'}
-              stock={p.stock || 0}
+              stock={typeof p.stock === 'number' ? p.stock : Object.values(p.size_stock || {}).reduce((a,b)=>a + (Number.isFinite(b)?Number(b):0), 0)}
               created_at={p.created_at}
               sizeOptions={p.size_options || []}
+              sizeStock={p.size_stock || undefined}
               selectedSize={selectedSizes[p.id]}
               onSelectSize={(size) => setSelectedSizes(prev => ({ ...prev, [p.id]: size }))}
               onAdd={() => handleAddToCart(p)}
@@ -177,7 +189,7 @@ export default function BusinessDetail() {
                   <div>
                     <div className="text-sm text-muted-foreground">{vendor.store_name}</div>
                     <div className="text-lg font-semibold">{p.name}</div>
-                    <div className="text-sm text-muted-foreground">₱{p.price.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})} • Stock: {p.stock ?? 0}</div>
+                    <div className="text-sm text-muted-foreground">₱{p.price.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})} • Stock: {typeof p.stock === 'number' ? p.stock : Object.values(p.size_stock || {}).reduce((a,b)=>a + (Number.isFinite(b)?Number(b):0), 0)}</div>
                   </div>
                   <div className="text-xs text-muted-foreground">Added {p.created_at ? new Date(p.created_at).toLocaleDateString() : 'recently'}</div>
                 </div>

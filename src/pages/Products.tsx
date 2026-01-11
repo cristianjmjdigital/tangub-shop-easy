@@ -26,6 +26,7 @@ interface RawProductRow {
   created_at?: string;
   description?: string | null;
   size_options?: string[] | null;
+  size_stock?: Record<string, number> | null;
 }
 
 interface VendorRow { id: string; store_name: string; address?: string | null; barangay?: string | null }
@@ -46,6 +47,7 @@ interface UIProduct {
   featured?: boolean;
   description?: string;
   sizeOptions?: string[];
+  sizeStock?: Record<string, number>;
   stock?: number;
   soldCount?: number;
 }
@@ -145,7 +147,7 @@ const Products = () => {
         const [{ data: pData, error: pErr }, { data: vRows, error: vErr }, { data: ratingRows, error: rErr }, { data: salesRows, error: sErr }] = await Promise.all([
           supabase
             .from('products')
-            .select('id,name,price,stock,vendor_id,main_image_url,image_url,description,created_at,category,size_options')
+            .select('id,name,price,stock,vendor_id,main_image_url,image_url,description,created_at,category,size_options,size_stock')
             .limit(200),
           supabase
             .from('vendors')
@@ -215,7 +217,9 @@ const Products = () => {
       const location = p.location || vendor?.barangay || vendor?.address || 'Unknown';
       const description = (p as any).description || 'Detailed product information is provided by the vendor.';
       const sizeOptions = (p as any).size_options || [];
-      const stock = typeof p.stock === 'number' ? p.stock : 0;
+      const sizeStock = (p as any).size_stock || {};
+      const derivedStock = Object.values(sizeStock).reduce((sum, val) => sum + (Number.isFinite(val) ? Number(val) : 0), 0);
+      const stock = typeof p.stock === 'number' ? p.stock : derivedStock;
       const ratingInfo = vendorId ? vendorRatings[vendorId] : undefined;
       const soldCount = salesCounts[p.id] || 0;
       return {
@@ -233,6 +237,7 @@ const Products = () => {
         featured: false,
         description,
         sizeOptions,
+        sizeStock,
         stock,
         soldCount,
       };
@@ -278,7 +283,11 @@ const Products = () => {
 
   const addToCart = async (product: UIProduct) => {
     try {
-      if (typeof product.stock === 'number' && product.stock <= 0) {
+      const sizeStockMap = product.sizeStock || {};
+      const sizeStockTotal = Object.values(sizeStockMap).reduce((sum, val) => sum + (Number.isFinite(val) ? Number(val) : 0), 0);
+      const effectiveStock = typeof product.stock === 'number' ? product.stock : sizeStockTotal;
+
+      if (typeof effectiveStock === 'number' && effectiveStock <= 0) {
         toast({ title: 'Out of stock', description: 'This item is currently unavailable.', variant: 'destructive' });
         return false;
       }
@@ -286,6 +295,11 @@ const Products = () => {
         const chosen = selectedSizes[product.id];
         if (!chosen) {
           toast({ title: 'Choose a size', description: 'Select a size before adding to cart.', variant: 'destructive' });
+          return false;
+        }
+        const sizeAvailable = Number(sizeStockMap[chosen] ?? 0);
+        if (Number.isFinite(sizeAvailable) && sizeAvailable <= 0) {
+          toast({ title: 'Out of stock', description: `Size ${chosen} is unavailable right now.`, variant: 'destructive' });
           return false;
         }
         await addItem(product.id, 1, product.name, chosen);
@@ -409,7 +423,10 @@ const Products = () => {
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {!loading && !error && filteredProducts.map((product) => {
-                const isOutOfStock = typeof product.stock === 'number' && product.stock <= 0;
+                const sizeStockMap = product.sizeStock || {};
+                const sizeStockTotal = Object.values(sizeStockMap).reduce((sum, val) => sum + (Number.isFinite(val) ? Number(val) : 0), 0);
+                const effectiveStock = typeof product.stock === 'number' ? product.stock : sizeStockTotal;
+                const isOutOfStock = typeof effectiveStock === 'number' && effectiveStock <= 0;
                 return (
                 <Card key={product.id} className="overflow-hidden hover:shadow-elegant transition-all duration-300 group">
                   {product.storePath ? (
@@ -493,7 +510,7 @@ const Products = () => {
                     </div>
 
                     <div className="flex items-center text-xs text-muted-foreground gap-3">
-                      <span>Stock: {product.stock ?? 0}</span>
+                      <span>Stock: {effectiveStock ?? 0}</span>
                       <span>Sold: {product.soldCount ?? 0}</span>
                       {product.category && <span>Category: {product.category}</span>}
                     </div>
@@ -517,6 +534,8 @@ const Products = () => {
                         <div className="flex flex-wrap gap-2">
                           {product.sizeOptions.map((size) => {
                             const selected = selectedSizes[product.id] === size;
+                            const available = typeof sizeStockMap[size] === 'number' ? Number(sizeStockMap[size]) : null;
+                            const disabled = available !== null && available <= 0;
                             return (
                               <Button
                                 key={size}
@@ -524,9 +543,10 @@ const Products = () => {
                                 size="sm"
                                 variant={selected ? 'secondary' : 'outline'}
                                 className="h-8 px-3"
+                                disabled={disabled}
                                 onClick={() => setSelectedSizes(prev => ({ ...prev, [product.id]: size }))}
                               >
-                                {size}
+                                {size}{available !== null ? ` (${available})` : ''}
                               </Button>
                             );
                           })}

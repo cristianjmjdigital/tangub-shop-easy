@@ -47,7 +47,7 @@ export default function Index() {
       const [{ data, error }, { data: ratingRows, error: rErr }, { data: salesRows, error: sErr }] = await Promise.all([
         supabase
           .from('products')
-          .select('id,name,price,stock,main_image_url,description,created_at,vendor_id,size_options,vendors(store_name,address)')
+          .select('id,name,price,stock,main_image_url,description,created_at,vendor_id,size_options,size_stock,vendors(store_name,address)')
           .order('created_at', { ascending: false })
           .limit(60),
         supabase
@@ -95,6 +95,9 @@ export default function Index() {
 
           setProducts((data||[]).map((p:any)=>{
             const vendorRating = p.vendor_id ? ratingsMap[String(p.vendor_id)] : undefined;
+            const sizeStock = p.size_stock || {};
+            const sizeStockTotal = Object.values(sizeStock).reduce((sum: number, val: any) => sum + (Number.isFinite(val) ? Number(val) : 0), 0);
+            const totalStock = typeof p.stock === 'number' ? p.stock : sizeStockTotal;
             return {
               id: p.id,
               name: p.name,
@@ -105,8 +108,9 @@ export default function Index() {
               location: p.vendors?.address || 'Tangub',
               imageUrl: p.main_image_url || undefined,
               description: p.description,
-              stock: p.stock,
+              stock: totalStock,
               sizeOptions: p.size_options || [],
+              sizeStock,
               created_at: p.created_at,
               soldCount: salesMap[p.id] || 0,
             };
@@ -181,13 +185,24 @@ export default function Index() {
   const displayCategories = [...baseCategories, ...customCategories.map(name => ({ name, icon: Tag }))];
 
   const handleAddToCart = async (product: any) => {
-    if (typeof product.stock === 'number' && product.stock <= 0) {
+    const sizeStockMap = product.sizeStock || {};
+    const sizeStockTotal = Object.values(sizeStockMap).reduce((sum: number, val: any) => sum + (Number.isFinite(val) ? Number(val) : 0), 0);
+    const effectiveStock = typeof product.stock === 'number' ? product.stock : sizeStockTotal;
+
+    if (typeof effectiveStock === 'number' && effectiveStock <= 0) {
       toast({ title: 'Out of stock', description: 'This item is currently unavailable.', variant: 'destructive' });
       return false;
     }
     if (product.sizeOptions && product.sizeOptions.length > 0 && !selectedSizes[product.id]) {
       toast({ title: 'Choose a size', description: 'Please select a size before adding to cart.' });
       return false;
+    }
+    if (product.sizeOptions && product.sizeOptions.length > 0 && selectedSizes[product.id]) {
+      const selectedSizeStock = Number(sizeStockMap[selectedSizes[product.id]] ?? 0);
+      if (Number.isFinite(selectedSizeStock) && selectedSizeStock <= 0) {
+        toast({ title: 'Out of stock', description: `Size ${selectedSizes[product.id]} is unavailable right now.`, variant: 'destructive' });
+        return false;
+      }
     }
     setAddingId(product.id);
     try {

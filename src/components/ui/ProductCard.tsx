@@ -22,6 +22,7 @@ export interface ProductCardProps {
   onAdd?: () => void;
   adding?: boolean;
   sizeOptions?: string[];
+  sizeStock?: Record<string, number>;
   selectedSize?: string;
   onSelectSize?: (size: string) => void;
   onBuyNow?: () => void;
@@ -45,6 +46,7 @@ export default function ProductCard({
   onAdd,
   adding,
   sizeOptions,
+  sizeStock,
   selectedSize,
   onSelectSize,
   onBuyNow
@@ -135,6 +137,8 @@ export default function ProductCard({
             <div className="flex flex-wrap gap-2">
               {sizeOptions.map((size) => {
                 const selected = selectedSize === size;
+                const available = typeof sizeStock?.[size] === 'number' ? Number(sizeStock?.[size]) : null;
+                const disabled = available !== null && available <= 0;
                 return (
                   <Button
                     key={size}
@@ -142,9 +146,10 @@ export default function ProductCard({
                     size="sm"
                     variant={selected ? 'secondary' : 'outline'}
                     className="h-8 px-3"
+                    disabled={disabled}
                     onClick={() => onSelectSize?.(size)}
                   >
-                    {size}
+                    {size}{available !== null ? ` (${available})` : ''}
                   </Button>
                 );
               })}
