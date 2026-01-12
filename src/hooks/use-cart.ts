@@ -35,6 +35,12 @@ interface CheckoutOptions {
   selectedItemIds?: string[];
 }
 
+interface StockAdjustment {
+  productId: string;
+  size?: string | null;
+  quantity: number;
+}
+
 export function useCart(options: UseCartOptions = {}) {
   const { vendorId = null, autoCreate = true } = options;
   const { session, profile } = useAuth();
@@ -45,7 +51,7 @@ export function useCart(options: UseCartOptions = {}) {
   const [items, setItems] = useState<CartItemRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // Adjust product stock. Negative delta reserves stock, positive delta returns stock. Supports size-level stock when available.
+  // Adjust product stock. Negative delta reserves/deducts stock, positive delta returns stock. Supports size-level stock when available.
   const adjustProductStock = useCallback(async (productId: string, delta: number, size?: string | null) => {
     if (!delta) return;
 
@@ -88,6 +94,32 @@ export function useCart(options: UseCartOptions = {}) {
       .eq('id', productId);
     if (updErr) throw updErr;
   }, []);
+
+  const releaseStockAdjustments = useCallback(async (applied: StockAdjustment[]) => {
+    if (!applied.length) return;
+    const reversed = [...applied].reverse();
+    for (const adj of reversed) {
+      try {
+        await adjustProductStock(adj.productId, adj.quantity, adj.size);
+      } catch (e) {
+        console.error('rollback stock failed', e);
+      }
+    }
+  }, [adjustProductStock]);
+
+  const reserveStockForItems = useCallback(async (cartItems: CartItemRow[]) => {
+    const applied: StockAdjustment[] = [];
+    try {
+      for (const it of cartItems) {
+        await adjustProductStock(it.product_id, -it.quantity, it.size);
+        applied.push({ productId: it.product_id, size: it.size, quantity: it.quantity });
+      }
+      return applied;
+    } catch (err) {
+      await releaseStockAdjustments(applied);
+      throw err;
+    }
+  }, [adjustProductStock, releaseStockAdjustments]);
 
   const loadCart = useCallback(async () => {
   if (!authUser) return;
@@ -181,13 +213,9 @@ export function useCart(options: UseCartOptions = {}) {
       // Upsert or increment existing item
       const existing = items.find(i => i.product_id === productId && (i.size || null) === (size || null));
       const desiredQty = (existing?.quantity || 0) + quantity;
-      const delta = desiredQty - (existing?.quantity || 0);
-      if (delta > availableStock) {
-        throw new Error(`Only ${availableStock} in stock for this selection.`);
+      if (desiredQty > (Number.isFinite(availableStock) ? Number(availableStock) : 0)) {
+        throw new Error(`Only ${availableStock ?? 0} in stock for this selection.`);
       }
-
-      // Reserve stock immediately so UI reflects remaining inventory
-      await adjustProductStock(productId, -delta, size);
       if (existing) {
         const { data, error: updErr } = await supabase
           .from('cart_items')
@@ -213,15 +241,10 @@ export function useCart(options: UseCartOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [authUser, profile?.id, cart, items, vendorId, toast, adjustProductStock]);
+  }, [authUser, profile?.id, cart, items, vendorId, toast]);
 
   const removeItem = useCallback(async (itemId: string) => {
     try {
-      const target = items.find(i => i.id === itemId);
-      if (target) {
-        await adjustProductStock(target.product_id, target.quantity, target.size); // return reserved stock
-      }
-
       setLoading(true);
       const { error: delErr } = await supabase
         .from('cart_items')
@@ -236,7 +259,7 @@ export function useCart(options: UseCartOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [toast, items, adjustProductStock]);
+  }, [toast, items]);
 
   const updateQuantity = useCallback(async (itemId: string, quantity: number) => {
     if (quantity < 1) return removeItem(itemId);
@@ -255,14 +278,10 @@ export function useCart(options: UseCartOptions = {}) {
       const sizeStockMap: Record<string, number> = productRow?.size_stock && typeof productRow.size_stock === 'object' ? productRow.size_stock as Record<string, number> : {};
       const hasSizeStock = Object.keys(sizeStockMap).length > 0;
       const availableStock = hasSizeStock && target.size ? Number(sizeStockMap[target.size] ?? 0) : Number(productRow?.stock ?? 0);
-      const delta = quantity - target.quantity; // positive when adding, negative when reducing
-      if (delta > 0 && delta > availableStock) {
+      if (quantity > (Number.isFinite(availableStock) ? Number(availableStock) : 0)) {
         toast({ title: 'Limited stock', description: `Only ${availableStock} left for this item.` });
         return;
       }
-
-      // Adjust product stock to reflect the new quantity
-      await adjustProductStock(target.product_id, -delta, target.size);
 
       setLoading(true);
       const { data, error: updErr } = await supabase
@@ -279,19 +298,11 @@ export function useCart(options: UseCartOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [toast, removeItem, items, adjustProductStock]);
+  }, [toast, removeItem, items]);
 
-  const clearCart = useCallback(async (options: { restock?: boolean } = {}) => {
-    const { restock = true } = options;
+  const clearCart = useCallback(async (_options: { restock?: boolean } = {}) => {
     if (!cart) return;
     try {
-      // Restock everything currently in the cart (best-effort; failures do not block delete)
-      if (restock) {
-        for (const it of items) {
-          try { await adjustProductStock(it.product_id, it.quantity, it.size); } catch (e) { console.error('restock on clear failed', e); }
-        }
-      }
-
       setLoading(true);
       const { error: delErr } = await supabase
         .from('cart_items')
@@ -305,7 +316,7 @@ export function useCart(options: UseCartOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [cart, toast, items, adjustProductStock]);
+  }, [cart, toast]);
 
   const subtotal = useMemo(() => items.reduce((sum, i) => sum + (i.product?.price ?? 0) * i.quantity, 0), [items]);
 
@@ -354,6 +365,9 @@ export function useCart(options: UseCartOptions = {}) {
       }
       return deliveryFeePerOrder;
     };
+    let reservedAdjustments: StockAdjustment[] = [];
+    const adjustmentKey = (productId: string, size?: string | null) => `${productId}::${size ?? ''}`;
+    const fulfilledKeys = new Set<string>();
     try {
       setLoading(true);
 
@@ -363,6 +377,9 @@ export function useCart(options: UseCartOptions = {}) {
         await loadCart();
         currentCart = cart;
       }
+
+      // Reserve/deduct stock right before creating orders to reflect actual purchases
+      reservedAdjustments = await reserveStockForItems(targetItems);
 
       // Preferred: server-side finalize (also clears cart_items) when single-vendor cart
       const primaryVendorId = currentCart?.vendor_id ?? vendorIds[0] ?? null;
@@ -374,6 +391,7 @@ export function useCart(options: UseCartOptions = {}) {
 
         if (!rpcErr && orderId) {
           let orderRecord: any = { id: orderId };
+          targetItems.forEach(it => fulfilledKeys.add(adjustmentKey(it.product_id, it.size || null)));
 
           // Add delivery fee to the stored total so vendor/customer views stay consistent
           const { data: existing } = await supabase
@@ -486,6 +504,7 @@ export function useCart(options: UseCartOptions = {}) {
 
         createdOrders.push(order);
         processedCartItemIds.push(...groupItems.map(it => it.id));
+        groupItems.forEach(it => fulfilledKeys.add(adjustmentKey(it.product_id, it.size || null)));
       }
 
       if (processedCartItemIds.length) {
@@ -500,6 +519,12 @@ export function useCart(options: UseCartOptions = {}) {
       return { orders: createdOrders };
     } catch (e: any) {
       console.error('checkout error', e);
+      if (reservedAdjustments.length) {
+        const pending = reservedAdjustments.filter(adj => !fulfilledKeys.has(adjustmentKey(adj.productId, adj.size || null)));
+        if (pending.length) {
+          await releaseStockAdjustments(pending);
+        }
+      }
       if (items.length === 0 && snapshotItems.length) {
         setItems(snapshotItems);
         if (!cart && snapshotCart) setCart(snapshotCart);
@@ -509,7 +534,7 @@ export function useCart(options: UseCartOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [authUser, items, toast, cart, profile?.id, loadCart]);
+  }, [authUser, items, toast, cart, profile?.id, loadCart, reserveStockForItems, releaseStockAdjustments]);
 
   return {
     loading,
